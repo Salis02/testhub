@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ================= LIGHT MODE ================= */
+    --bg-canvas: #F8FAFC;
+    --text-ink: #0F172A;
+    --color-accent: #1D4ED8;
+
+    /* Derived Opacities */
+    --surface-card: #FFFFFF;
+    --text-muted: rgba(15, 23, 42, 0.65);
+    --border-subtle: rgba(15, 23, 42, 0.12);
+    --surface-hover: rgba(15, 23, 42, 0.03);
+    --accent-tint: rgba(29, 78, 216, 0.08);
+  }
+
+  [data-theme='dark'],
+  .dark {
+    /* ================= NIGHT MODE ================= */
+    --bg-canvas: #0B0F17;
+    --text-ink: #F1F5F9;
+    --color-accent: #3B82F6;
+
+    /* Derived Opacities */
+    --surface-card: #131926;
+    --text-muted: rgba(241, 245, 249, 0.60);
+    --border-subtle: rgba(241, 245, 249, 0.12);
+    --surface-hover: rgba(241, 245, 249, 0.06);
+    --accent-tint: rgba(59, 130, 246, 0.12);
+  }
+
+  * {
+    border-color: var(--border-subtle);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background-color: var(--bg-canvas);
+    color: var(--text-ink);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* Tabular numerals for exam timers and scoring */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}

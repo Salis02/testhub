@@ -1,0 +1,115 @@
+import React, { useEffect, useState } from 'react'
+import { useParams, Link } from 'react-router-dom'
+import { TestResult, Question } from '@/types'
+import { api } from '@/services/api'
+import { ScoreSummary } from '@/components/results/ScoreSummary'
+import { CategoryBreakdown } from '@/components/results/CategoryBreakdown'
+import { QuestionReviewList } from '@/components/results/QuestionReviewList'
+import { ResultsPageSkeleton } from '@/components/common/Skeleton'
+import { ArrowLeft, RotateCcw, Share2, Printer, Check } from 'lucide-react'
+
+export const ResultsPage: React.FC = () => {
+  const { resultId } = useParams<{ resultId: string }>()
+  const [data, setData] = useState<{ result: TestResult; questions: Question[] } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    loadResult()
+  }, [resultId])
+
+  const loadResult = async () => {
+    if (!resultId) return
+    try {
+      setLoading(true)
+      const res = await api.getResult(resultId)
+      setData(res)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handlePrint = () => {
+    window.print()
+  }
+
+  if (loading) {
+    return <ResultsPageSkeleton />
+  }
+
+  if (!data) {
+    return (
+      <div className="max-w-xl mx-auto py-16 px-4 text-center space-y-4">
+        <h2 className="text-xl font-semibold text-ink">Hasil Tidak Ditemukan</h2>
+        <p className="text-xs text-ink-muted">
+          Sesi ujian ini mungkin telah kedaluwarsa atau belum diselesaikan secara valid.
+        </p>
+        <Link
+          to="/"
+          className="inline-flex items-center space-x-2 px-4 py-2 rounded-md bg-accent text-white text-xs font-semibold"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Kembali ke Katalog Ujian</span>
+        </Link>
+      </div>
+    )
+  }
+
+  const { result, questions } = data
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-8">
+      {/* Top Action Bar */}
+      <div className="flex items-center justify-between flex-wrap gap-4 print:hidden">
+        <Link
+          to="/"
+          className="inline-flex items-center space-x-1.5 text-xs font-semibold text-ink-muted hover:text-ink transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Katalog Ujian Lainnya</span>
+        </Link>
+
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleShare}
+            className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-md border border-borderline bg-surface text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5" />}
+            <span>{copied ? 'Tautan Disalin' : 'Bagikan Hasil'}</span>
+          </button>
+          <button
+            onClick={handlePrint}
+            className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-md border border-borderline bg-surface text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Cetak Rekap</span>
+          </button>
+          <Link
+            to={`/test/${result.test_id}`}
+            className="inline-flex items-center space-x-1.5 px-4 py-1.5 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Coba Ujian Lagi</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Score Summary Card */}
+      <ScoreSummary result={result} />
+
+      {/* Category Breakdown */}
+      <CategoryBreakdown breakdown={result.category_breakdown} />
+
+      {/* Review Mode (All questions + answers + explanations) */}
+      <QuestionReviewList questions={questions} submissions={result.submissions} />
+    </div>
+  )
+}
