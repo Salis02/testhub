@@ -18,6 +18,8 @@ help:
 	@echo "$(GREEN)Commands:$(NC)"
 	@echo "  $(YELLOW)make setup$(NC)          - Setup environment, migrate and seed data"
 	@echo "  $(YELLOW)make dev$(NC)            - Run backend locally on port 8000"
+	@echo "  $(YELLOW)make dev-backend$(NC)    - Alias for make dev"
+	@echo "  $(YELLOW)make dev-frontend$(NC)   - Run React frontend (Vite/Bun) on port 5173"
 	@echo "  $(YELLOW)make migrate$(NC)        - Run database migrations"
 	@echo "  $(YELLOW)make seed$(NC)           - Seed initial admin and quiz catalog"
 	@echo "  $(YELLOW)make test$(NC)           - Run Go test suite"
@@ -61,8 +63,14 @@ build-backend:
 
 build-frontend:
 	@echo "$(BLUE)Building frontend...$(NC)"
-	cd frontend && npm run build
+	cd frontend && (which bun >/dev/null 2>&1 && bun run build || npm run build)
 	@echo "$(GREEN)✓ Frontend built!$(NC)"
+
+dev-backend: dev
+
+dev-frontend:
+	@echo "$(GREEN)Starting TestHub Frontend (Vite) on :5173...$(NC)"
+	cd frontend && (which bun >/dev/null 2>&1 && bun run dev || npm run dev)
 
 dev:
 	@echo "$(GREEN)Starting TestHub API server on :8000...$(NC)"
@@ -73,3 +81,4 @@ docker-dev:
 
 docker-down:
 	docker compose down
+
