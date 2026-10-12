@@ -36,18 +36,24 @@
 - [x] Rate limiting middleware per IP & session (anti-DDoS/spam protection)
 - [x] Database seed command (`cmd/seed/main.go`) with realistic CPNS, SBMPTN, IQ, and BUMN questions
 
-#### Frontend (React)
-- [x] Project setup (Vite + React 18 + TypeScript + Tailwind CSS)
-- [x] Test taking form (non-auth session flow)
+#### Frontend (React + Bun)
+- [x] Project setup (Vite + React 19 + TypeScript + Tailwind CSS)
+- [x] Test taking form (non-auth session flow, media image rendering)
 - [x] Answer submission UI with flag questions
 - [x] Results display with percentile & category breakdown
-- [x] Admin login portal
+- [x] Admin login portal dengan Role-Based Access Control (RBAC) & ProtectedRoute
 - [x] Test management (create, publish toggle, delete)
+- [x] **Edit Modul Ujian & Soal (`PUT /api/admin/tests/:testId` via `TestEditorModal.tsx`)**
+- [x] **Unggah Media Gambar Soal (`POST /api/admin/upload-media` via `MediaUploader.tsx`)**
+- [x] **Universal Toast & Confirmation Modal (`useToast`, `useConfirm` - DRY, anti-browser popups)**
+- [x] **AI Question Generator Modal (`AIAssistantModal.tsx`) dengan Dynamic Progressing & Skeleton Loader**
 - [x] Dashboard (stats overview & essay review queue)
 - [x] API client (`frontend/src/services/api.ts`) integrated with Go backend via proxy
+- [x] Static uploads proxy (`/uploads` -> backend `http://localhost:8000`)
 
 #### Testing & QA
 - [x] Integration & unit test suite in `backend/tests/api_test.go` (100% Passing)
+- [x] Frontend build & type-checking (`bun run build` - 100% Passing, 0 errors)
   - `TestHealthCheck` (PASS)
   - `TestAuthFlow` (PASS)
   - `TestTestTakingFlow` (PASS)

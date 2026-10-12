@@ -112,11 +112,12 @@ Single platform untuk:
 ### 4.4 Admin Dashboard
 - **Test Management**
   - [x] **DONE** - Create test (Modal pembuatan tes interaktif)
-  - [x] **DONE** - Edit existing test (`GET /api/admin/tests/:id` & `PUT /api/admin/tests/:id` dengan update atomik metadata, butir soal, dan opsi jawaban)
+  - [x] **DONE** - Edit existing test (`GET /api/admin/tests/:id` & `PUT /api/admin/tests/:id` dengan update atomik metadata, butir soal, dan opsi jawaban via `TestEditorModal.tsx`)
+  - [x] **DONE** - Media Image Upload (`POST /api/admin/upload-media`, `DELETE /api/admin/media`, `MediaUploader.tsx` untuk diagram/gambar soal maks 2MB)
   - [x] **DONE** - Publish & unpublish toggle (`POST /api/admin/tests/:id/toggle-publish`)
-  - [x] **DONE** - Delete test (soft-delete dengan konfirmasi aman)
+  - [x] **DONE** - Delete test (soft-delete dengan custom confirmation modal `ConfirmContext`)
   - [x] **DONE** - View test statistics (`GET /api/admin/stats`)
-  - [x] **DONE** - Manage questions & answers (editor opsi jawaban A-E)
+  - [x] **DONE** - Manage questions & answers (editor opsi jawaban A-E, radio toggle kunci benar, pembahasan)
 
 - **Analytics**
   - [x] **DONE** - User performance overview (total peserta, rata-rata skor di dashboard)
@@ -128,6 +129,7 @@ Single platform untuk:
 - **Content Management**
   - [ ] **IN PROGRESS** - Question bank terpusat (repositori soal reusable antar tes)
   - [x] **DONE (Melampaui MVP)** - AI Agent Question Generator (Integrasi live Gemini 2.5 Flash + Groq OSS dengan dynamic progress bar & abort controller)
+  - [x] **DONE** - Media & Image Attachment (Penayangan gambar responsif di `QuestionCard.tsx` saat ujian)
   - [x] **DONE** - Review pending user submissions (Antrean penilaian esai admin terintegrasi)
 
 ### 4.5 User Dashboard (Post-Test)

@@ -51,13 +51,17 @@ Semua dokumentasi arsitektur, panduan teknis, dan keamanan disimpan dalam file m
 - **Pengujian:**
   - Test suite integrasi di `backend/tests/api_test.go` (100% PASS).
 
-### 2. Frontend Web (React + TypeScript)
-- **Teknologi:** React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons.
-- **Tampilan Antarmuka:**
-  - Beranda pencarian & filter kategori tes (CPNS, SBMPTN, IQ, Custom).
-  - Halaman ujian interaktif dengan timer countdown, navigasi nomor, penanda ragu-ragu (flag), dan konfirmasi selesai.
+### 2. Frontend Web (React + Bun)
+- **Teknologi:** React 19, Vite 8, Bun `v1.4.2`, TypeScript, Tailwind CSS, Lucide Icons.
+- **Tampilan Antarmuka & Fitur:**
+  - Beranda pencarian & filter kategori tes (CPNS, SBMPTN, IQ, Custom BUMN).
+  - Halaman ujian interaktif dengan timer countdown, render gambar/media soal, navigasi nomor, penanda ragu-ragu (flag), dan konfirmasi selesai modern.
   - Halaman hasil komprehensif: Skor total, status kelulusan, persentil, kartu breakdown kategori, dan ulasan pembahasan soal.
-  - Dashboard Pengajar: Statistik ringkasan, manajemen tes (buat tes, toggle publish, hapus), antrean penilaian esai, dan modal AI Assistant.
+  - Dashboard Pengajar Terproteksi (RBAC): Statistik ringkasan, manajemen tes (buat modul, edit soal, toggle publish, hapus), antrean penilaian esai manual.
+  - **Modal Edit Soal & Ujian (`TestEditorModal.tsx`)**: Mengubah parameter ujian, butir soal, opsi jawaban A–E, kunci jawaban, dan pembahasan.
+  - **Upload Media Gambar Soal (`MediaUploader.tsx`)**: Unggah gambar (maks 2MB) terhubung ke `POST /api/admin/upload-media` dengan preview instan.
+  - **AI Question Assistant Modal (`AIAssistantModal.tsx`)**: Integrasi Gemini 2.5 Flash / Groq OSS dengan kurva progres persentase dinamis (0–100%) dan multi-card shimmer skeleton loader.
+  - **Universal Toast & Confirmation Modal (DRY)**: Sistem notifikasi dan dialog konfirmasi modern dengan efek `backdrop-blur-md` dan keyboard accessibility (`Esc`/`Enter`).
 
 ---
 

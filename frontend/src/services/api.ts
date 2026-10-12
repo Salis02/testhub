@@ -553,6 +553,131 @@ export const api = {
     return test
   },
 
+  async getAdminTest(testId: string): Promise<{ test: Test; questions: Question[] }> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/tests/${testId}`, {
+        headers: getHeaders(true),
+      })
+      if (res.ok) {
+        return await res.json()
+      }
+    } catch {
+      // Fallback
+    }
+
+    const test = await this.getTestById(testId)
+    if (!test) throw new Error('Ujian tidak ditemukan.')
+    const allQuestions = getStored<Record<string, Question[]>>(STORAGE_KEYS.QUESTIONS, INITIAL_QUESTIONS)
+    const questions = allQuestions[testId] || []
+    return { test, questions }
+  },
+
+  async updateAdminTest(
+    testId: string,
+    testData: Partial<Test>,
+    questions?: Question[]
+  ): Promise<Test> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/tests/${testId}`, {
+        method: 'PUT',
+        headers: getHeaders(true),
+        body: JSON.stringify({
+          title: testData.title,
+          description: testData.description,
+          category: testData.category,
+          duration_minutes: testData.duration_minutes,
+          passing_score_percentage: testData.passing_score_percentage,
+          shuffle_questions: testData.shuffle_questions,
+          shuffle_answers: testData.shuffle_answers,
+          published: testData.published,
+          questions: questions?.map((q) => ({
+            question_number: q.question_number,
+            question_text: q.question_text,
+            question_type: q.question_type || 'multiple_choice',
+            media_url: q.media_url || null,
+            difficulty_level: q.difficulty_level || 'medium',
+            explanation: q.explanation || '',
+            points: q.points || 5,
+            options: (q.options || []).map((o) => ({
+              option_letter: o.option_letter,
+              option_text: o.option_text,
+              is_correct: !!o.is_correct,
+            })),
+          })),
+        }),
+      })
+
+      if (res.ok) {
+        return await res.json()
+      }
+    } catch {
+      // Fallback
+    }
+
+    const tests = getStored<Test[]>(STORAGE_KEYS.TESTS, INITIAL_TESTS)
+    const idx = tests.findIndex((t) => t.id === testId)
+    if (idx === -1) throw new Error('Ujian tidak ditemukan.')
+
+    const updated: Test = {
+      ...tests[idx],
+      ...testData,
+      total_questions: questions ? questions.length : tests[idx].total_questions,
+      updated_at: new Date().toISOString(),
+    }
+    tests[idx] = updated
+    setStored(STORAGE_KEYS.TESTS, tests)
+
+    if (questions) {
+      const allQ = getStored<Record<string, Question[]>>(STORAGE_KEYS.QUESTIONS, INITIAL_QUESTIONS)
+      allQ[testId] = questions.map((q, i) => ({
+        ...q,
+        id: q.id || `q-${testId}-${i + 1}`,
+        test_id: testId,
+        question_number: i + 1,
+      }))
+      setStored(STORAGE_KEYS.QUESTIONS, allQ)
+    }
+
+    return updated
+  },
+
+  async uploadMedia(file: File): Promise<{ url: string; filename: string; size_bytes: number; content_type: string }> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const headers: Record<string, string> = {}
+    const token = localStorage.getItem(STORAGE_KEYS.AUTH)
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const res = await fetch(`${API_BASE}/admin/upload-media`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || `Gagal mengunggah media (HTTP ${res.status})`)
+    }
+
+    return await res.json()
+  },
+
+  async deleteMedia(url: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/media?url=${encodeURIComponent(url)}`, {
+        method: 'DELETE',
+        headers: getHeaders(true),
+      })
+      if (res.ok) return true
+    } catch {
+      // ignore
+    }
+    return true
+  },
+
   async adminTogglePublish(testId: string): Promise<boolean> {
     try {
       const res = await fetch(`${API_BASE}/admin/tests/${testId}/toggle-publish`, {

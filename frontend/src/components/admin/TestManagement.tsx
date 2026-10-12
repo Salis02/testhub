@@ -1,7 +1,7 @@
 import React from 'react'
 import { Test } from '@/types'
 import { CategoryBadge } from '@/components/common/Badge'
-import { Plus, Trash2, Globe, Lock, Play } from 'lucide-react'
+import { Plus, Trash2, Globe, Lock, Play, Pencil } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useConfirm } from '@/context/ConfirmContext'
 import { useToast } from '@/context/ToastContext'
@@ -11,6 +11,7 @@ interface TestManagementProps {
   onTogglePublish: (testId: string) => void
   onDeleteTest: (testId: string) => void
   onOpenCreateModal: () => void
+  onEditTest: (testId: string) => void
 }
 
 export const TestManagement: React.FC<TestManagementProps> = ({
@@ -18,6 +19,7 @@ export const TestManagement: React.FC<TestManagementProps> = ({
   onTogglePublish,
   onDeleteTest,
   onOpenCreateModal,
+  onEditTest,
 }) => {
   const { confirm } = useConfirm()
   const toast = useToast()
@@ -97,6 +99,16 @@ export const TestManagement: React.FC<TestManagementProps> = ({
                   )}
                 </td>
                 <td className="py-4 px-4 whitespace-nowrap text-right space-x-2">
+                  {/* Edit Test & Questions */}
+                  <button
+                    onClick={() => onEditTest(test.id)}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded text-[11px] font-medium border border-accent/40 bg-accent/5 text-accent hover:bg-accent/15 transition-colors"
+                    title="Edit parameter modul dan butir soal"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    <span>Edit Soal</span>
+                  </button>
+
                   {/* Start / Preview Test */}
                   <Link
                     to={`/test/${test.id}`}

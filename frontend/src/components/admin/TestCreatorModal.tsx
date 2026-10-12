@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Test, Question, TestCategory, QuestionType } from '@/types'
 import { X, Plus, Trash2, Sparkles } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
+import { MediaUploader } from '@/components/common/MediaUploader'
 
 interface TestCreatorModalProps {
   isOpen: boolean
@@ -285,6 +286,17 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
                     className="w-full px-3 py-2 text-sm rounded-md border border-borderline bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </div>
+
+                {/* Media Image Uploader */}
+                <MediaUploader
+                  mediaUrl={q.media_url}
+                  onChange={(url) => {
+                    const updated = [...questions]
+                    updated[qIndex].media_url = url
+                    setQuestions(updated)
+                  }}
+                  label="Lampirkan Gambar/Diagram Soal"
+                />
 
                 {/* Multiple Choice Options */}
                 {q.question_type === 'multiple_choice' && (

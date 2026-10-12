@@ -683,6 +683,67 @@ Response: 200
 }
 ```
 
+#### PUT /api/admin/tests/{testId}
+Update modul ujian secara atomik beserta daftar butir pertanyaan, opsi jawaban, dan media:
+```
+Request:
+{
+  "title": "CPNS 2026 - Paket A Update",
+  "description": "Petunjuk pengerjaan terbaru...",
+  "category": "cpns",
+  "duration_minutes": 100,
+  "passing_score_percentage": 65,
+  "published": true,
+  "questions": [
+    {
+      "question_number": 1,
+      "question_text": "Perhatikan diagram berikut...",
+      "question_type": "multiple_choice",
+      "media_url": "/uploads/questions/img_abc123.png",
+      "difficulty_level": "medium",
+      "points": 5,
+      "explanation": "Berdasarkan diagram...",
+      "options": [
+        {"option_letter": "A", "option_text": "Opsi A", "is_correct": true},
+        {"option_letter": "B", "option_text": "Opsi B", "is_correct": false}
+      ]
+    }
+  ]
+}
+
+Response: 200
+{
+  "id": "test-cpns-1718000000",
+  "title": "CPNS 2026 - Paket A Update",
+  ...
+}
+```
+
+#### POST /api/admin/upload-media
+Unggah file gambar media untuk diagram/ilustrasi soal:
+```
+Content-Type: multipart/form-data
+Body: file=<binary_data> (max 2MB: PNG, JPG, WebP, SVG)
+
+Response: 201
+{
+  "url": "/uploads/questions/img_21fd83b9-b10d-40ff-ae4e-811b70259e9a.png",
+  "filename": "diagram_soal.png",
+  "size_bytes": 105420,
+  "content_type": "image/png"
+}
+```
+
+#### DELETE /api/admin/media
+Hapus file media dari penyimpanan lokal/cloud:
+```
+Query: ?url=/uploads/questions/img_abc.png
+Response: 200
+{
+  "success": true
+}
+```
+
 ---
 
 ## 4. Caching Strategy (Redis)

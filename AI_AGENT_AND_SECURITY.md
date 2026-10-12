@@ -447,9 +447,24 @@ Policy:
 
 Soft deletes (for compliance):
 - Mark as deleted, don't remove
-- Exclude from queries by default
-- Only show if explicitly requested (admin)
 ```
+
+---
+
+### 4.3 Media & File Upload Security (`/api/admin/upload-media`)
+
+#### Threat Model & Mitigations:
+1. **Malicious Executable Upload**:
+   - Hanya file bertipe MIME gambar yang diizinkan (`image/png`, `image/jpeg`, `image/webp`, `image/svg+xml`).
+   - Ekstensi file divalidasi dan dinormalisasi.
+2. **File Size Exhaustion (DoS)**:
+   - Batas ketat 2MB per file dikonfigurasi pada middleware & storage provider (`LocalStorageProvider` 2*1024*1024 bytes).
+3. **Directory Traversal Attack (`../`)**:
+   - Nama file asli tidak disimpan langsung di disk; backend meng-generate UUID acak unik (`img_<uuid>.<ext>`) sehingga eksploitasi traversal nama file mustahil dilakukan.
+4. **Unauthenticated File Upload**:
+   - Endpoint dilindungi ganda: `middleware.AuthRequired` (JWT) dan `middleware.RequireAdmin` (hanya role `admin` dan `creator`).
+5. **Static File Sandboxing**:
+   - Direktori `uploads/` hanya menyajikan file statis dan tidak memiliki hak eksekusi binary/script pada web server.
 
 ---
 

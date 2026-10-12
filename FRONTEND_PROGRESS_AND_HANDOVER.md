@@ -15,9 +15,11 @@ Dokumentasi ini dibuat sebagai referensi lengkap dan panduan serah terima (*hand
 3. [Skeleton Loading & Dynamic Progressing Engine](#3-skeleton-loading--dynamic-progressing-engine)
 4. [Autentikasi & Role-Based Access Control (RBAC)](#4-autentikasi--role-based-access-control-rbac)
 5. [Standardisasi Universal Toast & Confirmation Modal (DRY)](#5-standardisasi-universal-toast--confirmation-modal-dry)
-6. [Struktur File & Manifest Komponen](#6-struktur-file--manifest-komponen)
-7. [Panduan Menjalankan & Verifikasi](#7-panduan-menjalankan--verifikasi)
-8. [Roadmap & Saran Langkah Berikutnya](#8-roadmap--saran-langkah-berikutnya)
+6. [Fitur Edit Soal & Ujian Terintegrasi](#6-fitur-edit-soal--ujian-terintegrasi)
+7. [Unggah Media & Manajemen Gambar Soal](#7-unggah-media--manajemen-gambar-soal)
+8. [Struktur File & Manifest Komponen](#8-struktur-file--manifest-komponen)
+9. [Panduan Menjalankan & Verifikasi](#9-panduan-menjalankan--verifikasi)
+10. [Roadmap & Saran Langkah Berikutnya](#10-roadmap--saran-langkah-berikutnya)
 
 ---
 
@@ -45,6 +47,16 @@ Berikut adalah fitur dan modul yang telah selesai dikerjakan secara menyeluruh (
 4. **Universal Toast & Confirmation Modal (Anti-Browser Popups)**:
    - Menghapus 100% pemanggilan `window.alert()` dan `window.confirm()`.
    - Standardisasi menggunakan `useToast()` (`success`, `error`, `warning`, `info`) dan `useConfirm()` (Promise-based dialog dengan keyboard ESC/Enter & `backdrop-blur-md`).
+
+5. **Edit Modul Ujian & Bank Soal (`PUT /api/admin/tests/:testId`)**:
+   - Komponen modal baru `TestEditorModal.tsx` yang memuat detail ujian via `GET /api/admin/tests/:testId`.
+   - Menyediakan interface pengeditan lengkap untuk metadata (judul, kategori, durasi, passing grade), penyesuaian bobot/tingkat kesulitan, penyusunan opsi jawaban A–E, radio button penentu kunci benar, pembahasan ilmiah, serta penambahan/penghapusan butir soal secara dinamis.
+   - Terintegrasi dengan tombol aksi *Edit Soal* berikon pensil pada tabel `TestManagement.tsx`.
+
+6. **Unggah Media Gambar Soal (`POST /api/admin/upload-media`)**:
+   - Komponen `MediaUploader.tsx` untuk melampirkan ilustrasi/diagram/grafik pada tiap butir soal (mendukung format PNG, JPG, WebP, SVG maks. 2MB).
+   - Terhubung langsung ke handler `mediaHandler.UploadMedia` dan `mediaHandler.DeleteMedia`.
+   - Konfigurasi proxy Vite `/uploads` ke `http://localhost:8000` dan penayangan responsif di `QuestionCard.tsx` saat peserta mengerjakan ujian.
 
 ---
 
@@ -181,16 +193,54 @@ Semua panggilan fungsi bawaan browser (`window.alert()` dan `window.confirm()`) 
 
 ---
 
-## 6. Struktur File & Manifest Komponen
+## 6. Fitur Edit Soal & Ujian Terintegrasi
+
+### Alur Kerja & Implementasi
+- **Komponen**: [TestEditorModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestEditorModal.tsx)
+- **Endpoint**:
+  - `GET /api/admin/tests/:testId` $\rightarrow$ Memuat data ujian beserta seluruh butir pertanyaan dan opsi lengkap dengan flag `is_correct`.
+  - `PUT /api/admin/tests/:testId` $\rightarrow$ Menyimpan pembaruan metadata dan memperbarui seluruh relasi `test_questions` dan `question_options` secara transaksional di database.
+- **Kemampuan Editor**:
+  1. **Metadata Real-time**: Mengubah judul, deskripsi, kategori, durasi waktu (5–300 menit), dan passing grade (1–100%).
+  2. **Manipulasi Butir Soal**:
+     - Mengubah redaksi pertanyaan (textarea auto-grow).
+     - Menyesuaikan bobot poin per soal (1–50 poin) dan tingkat kesulitan (*easy*, *medium*, *hard*).
+     - Menentukan jenis soal (*Pilihan Ganda* vs *Esai*).
+     - Mengubah opsi jawaban A, B, C, D, E dan menentukan kunci jawaban benar via button radio.
+     - Mengisi pembahasan rasionalisasi ilmiah.
+     - Menambah butir soal baru atau menghapus butir soal lama.
+  3. **AI Injection**: Tombol *"Generate dengan AI"* dapat dipicu langsung dari modal editor untuk menambahkan soal hasil AI ke draf yang sedang disunting.
+
+---
+
+## 7. Unggah Media & Manajemen Gambar Soal
+
+### Spesifikasi Backend & Storage
+- **Handler**: `mediaHandler.UploadMedia` di [media.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/media.go)
+- **Endpoint Upload**: `POST /api/admin/upload-media` (Form parameter `file`)
+- **Endpoint Hapus**: `DELETE /api/admin/media?url=...`
+- **Direktori Penyimpanan**: `backend/uploads/questions/`
+- **Maksimal Ukuran**: 2MB per gambar
+- **Tipe File**: MIME `image/png`, `image/jpeg`, `image/webp`, `image/svg+xml`
+- **Akses Statis**: `GET /uploads/questions/:filename` (Di-proxy oleh Vite ke backend di development environment).
+
+### Komponen Frontend: [MediaUploader.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/MediaUploader.tsx)
+- **Pratinjau Gambar**: Menampilkan thumbnail instan dengan border clean, nama file, tautan preview layar penuh, dan tombol lepas lampiran (`X`).
+- **Validasi Klien**: Menolak file non-gambar atau ukuran melebihi 2MB sebelum request dikirim ke backend.
+- **Tampilan di Ujian**: Terintegrasi otomatis pada [QuestionCard.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/test/QuestionCard.tsx) sehingga peserta dapat melihat diagram/gambar soal saat ujian berlangsung.
+
+---
+
+## 8. Struktur File & Manifest Komponen
 
 ```
 frontend/src/
 ├── App.tsx                               # Router utama dengan wrapper ToastProvider, ConfirmProvider, AuthProvider
 ├── index.css                             # Desain token CSS (Cognitive-Calm, border, surface, canvas)
 ├── types/
-│   └── index.ts                          # Tipe User, Question, Test, TestSession, DifficultyLevel, dll.
+│   └── index.ts                          # Tipe User, Question (media_url), Test, TestSession, DifficultyLevel, dll.
 ├── services/
-│   └── api.ts                            # REST API client ke backend Go (/api/ai/generate-questions, /api/auth/*)
+│   └── api.ts                            # REST API client ke backend Go (/api/admin/*, /api/ai/*, /api/auth/*)
 ├── context/
 │   ├── AuthContext.tsx                   # State login, register, session verification (GET /api/auth/me)
 │   ├── ThemeContext.tsx                  # Dark/light mode switcher
@@ -201,17 +251,19 @@ frontend/src/
 │   │   ├── Header.tsx                    # Navigasi atas, auth indicator, dark mode toggle
 │   │   ├── Footer.tsx                    # Footer aplikasi
 │   │   ├── ProtectedRoute.tsx            # Route guard untuk admin & role-based checks
+│   │   ├── MediaUploader.tsx             # Pengunggah media gambar soal (POST /api/admin/upload-media)
 │   │   ├── Skeleton.tsx                  # Shared shimmer skeletons
 │   │   └── Badge.tsx                     # Category & difficulty badges
 │   ├── admin/
 │   │   ├── AIAssistantModal.tsx          # Modal generator AI, progress bar, skeleton, review card
 │   │   ├── AdminOverview.tsx             # Kartu metrik & statistik admin
-│   │   ├── TestManagement.tsx            # Tabel manajemen tes (publish/delete dengan useConfirm & useToast)
-│   │   ├── TestCreatorModal.tsx          # Formulir pembuatan tes baru dengan validasi useToast
+│   │   ├── TestManagement.tsx            # Tabel manajemen tes (Aksi Edit Soal, publish, delete)
+│   │   ├── TestCreatorModal.tsx          # Formulir pembuatan tes baru dengan MediaUploader
+│   │   ├── TestEditorModal.tsx           # Modal edit modul ujian & butir soal (PUT /api/admin/tests/:testId)
 │   │   └── EssayGradingView.tsx          # Antrean koreksi esai manual peserta dengan useToast
 │   └── test/
 │       ├── TestHeader.tsx                # Countdown timer ujian & progress
-│       ├── QuestionCard.tsx              # Tampilan butir soal & opsi pilihan ganda/esai
+│       ├── QuestionCard.tsx              # Tampilan butir soal (dengan gambar media_url) & opsi pilihan ganda/esai
 │       ├── QuestionNav.tsx               # Drawer nomor soal & status (terjawab, ragu-ragu)
 │       └── FinishConfirmModal.tsx        # Modal konfirmasi submit lembar jawaban (backdrop-blur-md)
 └── pages/
@@ -225,7 +277,7 @@ frontend/src/
 
 ---
 
-## 7. Panduan Menjalankan & Verifikasi
+## 9. Panduan Menjalankan & Verifikasi
 
 ### Prasyarat
 - **Bun**: `v1.4.0` atau lebih baru

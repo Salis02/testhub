@@ -7,6 +7,7 @@ import { AdminOverview } from '@/components/admin/AdminOverview'
 import { TestManagement } from '@/components/admin/TestManagement'
 import { EssayGradingView } from '@/components/admin/EssayGradingView'
 import { TestCreatorModal } from '@/components/admin/TestCreatorModal'
+import { TestEditorModal } from '@/components/admin/TestEditorModal'
 import { AIAssistantModal } from '@/components/admin/AIAssistantModal'
 import { AdminOverviewSkeleton } from '@/components/common/Skeleton'
 import { LayoutDashboard, FileSpreadsheet, FileEdit, Sparkles, Plus } from 'lucide-react'
@@ -28,6 +29,9 @@ export const AdminPage: React.FC = () => {
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isAIModalOpen, setIsAIModalOpen] = useState(false)
+  const [editingTestId, setEditingTestId] = useState<string | null>(null)
+  const [pendingAIQuestions, setPendingAIQuestions] = useState<Question[]>([])
+  const [aiContext, setAiContext] = useState<'create' | 'edit' | 'auto'>('auto')
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -165,7 +169,13 @@ export const AdminPage: React.FC = () => {
           tests={tests}
           onTogglePublish={handleTogglePublish}
           onDeleteTest={handleDeleteTest}
-          onOpenCreateModal={() => setIsCreateModalOpen(true)}
+          onOpenCreateModal={() => {
+            setAiContext('create')
+            setIsCreateModalOpen(true)
+          }}
+          onEditTest={(testId) => {
+            setEditingTestId(testId)
+          }}
         />
       )}
 
@@ -179,16 +189,35 @@ export const AdminPage: React.FC = () => {
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={handleCreateTest}
         onOpenAIAssistant={() => {
+          setAiContext('create')
           setIsCreateModalOpen(false)
           setIsAIModalOpen(true)
         }}
+      />
+
+      <TestEditorModal
+        isOpen={!!editingTestId}
+        testId={editingTestId}
+        onClose={() => setEditingTestId(null)}
+        onUpdated={loadData}
+        onOpenAIAssistant={() => {
+          setAiContext('edit')
+          setIsAIModalOpen(true)
+        }}
+        pendingAIQuestions={pendingAIQuestions}
+        onClearPendingAIQuestions={() => setPendingAIQuestions([])}
       />
 
       <AIAssistantModal
         isOpen={isAIModalOpen}
         onClose={() => setIsAIModalOpen(false)}
         onAppendQuestions={async (newQuestions) => {
-          // Open create modal with pre-generated questions or auto-create test
+          if (aiContext === 'edit' && editingTestId) {
+            setPendingAIQuestions(newQuestions)
+            return
+          }
+
+          // Auto-create test if generated from main overview
           if (newQuestions.length > 0) {
             await api.adminCreateTest(
               {

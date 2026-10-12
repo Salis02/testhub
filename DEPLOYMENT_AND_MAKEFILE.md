@@ -770,6 +770,14 @@ server {
         proxy_connect_timeout 10s;
     }
 
+    # Uploaded Media (Cached)
+    location /uploads/ {
+        proxy_pass http://backend;
+        proxy_set_header Host $host;
+        expires 7d;
+        add_header Cache-Control "public, no-transform";
+    }
+
     # Rate limiting
     limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
     location /api/tests/*/start {
