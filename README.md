@@ -19,8 +19,9 @@ Semua dokumentasi arsitektur, panduan teknis, dan keamanan disimpan dalam file m
 5. [DEPLOYMENT_AND_MAKEFILE.md](file:///home/sans/coding/quiz_app/DEPLOYMENT_AND_MAKEFILE.md)  
    Panduan orkestrasi Makefile, Docker Compose, skrip backup, health check, dan panduan scaling VPS 2GB.
 6. [FRONTEND_PROGRESS_AND_HANDOVER.md](file:///home/sans/coding/quiz_app/FRONTEND_PROGRESS_AND_HANDOVER.md)  
-   **Dokumentasi frontend terkini & panduan serah terima AI agent**: Integrasi backend AI generator, skeleton loading & progressing dynamic bar, RBAC route protection, dan universal toast & modal confirmation (DRY).
-
+   **Dokumentasi frontend terkini & panduan serah terima AI agent**: Arsitektur React 19, RBAC route protection, universal toast & modal confirmation (DRY), dan AI generator modal.
+7. [style.md](file:///home/sans/coding/quiz_app/style.md)  
+   **Sistem Desain & Panduan Visual**: Strict Tri-Color palette per mode, CSS variables, Tailwind tokens, dan checklist anti-AI-slop.
 ---
 
 ## ⚡ Status Fitur Terimplementasi (Update Terkini: Okt 2026)
@@ -86,10 +87,13 @@ make dev
 
 ### 2. Jalankan Frontend
 ```bash
+# Opsi 1: Menggunakan Makefile dari root
+make dev-frontend
+
+# Opsi 2: Manual via Bun
 cd frontend
-npm install
-npm run dev
-# Buka http://localhost:3000 atau http://localhost:5173 di browser
+bun run dev
+# Buka http://localhost:5173 atau http://localhost:3000 di browser
 ```
 
 ### 3. Akun Admin Default

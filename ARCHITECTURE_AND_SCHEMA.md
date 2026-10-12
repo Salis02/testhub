@@ -1,812 +1,130 @@
-# 🏗️ ARCHITECTURE & DATABASE SCHEMA
-## Production-Ready Design for TestHub
+# 🏛️ TestHub Architecture, Database Schema & API Contracts
+
+> **Dokumen Arsitektur Teknis, Skema Data Relasional, dan Spesifikasi API TestHub**  
+> Sumber Skema Migrasi: [backend/migrations/001_init.sql](file:///home/sans/coding/quiz_app/backend/migrations/001_init.sql)  
+> Domain Models: [backend/internal/models/models.go](file:///home/sans/coding/quiz_app/backend/internal/models/models.go)
 
 ---
 
-## 1. SYSTEM ARCHITECTURE
-
-### High-Level Architecture Diagram
+## 1. Arsitektur Sistem (High-Level Design)
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    CLIENT LAYER                         │
-├─────────────────────────────────────────────────────────┤
-│  React SPA                                              │
-│  - Test Taking Form (Non-auth)                          │
-│  - Admin Dashboard (Auth protected)                      │
-│  - Analytics Dashboard                                  │
-│  - User Results Page                                    │
-└────────────────────┬────────────────────────────────────┘
-                     │ HTTPS + CORS
-┌────────────────────┴────────────────────────────────────┐
-│            LOAD BALANCER / REVERSE PROXY                │
-│  (Nginx - for horizontal scaling)                       │
-└────────────────────┬────────────────────────────────────┘
-                     │
-    ┌────────────────┼────────────────┐
-    │                │                │
-┌───▼───┐       ┌───▼───┐       ┌───▼───┐
-│ GO    │       │ GO    │       │ GO    │
-│Server │       │Server │       │Server │  (Horizontal scaling)
-│:8000  │       │:8001  │       │:8002  │
-└───┬───┘       └───┬───┘       └───┬───┘
-    │                │                │
-    └────────────────┼────────────────┘
-                     │
-        ┌────────────┴────────────┐
-        │                         │
-┌───────▼────────────┐  ┌────────▼────────┐
-│  PostgreSQL        │  │  Redis Cache    │
-│  (Master-Replica)  │  │  (Session+Data) │
-├────────────────────┤  ├─────────────────┤
-│ Primary (Write)    │  │ - Session cache │
-│ Replica (Read)     │  │ - Rate limit    │
-│ Backup             │  │ - Test cache    │
-└────────────────────┘  └─────────────────┘
-
-┌──────────────────────────────────────┐
-│     BACKGROUND SERVICES              │
-├──────────────────────────────────────┤
-│ - Email queue (Goroutine workers)    │
-│ - File processing                    │
-│ - Analytics aggregation              │
-│ - Log aggregation                    │
-└──────────────────────────────────────┘
-```
-
-### Component Responsibilities
-
-#### Frontend (React)
-- SPA with React Router
-- Tailwind CSS for styling
-- Redux/Context for state
-- Axios for API calls
-- No local auth - token in localStorage
-
-#### Backend (Go)
-- REST API server
-- Session management (JWT + Redis)
-- Business logic
-- Database queries
-- Rate limiting middleware
-- Request validation
-
-#### Database (PostgreSQL)
-- ACID compliance
-- Optimized indexes
-- Connection pooling
-- Read replicas for analytics
-
-#### Cache Layer (Redis)
-- Session storage
-- Rate limit counters
-- Test question cache
-- Hot data cache
-
----
-
-## 2. DATABASE SCHEMA
-
-### Schema Design Principles
-- ✅ Normalized (3NF) untuk consistency
-- ✅ Indexing pada frequently queried columns
-- ✅ Partitioning ready (future) untuk test_submissions
-- ✅ Audit logging untuk sensitive data
-- ✅ Soft deletes untuk data retention
-
-### Database Diagram
-
-```
-USERS (admin)
-├── id (uuid, PK)
-├── email (unique)
-├── password_hash
-├── full_name
-├── role (admin, creator)
-├── subscription_tier
-├── created_at
-├── updated_at
-
-TESTS
-├── id (uuid, PK)
-├── creator_id (FK -> USERS)
-├── title
-├── description
-├── category (cpns, sbmptn, iq, custom)
-├── duration_minutes
-├── passing_score_percentage
-├── total_questions
-├── shuffle_questions (boolean)
-├── shuffle_answers (boolean)
-├── published (boolean)
-├── created_at
-├── updated_at
-
-TEST_QUESTIONS
-├── id (uuid, PK)
-├── test_id (FK -> TESTS)
-├── question_number (int)
-├── question_text
-├── question_type (multiple_choice, essay, matching)
-├── media_url (nullable, for images)
-├── difficulty_level (easy, medium, hard)
-├── explanation
-├── points (for weighted scoring)
-├── created_at
-
-QUESTION_OPTIONS
-├── id (uuid, PK)
-├── question_id (FK -> TEST_QUESTIONS)
-├── option_text
-├── option_number (A, B, C, D, E)
-├── is_correct (boolean)
-├── created_at
-
-TEST_SESSIONS
-├── id (uuid, PK) - unique session token
-├── test_id (FK -> TESTS)
-├── ip_address
-├── user_agent
-├── started_at
-├── submitted_at (nullable)
-├── device_fingerprint (for security)
-├── expires_at (24 hours)
-├── created_at
-
-TEST_SUBMISSIONS (Partitioned by created_at)
-├── id (uuid, PK)
-├── session_id (FK -> TEST_SESSIONS)
-├── question_id (FK -> TEST_QUESTIONS)
-├── user_answer_text
-├── user_answer_id (for multiple choice - FK -> QUESTION_OPTIONS)
-├── is_correct (nullable, auto-filled for MC)
-├── score (nullable, for weighted)
-├── admin_review_note (nullable, for essays)
-├── submitted_at
-├── created_at
-
-TEST_RESULTS
-├── id (uuid, PK)
-├── session_id (FK -> TEST_SESSIONS, unique)
-├── test_id (FK -> TESTS)
-├── total_score
-├── percentage_score
-├── passing (boolean)
-├── time_spent_seconds
-├── questions_answered (int)
-├── questions_correct (int)
-├── submitted_at
-├── created_at
-
-CATEGORY_PERFORMANCE (Denormalized for analytics)
-├── id (uuid, PK)
-├── result_id (FK -> TEST_RESULTS)
-├── category_name (reading, logic, math, etc)
-├── score
-├── total_possible
-├── percentage
-├── created_at
-
-SCORE_TEMPLATES (Admin-defined)
-├── id (uuid, PK)
-├── test_id (FK -> TESTS)
-├── formula_type (simple, weighted, custom)
-├── formula_json (for complex scoring)
-├── created_at
-
-ADMIN_AUDIT_LOG
-├── id (uuid, PK)
-├── admin_id (FK -> USERS)
-├── action (create_test, modify_test, grade_essay, etc)
-├── resource_type (test, question, result, etc)
-├── resource_id (uuid)
-├── old_value (jsonb, nullable)
-├── new_value (jsonb, nullable)
-├── timestamp
-
-FEEDBACK_TEMPLATES
-├── id (uuid, PK)
-├── test_id (FK -> TESTS)
-├── score_range_min (0-100)
-├── score_range_max (0-100)
-├── feedback_text
-├── next_steps (recommendations)
-├── created_at
-```
-
-### SQL Schema (PostgreSQL)
-
-```sql
--- Create extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
--- USERS table
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name VARCHAR(255),
-    role VARCHAR(50) NOT NULL DEFAULT 'user', -- admin, creator
-    subscription_tier VARCHAR(50) NOT NULL DEFAULT 'free', -- free, basic, pro, institution
-    subscription_expires_at TIMESTAMP,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_email (email),
-    INDEX idx_role (role),
-    INDEX idx_subscription_tier (subscription_tier)
-);
-
--- TESTS table
-CREATE TABLE tests (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    creator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    category VARCHAR(100) NOT NULL, -- cpns, sbmptn, iq, custom
-    duration_minutes INT NOT NULL,
-    passing_score_percentage INT DEFAULT 60,
-    total_questions INT,
-    shuffle_questions BOOLEAN DEFAULT false,
-    shuffle_answers BOOLEAN DEFAULT false,
-    published BOOLEAN DEFAULT false,
-    is_deleted BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_category (category),
-    INDEX idx_creator_id (creator_id),
-    INDEX idx_published (published),
-    INDEX idx_created_at (created_at)
-);
-
--- TEST_QUESTIONS table
-CREATE TABLE test_questions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    test_id UUID NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
-    question_number INT NOT NULL,
-    question_text TEXT NOT NULL,
-    question_type VARCHAR(50) NOT NULL, -- multiple_choice, essay, matching
-    media_url VARCHAR(500),
-    difficulty_level VARCHAR(50) DEFAULT 'medium', -- easy, medium, hard
-    explanation TEXT,
-    points INT DEFAULT 1,
-    is_deleted BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(test_id, question_number),
-    INDEX idx_test_id (test_id),
-    INDEX idx_question_type (question_type)
-);
-
--- QUESTION_OPTIONS table
-CREATE TABLE question_options (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    question_id UUID NOT NULL REFERENCES test_questions(id) ON DELETE CASCADE,
-    option_text TEXT NOT NULL,
-    option_letter VARCHAR(1) NOT NULL, -- A, B, C, D, E
-    is_correct BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(question_id, option_letter),
-    INDEX idx_question_id (question_id),
-    INDEX idx_is_correct (is_correct)
-);
-
--- TEST_SESSIONS table (Non-auth user sessions)
-CREATE TABLE test_sessions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), -- Session token
-    test_id UUID NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
-    ip_address INET,
-    user_agent TEXT,
-    device_fingerprint VARCHAR(255), -- Hash of device info
-    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    submitted_at TIMESTAMP,
-    expires_at TIMESTAMP NOT NULL,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_test_id (test_id),
-    INDEX idx_ip_address (ip_address),
-    INDEX idx_expires_at (expires_at),
-    INDEX idx_is_active (is_active)
-);
-
--- TEST_SUBMISSIONS table (Partitioned by created_at for scalability)
-CREATE TABLE test_submissions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    session_id UUID NOT NULL REFERENCES test_sessions(id) ON DELETE CASCADE,
-    question_id UUID NOT NULL REFERENCES test_questions(id),
-    user_answer_text TEXT,
-    user_answer_option_id UUID REFERENCES question_options(id),
-    is_correct BOOLEAN, -- Auto-filled for MC, NULL for essay
-    score DECIMAL(5,2), -- For weighted scoring
-    admin_review_note TEXT,
-    admin_reviewed_at TIMESTAMP,
-    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_session_id (session_id),
-    INDEX idx_question_id (question_id),
-    INDEX idx_is_correct (is_correct),
-    INDEX idx_created_at (created_at)
-) PARTITION BY RANGE (created_at);
-
--- Create partitions for test_submissions (monthly)
-CREATE TABLE test_submissions_2026_10 PARTITION OF test_submissions
-    FOR VALUES FROM ('2026-10-01') TO ('2026-11-01');
-
-CREATE TABLE test_submissions_2026_11 PARTITION OF test_submissions
-    FOR VALUES FROM ('2026-11-01') TO ('2026-12-01');
-
--- TEST_RESULTS table
-CREATE TABLE test_results (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    session_id UUID UNIQUE NOT NULL REFERENCES test_sessions(id),
-    test_id UUID NOT NULL REFERENCES tests(id),
-    total_score DECIMAL(8,2),
-    percentage_score DECIMAL(5,2),
-    passing BOOLEAN,
-    time_spent_seconds INT,
-    questions_answered INT,
-    questions_correct INT,
-    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_test_id (test_id),
-    INDEX idx_percentage_score (percentage_score),
-    INDEX idx_submitted_at (submitted_at)
-);
-
--- SCORE_TEMPLATES table
-CREATE TABLE score_templates (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    test_id UUID UNIQUE NOT NULL REFERENCES tests(id),
-    formula_type VARCHAR(50), -- simple, weighted, custom
-    formula_json JSONB,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_test_id (test_id)
-);
-
--- ADMIN_AUDIT_LOG table
-CREATE TABLE admin_audit_log (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    admin_id UUID REFERENCES users(id),
-    action VARCHAR(255),
-    resource_type VARCHAR(100),
-    resource_id UUID,
-    old_value JSONB,
-    new_value JSONB,
-    ip_address INET,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_admin_id (admin_id),
-    INDEX idx_timestamp (timestamp),
-    INDEX idx_resource_id (resource_id)
-);
-
--- FEEDBACK_TEMPLATES table
-CREATE TABLE feedback_templates (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    test_id UUID NOT NULL REFERENCES tests(id),
-    score_range_min INT,
-    score_range_max INT,
-    feedback_text TEXT,
-    next_steps TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_test_id (test_id),
-    INDEX idx_score_range (score_range_min, score_range_max)
-);
-
--- Create indexes for performance
-CREATE INDEX idx_test_sessions_test_id_active 
-    ON test_sessions(test_id, is_active);
-
-CREATE INDEX idx_test_results_test_created 
-    ON test_results(test_id, created_at DESC);
+   [ Test Takers (Browser) ]       [ Admin / Creator (Browser) ]
+               │                                   │
+               ▼                                   ▼
+        ┌─────────────────────────────────────────────────┐
+        │        Nginx Reverse Proxy (:80 / :443)         │
+        │  - SSL Termination       - Rate Limiting Zone   │
+        │  - Static Asset Cache    - Gzip Compression     │
+        └──────────────┬──────────────────┬───────────────┘
+                       │                  │
+         Static SPA    │                  │  /api/*, /uploads/*
+         /index.html   ▼                  ▼
+    ┌──────────────────────┐      ┌─────────────────────────┐
+    │ React Frontend (Bun) │      │   Go Backend API (:8000)│
+    │  - Vite / React 19   │      │   - Gin Web Engine      │
+    │  - Tailwind CSS      │      │   - Anonymous Sessions  │
+    │  - Lucide Icons      │      │   - Scoring Engine      │
+    └──────────────────────┘      └────────────┬────────────┘
+                                               │
+                       ┌───────────────────────┴──────────────────────┐
+                       ▼                                              ▼
+         ┌───────────────────────────┐                 ┌───────────────────────────┐
+         │     PostgreSQL 15 DB      │                 │      Redis 7 / Memory     │
+         │ - Relational Storage      │                 │ - Session Metadata Cache  │
+         │ - Connection Pool (20-50) │                 │ - Distributed Rate Limits │
+         │ - B-Tree Indexes          │                 │ - Auto In-Memory Fallback │
+         └───────────────────────────┘                 └───────────────────────────┘
 ```
 
 ---
 
-## 3. API SPECIFICATIONS
+## 2. Skema Database Relasional & Kamus Data
 
-### Authentication Endpoints
+Relasi entitas terdefinisi di [backend/migrations/001_init.sql](file:///home/sans/coding/quiz_app/backend/migrations/001_init.sql):
 
-#### POST /api/auth/register
-```json
-Request:
-{
-  "email": "admin@example.com",
-  "password": "secure_password",
-  "full_name": "John Doe",
-  "role": "creator"
-}
-
-Response: 200
-{
-  "user_id": "uuid",
-  "token": "jwt_token",
-  "refresh_token": "jwt_refresh_token",
-  "role": "creator"
-}
+```
+users (1) ──< tests (N) ──< questions (N) ──< options (N)
+               │                 │
+               │ (1)             │ (1)
+               ▼ (N)             ▼ (N)
+            sessions (1) ───< submissions (N)
+               │
+               ▼ (1)
+            results (1)
 ```
 
-#### POST /api/auth/login
-```json
-Request:
-{
-  "email": "admin@example.com",
-  "password": "secure_password"
-}
+### Kamus Entitas Inti
+| Tabel | Primary Key | Foreign Key Penting | Deskripsi & Kolom Kunci |
+|---|---|---|---|
+| **`users`** | `id` (UUID) | - | Akun pengelola kuis (`email`, `password_hash`, `role: admin/creator`, `full_name`) |
+| **`tests`** | `id` (UUID) | `created_by -> users.id` | Modul kuis (`title`, `category: cpns/sbmptn/iq/custom`, `duration_minutes`, `passing_score`, `is_published`) |
+| **`questions`** | `id` (UUID) | `test_id -> tests.id` | Butir soal kuis (`question_number`, `question_text`, `question_type: multiple_choice/essay`, `points`, `media_url`, `explanation`) |
+| **`options`** | `id` (UUID) | `question_id -> questions.id` | Opsi pilihan ganda (`option_text`, `option_letter: A-E`, `is_correct: boolean`) |
+| **`sessions`** | `id` (UUID) | `test_id -> tests.id` | Sesi ujian anonim peserta (`session_token`, `status: in_progress/completed/expired`, `expires_at`, `total_score`) |
+| **`submissions`**| `id` (UUID) | `session_id`, `question_id`, `selected_option_id` | Jawaban peserta (`essay_answer`, `is_flagged`, `is_correct`, `score_awarded`) |
+| **`results`** | `id` (UUID) | `session_id -> sessions.id` | Rekapitulasi akhir (`score`, `percentage`, `passed: boolean`, `percentile`, `category_breakdown: JSONB`) |
 
-Response: 200
-{
-  "user_id": "uuid",
-  "token": "jwt_token",
-  "refresh_token": "jwt_refresh_token"
-}
-```
+### Indeks Performa Kritis
+- `CREATE INDEX idx_tests_category_published ON tests(category, is_published);`
+- `CREATE INDEX idx_questions_test_id ON questions(test_id);`
+- `CREATE INDEX idx_options_question_id ON options(question_id);`
+- `CREATE INDEX idx_sessions_token ON sessions(session_token);`
+- `CREATE INDEX idx_submissions_session_question ON submissions(session_id, question_id);`
 
 ---
 
-### Public Endpoints (Non-Auth)
+## 3. Spesifikasi Kontrak API (API Directory)
 
-#### GET /api/tests
-```
-Query: ?category=cpns&page=1&limit=10
+Semua endpoint terdaftar di [backend/internal/handlers/routes.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/routes.go):
 
-Response: 200
-{
-  "tests": [
-    {
-      "id": "uuid",
-      "title": "CPNS Test 2024",
-      "category": "cpns",
-      "duration_minutes": 120,
-      "total_questions": 100,
-      "difficulty": "hard",
-      "reviews_count": 1234,
-      "average_rating": 4.5
-    }
-  ],
-  "pagination": {
-    "total": 500,
-    "page": 1,
-    "limit": 10
-  }
-}
-```
+### 3.1 Autentikasi & Akun
+| Method | Path | Akses | Deskripsi & Payload Utama |
+|---|---|---|---|
+| `POST` | `/api/auth/register` | Publik (RL: 20/m) | Daftar admin/creator (`email`, `password`, `full_name`, `role`) |
+| `POST` | `/api/auth/login` | Publik (RL: 30/m) | Login admin/creator (`email`, `password`) -> return JWT `token` |
+| `GET` | `/api/auth/me` | Bearer Token | Mengambil identitas user dari token (`id`, `email`, `role`) |
 
-#### POST /api/tests/{testId}/start
-```
-Request: {}
+### 3.2 Alur Ujian Publik (Non-Auth / Anonim)
+| Method | Path | Akses | Deskripsi & Payload Utama |
+|---|---|---|---|
+| `GET` | `/api/tests` | Publik | Katalog tes aktif (Query: `category`, `keyword`) |
+| `GET` | `/api/tests/:testId` | Publik | Detail ringkas modul tes (durasi, jumlah soal, passing score) |
+| `POST` | `/api/tests/:testId/start` | Publik (RL: 10/m) | Mulai ujian -> kembalikan `session_id` & `expires_at` |
+| `GET` | `/api/sessions/:sessionId/questions`| Publik | Ambil daftar butir soal (**kunci jawaban & pembahasan di-strip**) |
+| `GET` | `/api/sessions/:sessionId/submissions`| Publik | Ambil progres draft jawaban yang sudah disimpan sebelumnya |
+| `POST` | `/api/sessions/:sessionId/submit-answer`| Publik | Simpan jawaban butir soal (`question_id`, `selected_option_id`, `is_flagged`) |
+| `POST` | `/api/sessions/:sessionId/finish`| Publik | Selesaikan ujian -> picu auto-grading & return `result_id` |
+| `GET` | `/api/results/:resultId` | Publik | Pembahasan lengkap, persentil, dan evaluasi performa kategori |
 
-Response: 200
-{
-  "session_id": "uuid (unique token)",
-  "test": {
-    "id": "uuid",
-    "title": "CPNS Test 2024",
-    "duration_minutes": 120,
-    "total_questions": 100,
-    "passing_score": 60
-  },
-  "expires_at": "2026-10-12T10:30:00Z"
-}
-```
-
-#### GET /api/sessions/{sessionId}/questions
-```
-Query: ?page=1&limit=5
-
-Response: 200
-{
-  "questions": [
-    {
-      "id": "uuid",
-      "question_number": 1,
-      "question_text": "What is...?",
-      "question_type": "multiple_choice",
-      "media_url": "https://...",
-      "difficulty": "medium",
-      "options": [
-        {
-          "id": "uuid",
-          "letter": "A",
-          "text": "Option A"
-        },
-        ...
-      ]
-    }
-  ],
-  "total_questions": 100,
-  "current_page": 1
-}
-```
-
-#### POST /api/sessions/{sessionId}/submit-answer
-```
-Request:
-{
-  "question_id": "uuid",
-  "answer_option_id": "uuid", // untuk MC
-  "answer_text": "essay answer..." // untuk essay
-}
-
-Response: 200
-{
-  "received": true,
-  "feedback": {
-    "is_correct": true, // untuk MC only
-    "explanation": "The correct answer is..."
-  }
-}
-```
-
-#### POST /api/sessions/{sessionId}/finish
-```
-Request: {}
-
-Response: 200
-{
-  "result_id": "uuid",
-  "total_score": 75.5,
-  "percentage_score": 75.5,
-  "passing": true,
-  "time_spent_seconds": 3600,
-  "questions_correct": 75,
-  "questions_total": 100,
-  "feedback": "Great job! You passed with 75%",
-  "next_steps": "Review your weak areas..."
-}
-```
-
-#### GET /api/results/{resultId}
-```
-Response: 200
-{
-  "result_id": "uuid",
-  "test_title": "CPNS Test 2024",
-  "total_score": 75.5,
-  "percentage_score": 75.5,
-  "passing": true,
-  "category_performance": [
-    {
-      "category": "Reading Comprehension",
-      "score": 85,
-      "percentage": 85,
-      "questions_correct": 17,
-      "total_questions": 20
-    }
-  ],
-  "detailed_answers": [
-    {
-      "question_number": 1,
-      "question_text": "...",
-      "user_answer": "A",
-      "correct_answer": "B",
-      "is_correct": false,
-      "explanation": "..."
-    }
-  ],
-  "comparison": {
-    "user_percentile": 75,
-    "average_score": 65,
-    "higher_than_percent": 75
-  }
-}
-```
+### 3.3 Dashboard Admin & Pengelolaan Kuis
+| Method | Path | Akses | Deskripsi & Payload Utama |
+|---|---|---|---|
+| `GET` | `/api/admin/tests` | Admin / Creator | List seluruh tes termasuk draft & unlisted |
+| `POST` | `/api/admin/tests` | Admin / Creator | Buat modul tes baru |
+| `GET` | `/api/admin/tests/:testId` | Admin / Creator | Detail modul lengkap beserta seluruh kunci jawaban dan opsi |
+| `PUT` | `/api/admin/tests/:testId` | Admin / Creator | Update atomik metadata tes, daftar soal, opsi A-E, dan gambar |
+| `DELETE` | `/api/admin/tests/:testId` | Admin / Creator | Soft-delete modul ujian |
+| `POST` | `/api/admin/tests/:testId/toggle-publish`| Admin / Creator| Toggle status tayang tes (`is_published`) |
+| `GET` | `/api/admin/tests/:testId/analytics` | Admin / Creator | Analitik submission, rata-rata nilai, passing rate |
+| `POST` | `/api/admin/upload-media` | Admin / Creator | Upload gambar ilustrasi soal (MIME check, max 2MB) |
+| `DELETE` | `/api/admin/media` | Admin / Creator | Hapus berkas media berdasarkan query `url` |
+| `GET` | `/api/admin/essays` | Admin / Creator | Antrean review jawaban esai yang belum dinilai |
+| `POST` | `/api/admin/essays/:essayId/grade` | Admin / Creator | Berikan skor dan feedback esai manual |
+| `POST` | `/api/ai/generate-questions` | Admin / Creator | AI Question Generator sintetis soal (Gemini/Groq) |
 
 ---
 
-### Admin Endpoints (Auth Required)
+## 4. Strategi Caching (Redis & In-Memory Fallback)
 
-#### POST /api/admin/tests
-```
-Request:
-{
-  "title": "CPNS Test 2024",
-  "description": "...",
-  "category": "cpns",
-  "duration_minutes": 120,
-  "passing_score_percentage": 60,
-  "shuffle_questions": true,
-  "shuffle_answers": true
-}
+Implementasi di [backend/internal/cache/redis.go](file:///home/sans/coding/quiz_app/backend/internal/cache/redis.go):
 
-Response: 201
-{
-  "test_id": "uuid"
-}
-```
+| Key Pattern | Tipe Data | TTL | Tujuan & Invalidation |
+|---|---|---|---|
+| `tests:published` | JSON String | 10 Menit | Cache katalog beranda kuis. Di-invalidate saat ada create/update/delete tes. |
+| `test:detail:{testId}` | JSON String | 30 Menit | Cache metadata modul tes publik. |
+| `test:questions:{testId}` | JSON String | 30 Menit | Cache daftar soal bersih tanpa jawaban untuk kecepatan akses bersamaan. |
+| `session:{sessionId}` | Hash / JSON | Sesuai durasi tes | Status aktif sesi pengerjaan ujian. |
+| `ratelimit:{ip}:{action}` | Integer | 1 Menit | Rate limit sliding window counter. |
 
-#### POST /api/admin/tests/{testId}/questions
-```
-Request:
-{
-  "question_number": 1,
-  "question_text": "What is the capital of France?",
-  "question_type": "multiple_choice",
-  "difficulty": "easy",
-  "points": 1,
-  "explanation": "Paris is...",
-  "options": [
-    {"letter": "A", "text": "London", "is_correct": false},
-    {"letter": "B", "text": "Paris", "is_correct": true},
-    ...
-  ]
-}
-
-Response: 201
-{
-  "question_id": "uuid"
-}
-```
-
-#### GET /api/admin/tests/{testId}/analytics
-```
-Query: ?from=2026-10-01&to=2026-10-31
-
-Response: 200
-{
-  "test_id": "uuid",
-  "test_title": "CPNS Test 2024",
-  "total_submissions": 5000,
-  "average_score": 65.5,
-  "passing_rate": 72.3,
-  "average_time_seconds": 4200,
-  "completion_rate": 95.2,
-  "question_analytics": [
-    {
-      "question_number": 1,
-      "correct_rate": 92.5,
-      "average_time_seconds": 45,
-      "difficulty_rating": 1.2 // 1-5, higher = harder
-    }
-  ],
-  "hourly_submissions": [...]
-}
-```
-
-#### POST /api/admin/tests/{testId}/publish
-```
-Request: {}
-
-Response: 200
-{
-  "published": true,
-  "published_at": "2026-10-11T10:30:00Z"
-}
-```
-
-#### PUT /api/admin/tests/{testId}
-Update modul ujian secara atomik beserta daftar butir pertanyaan, opsi jawaban, dan media:
-```
-Request:
-{
-  "title": "CPNS 2026 - Paket A Update",
-  "description": "Petunjuk pengerjaan terbaru...",
-  "category": "cpns",
-  "duration_minutes": 100,
-  "passing_score_percentage": 65,
-  "published": true,
-  "questions": [
-    {
-      "question_number": 1,
-      "question_text": "Perhatikan diagram berikut...",
-      "question_type": "multiple_choice",
-      "media_url": "/uploads/questions/img_abc123.png",
-      "difficulty_level": "medium",
-      "points": 5,
-      "explanation": "Berdasarkan diagram...",
-      "options": [
-        {"option_letter": "A", "option_text": "Opsi A", "is_correct": true},
-        {"option_letter": "B", "option_text": "Opsi B", "is_correct": false}
-      ]
-    }
-  ]
-}
-
-Response: 200
-{
-  "id": "test-cpns-1718000000",
-  "title": "CPNS 2026 - Paket A Update",
-  ...
-}
-```
-
-#### POST /api/admin/upload-media
-Unggah file gambar media untuk diagram/ilustrasi soal:
-```
-Content-Type: multipart/form-data
-Body: file=<binary_data> (max 2MB: PNG, JPG, WebP, SVG)
-
-Response: 201
-{
-  "url": "/uploads/questions/img_21fd83b9-b10d-40ff-ae4e-811b70259e9a.png",
-  "filename": "diagram_soal.png",
-  "size_bytes": 105420,
-  "content_type": "image/png"
-}
-```
-
-#### DELETE /api/admin/media
-Hapus file media dari penyimpanan lokal/cloud:
-```
-Query: ?url=/uploads/questions/img_abc.png
-Response: 200
-{
-  "success": true
-}
-```
-
----
-
-## 4. Caching Strategy (Redis)
-
-```go
-// Session cache
-KEY: session:{sessionId}
-VALUE: {
-  test_id,
-  started_at,
-  expires_at,
-  ip_address,
-  device_fingerprint
-}
-TTL: 24 hours
-
-// Test cache
-KEY: test:{testId}
-VALUE: {
-  title, duration, total_questions, ...
-}
-TTL: 6 hours (invalidate on update)
-
-// Questions cache (per test)
-KEY: test_questions:{testId}
-VALUE: [questions array]
-TTL: 6 hours
-
-// Rate limiting
-KEY: rate_limit:{ip_or_session}:{endpoint}
-VALUE: count
-TTL: 1 minute
-
-// Results cache (temporary)
-KEY: result_pending:{sessionId}
-VALUE: {
-  total_score, percentage, ...
-}
-TTL: 30 minutes
-```
-
----
-
-## 5. Performance Optimization
-
-### Database Optimization
-1. **Connection Pooling:** pgbouncer (50 connections min, 200 max)
-2. **Read Replicas:** Distribute analytics queries
-3. **Indexes:** All FK, frequently filtered, sorted columns
-4. **Query Optimization:** Use EXPLAIN ANALYZE
-5. **Partitioning:** test_submissions by month
-
-### API Optimization
-1. **Pagination:** Default 20 items/page
-2. **Caching:** Redis for hot data
-3. **Compression:** GZIP for responses
-4. **CDN:** Static assets (images, JS, CSS)
-
-### Frontend Optimization
-1. **Code splitting:** By routes
-2. **Lazy loading:** Images, components
-3. **Service workers:** Offline capability (future)
-
----
-
-**End of Architecture & Schema**
+> **Resilient Fallback:** Jika koneksi Redis terputus, backend secara otomatis dan transparan mengalihkan operasi `Get`, `Set`, `Delete`, dan `Incr` ke cache memori lokal (`sync.RWMutex`), menjamin SLA ketersediaan 99.5%.
