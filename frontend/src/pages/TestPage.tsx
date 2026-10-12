@@ -8,11 +8,13 @@ import { QuestionNav } from '@/components/test/QuestionNav'
 import { FinishConfirmModal } from '@/components/test/FinishConfirmModal'
 import { TestPageSkeleton } from '@/components/common/Skeleton'
 import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { useToast } from '@/context/ToastContext'
 
 export const TestPage: React.FC = () => {
   const { testId } = useParams<{ testId: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const toast = useToast()
 
   const [session, setSession] = useState<TestSession | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
@@ -84,7 +86,7 @@ export const TestPage: React.FC = () => {
         })
       }, 1000)
     } catch (err) {
-      alert((err as Error).message)
+      toast.error('Gagal Memuat Ujian', (err as Error).message)
       navigate('/')
     } finally {
       setLoading(false)
@@ -97,7 +99,7 @@ export const TestPage: React.FC = () => {
       const res = await api.finishTest(sessionId, initialDurationRef.current)
       navigate(`/results/${res.id}`)
     } catch (err) {
-      alert('Gagal menyelesaikan ujian: ' + (err as Error).message)
+      toast.error('Gagal Menyelesaikan Ujian', (err as Error).message)
     }
   }
 
@@ -172,7 +174,7 @@ export const TestPage: React.FC = () => {
       const res = await api.finishTest(session.session_id, Math.max(1, timeSpent))
       navigate(`/results/${res.id}`)
     } catch (err) {
-      alert((err as Error).message)
+      toast.error('Gagal Mengirim Ujian', (err as Error).message)
       setIsSubmitting(false)
     }
   }

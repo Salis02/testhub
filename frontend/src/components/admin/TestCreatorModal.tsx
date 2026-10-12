@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Test, Question, TestCategory, QuestionType } from '@/types'
 import { X, Plus, Trash2, Sparkles } from 'lucide-react'
+import { useToast } from '@/context/ToastContext'
 
 interface TestCreatorModalProps {
   isOpen: boolean
@@ -21,6 +22,7 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
   const [durationMinutes, setDurationMinutes] = useState(25)
   const [passingScore, setPassingScore] = useState(65)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const toast = useToast()
 
   // Questions state
   const [questions, setQuestions] = useState<Question[]>([
@@ -76,7 +78,7 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) {
-      alert('Judul modul ujian tidak boleh kosong.')
+      toast.warning('Validasi Diperlukan', 'Judul modul ujian tidak boleh kosong.')
       return
     }
 
@@ -94,9 +96,10 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
         },
         questions
       )
+      toast.success('Modul Berhasil Dibuat', `"${title.trim()}" telah dipublikasikan ke bank soal.`)
       onClose()
     } catch (err) {
-      alert((err as Error).message)
+      toast.error('Gagal Membuat Modul', (err as Error).message)
     } finally {
       setIsSubmitting(false)
     }

@@ -1,15 +1,25 @@
-import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { Lock, Mail, ArrowRight, KeyRound } from 'lucide-react'
+import { Lock, Mail, ArrowRight, KeyRound, ShieldAlert } from 'lucide-react'
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('admin@testhub.com')
   const [password, setPassword] = useState('AdminPassword123!')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { login } = useAuth()
+  const { login, isAuthenticated, user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  const from = (location.state as { from?: string })?.from || '/admin'
+  const reason = (location.state as { reason?: string })?.reason
+
+  useEffect(() => {
+    if (isAuthenticated && user && (user.role === 'admin' || user.role === 'creator')) {
+      navigate(from, { replace: true })
+    }
+  }, [isAuthenticated, user, navigate, from])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,7 +29,7 @@ export const LoginPage: React.FC = () => {
     try {
       const ok = await login(email, password)
       if (ok) {
-        navigate('/admin')
+        navigate(from, { replace: true })
       } else {
         setError('Kredensial login tidak valid. Pastikan email dan kata sandi benar.')
       }
@@ -33,9 +43,17 @@ export const LoginPage: React.FC = () => {
   const handleQuickDemo = async () => {
     setEmail('admin@testhub.com')
     setPassword('AdminPassword123!')
-    const ok = await login('admin@testhub.com', 'AdminPassword123!')
-    if (ok) {
-      navigate('/admin')
+    setError(null)
+    setLoading(true)
+    try {
+      const ok = await login('admin@testhub.com', 'AdminPassword123!')
+      if (ok) {
+        navigate(from, { replace: true })
+      }
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -51,6 +69,19 @@ export const LoginPage: React.FC = () => {
             Akses dashboard manajemen bank soal, penilaian esai, dan analitik.
           </p>
         </div>
+
+        {/* Access Warning if redirected from protected route */}
+        {reason === 'unauthenticated' && !error && (
+          <div className="p-3.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs flex items-start space-x-2">
+            <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Otorisasi Diperlukan</p>
+              <p className="text-[11px] text-amber-600/90 dark:text-amber-400/90 mt-0.5">
+                Rute yang Anda tuju (<code className="font-mono">{from}</code>) dilindungi dan hanya dapat diakses oleh Administrator/Pengajar.
+              </p>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="p-3 rounded-md bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs">
@@ -70,7 +101,7 @@ export const LoginPage: React.FC = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@testhub.id"
+                placeholder="admin@testhub.com"
                 className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
@@ -104,14 +135,16 @@ export const LoginPage: React.FC = () => {
         </form>
 
         {/* Demo Quick Button */}
-        <div className="pt-4 border-t border-borderline">
+        <div className="pt-4 border-t border-borderline space-y-2 text-center">
+          <p className="text-[11px] text-ink-muted">Akun Uji Coba Terdaftar di Database:</p>
           <button
             type="button"
             onClick={handleQuickDemo}
+            disabled={loading}
             className="w-full py-2 px-3 rounded-md border border-accent/40 bg-accent/5 text-accent text-xs font-semibold hover:bg-accent/10 transition-colors flex items-center justify-center space-x-1.5 font-mono"
           >
             <KeyRound className="w-3.5 h-3.5" />
-            <span>1-Klik Masuk Mode Demo Admin</span>
+            <span>1-Klik Masuk Mode Demo Admin (admin@testhub.com)</span>
           </button>
         </div>
       </div>

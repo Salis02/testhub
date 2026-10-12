@@ -6,6 +6,7 @@ import { CategoryBadge } from '@/components/common/Badge'
 import { Search, Play, Clock, Award, CheckCircle2, Shield, Zap, ArrowRight } from 'lucide-react'
 
 import { TestCardSkeleton } from '@/components/common/Skeleton'
+import { useToast } from '@/context/ToastContext'
 
 export const HomePage: React.FC = () => {
   const [tests, setTests] = useState<Test[]>([])
@@ -14,6 +15,7 @@ export const HomePage: React.FC = () => {
   const activeCategory = searchParams.get('category') || 'all'
   const [searchQuery, setSearchQuery] = useState('')
   const navigate = useNavigate()
+  const toast = useToast()
 
   useEffect(() => {
     loadTests()
@@ -41,7 +43,7 @@ export const HomePage: React.FC = () => {
       const session = await api.startTest(testId)
       navigate(`/test/${session.test.id}?session=${session.session_id}`)
     } catch (err) {
-      alert((err as Error).message)
+      toast.error('Gagal Memulai Ujian', (err as Error).message)
     }
   }
 

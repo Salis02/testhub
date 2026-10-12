@@ -10,12 +10,14 @@ import { TestCreatorModal } from '@/components/admin/TestCreatorModal'
 import { AIAssistantModal } from '@/components/admin/AIAssistantModal'
 import { AdminOverviewSkeleton } from '@/components/common/Skeleton'
 import { LayoutDashboard, FileSpreadsheet, FileEdit, Sparkles, Plus } from 'lucide-react'
+import { useToast } from '@/context/ToastContext'
 
 type TabType = 'overview' | 'tests' | 'essays'
 
 export const AdminPage: React.FC = () => {
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
+  const toast = useToast()
 
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [stats, setStats] = useState<AdminStats | null>(null)
@@ -201,7 +203,7 @@ export const AdminPage: React.FC = () => {
               newQuestions
             )
             await loadData()
-            alert('Modul ujian AI berhasil ditambahkan ke bank soal!')
+            toast.success('Modul AI Ditambahkan', 'Modul ujian berbasis AI berhasil disimpan ke bank soal!')
           }
         }}
       />

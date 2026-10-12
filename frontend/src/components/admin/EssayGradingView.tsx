@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { EssaySubmission } from '@/types'
 import { CheckCircle2, FileText, Send } from 'lucide-react'
+import { useToast } from '@/context/ToastContext'
 
 interface EssayGradingViewProps {
   submissions: EssaySubmission[]
@@ -11,6 +12,7 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
   submissions,
   onGrade,
 }) => {
+  const toast = useToast()
   const [selectedEssayId, setSelectedEssayId] = useState<string | null>(
     submissions.length > 0 ? submissions[0].id : null
   )
@@ -27,10 +29,13 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
     try {
       setIsSubmitting(true)
       await onGrade(selectedEssay.id, score, note)
-      alert('Nilai dan catatan evaluasi berhasil disimpan ke rekam jejak peserta.')
+      toast.success(
+        'Penilaian Berhasil Disimpan',
+        `Skor ${score} dan catatan evaluasi telah dicatat ke rekam jejak peserta.`
+      )
       setNote('')
     } catch (err) {
-      alert((err as Error).message)
+      toast.error('Gagal Menyimpan Penilaian', (err as Error).message)
     } finally {
       setIsSubmitting(false)
     }

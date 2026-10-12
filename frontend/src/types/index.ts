@@ -114,3 +114,12 @@ export interface AdminStats {
   average_score_percentage: number
   pending_essays: number
 }
+
+export interface User {
+  id: string
+  email: string
+  fullName: string
+  role: 'admin' | 'creator' | 'user'
+  subscription_tier?: string
+  is_active?: boolean
+}

@@ -3,6 +3,8 @@ import { Test } from '@/types'
 import { CategoryBadge } from '@/components/common/Badge'
 import { Plus, Trash2, Globe, Lock, Play } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useConfirm } from '@/context/ConfirmContext'
+import { useToast } from '@/context/ToastContext'
 
 interface TestManagementProps {
   tests: Test[]
@@ -17,6 +19,22 @@ export const TestManagement: React.FC<TestManagementProps> = ({
   onDeleteTest,
   onOpenCreateModal,
 }) => {
+  const { confirm } = useConfirm()
+  const toast = useToast()
+
+  const handleDelete = async (test: Test) => {
+    const ok = await confirm({
+      title: 'Hapus Modul Ujian?',
+      message: `Modul "${test.title}" akan dihapus secara permanen dari bank soal. Tindakan ini tidak dapat dibatalkan.`,
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      variant: 'danger',
+    })
+    if (ok) {
+      onDeleteTest(test.id)
+      toast.success('Modul Berhasil Dihapus', `"${test.title}" telah dihapus.`)
+    }
+  }
   return (
     <div className="bg-surface border border-borderline rounded-lg shadow-sm overflow-hidden">
       {/* Table Header Action Bar */}
@@ -99,11 +117,7 @@ export const TestManagement: React.FC<TestManagementProps> = ({
 
                   {/* Delete button */}
                   <button
-                    onClick={() => {
-                      if (confirm(`Hapus modul "${test.title}"?`)) {
-                        onDeleteTest(test.id)
-                      }
-                    }}
+                    onClick={() => handleDelete(test)}
                     className="inline-flex items-center p-1 rounded text-ink-muted hover:text-red-500 hover:bg-surface-hover transition-colors"
                     title="Hapus Modul"
                   >

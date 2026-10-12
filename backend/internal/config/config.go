@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -35,6 +36,12 @@ type Config struct {
 	// Rate Limiting
 	RateLimitRequests int
 	RateLimitWindow   time.Duration
+
+	// AI Multi-Provider Config
+	GeminiAPIKeys []string
+	GeminiModel   string
+	GroqAPIKeys   []string
+	GroqModel     string
 }
 
 func LoadConfig() *Config {
@@ -58,6 +65,10 @@ func LoadConfig() *Config {
 		Domain:             getEnv("DOMAIN", "localhost"),
 		RateLimitRequests:  getEnvInt("RATE_LIMIT_REQUESTS", 100),
 		RateLimitWindow:    time.Minute,
+		GeminiAPIKeys:      getEnvSlice("GEMINI_API_KEYS", nil),
+		GeminiModel:        getEnv("GEMINI_MODEL", "gemini-1.5-flash"),
+		GroqAPIKeys:        getEnvSlice("GROQ_API_KEYS", nil),
+		GroqModel:          getEnv("GROQ_MODEL", "llama-3.3-70b-versatile"),
 	}
 }
 
@@ -84,4 +95,23 @@ func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
 		}
 	}
 	return defaultVal
+}
+
+func getEnvSlice(key string, defaultVal []string) []string {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	parts := strings.Split(val, ",")
+	var result []string
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	if len(result) == 0 {
+		return defaultVal
+	}
+	return result
 }

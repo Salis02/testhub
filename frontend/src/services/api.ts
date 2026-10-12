@@ -8,6 +8,7 @@ import {
   AdminStats,
   TestCategory,
   DifficultyLevel,
+  User,
 } from '@/types'
 import { INITIAL_TESTS, INITIAL_QUESTIONS, INITIAL_PENDING_ESSAYS } from './mockData'
 
@@ -158,7 +159,6 @@ export const api = {
       const res = await fetch(`${API_BASE}/sessions/${sessionId}/questions`)
       if (res.ok) {
         const data = await res.json()
-        // Ensure options is an array
         const safeQuestions: Question[] = (data.questions || []).map((q: Question) => ({
           ...q,
           options: q.options || [],
@@ -388,42 +388,70 @@ export const api = {
     return { result, questions }
   },
 
-  // 3. Admin Authentication & Management
-  async adminLogin(email: string, pass: string): Promise<{ token: string; user: { id: string; email: string; fullName: string; role: 'admin' | 'creator' } }> {
+  // 3. Admin Authentication & Role Verification
+  async adminLogin(email: string, pass: string): Promise<{ token: string; user: User }> {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ email, password: pass }),
+    })
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.error || 'Email atau kata sandi tidak cocok.')
+    }
+
+    const data = await res.json()
+    const userRole = data.role || 'creator'
+
+    if (userRole !== 'admin' && userRole !== 'creator') {
+      throw new Error('Akses Ditolak: Hanya akun Administrator/Instruktur yang diizinkan mengakses panel ini.')
+    }
+
+    localStorage.setItem(STORAGE_KEYS.AUTH, data.token)
+    return {
+      token: data.token,
+      user: {
+        id: data.user_id,
+        email: data.email,
+        fullName: data.full_name,
+        role: userRole,
+      },
+    }
+  },
+
+  async getCurrentUser(): Promise<User | null> {
+    const token = localStorage.getItem(STORAGE_KEYS.AUTH)
+    if (!token) return null
+
     try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ email, password: pass }),
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        headers: getHeaders(true),
       })
       if (res.ok) {
         const data = await res.json()
-        localStorage.setItem(STORAGE_KEYS.AUTH, data.token)
         return {
-          token: data.token,
-          user: {
-            id: data.user_id,
-            email: data.email,
-            fullName: data.full_name,
-            role: data.role || 'admin',
-          },
+          id: data.id,
+          email: data.email,
+          fullName: data.full_name,
+          role: data.role,
+          subscription_tier: data.subscription_tier,
+          is_active: data.is_active,
         }
       }
+      if (res.status === 401) {
+        localStorage.removeItem(STORAGE_KEYS.AUTH)
+        return null
+      }
     } catch {
-      // Fallback
+      // Offline fallback
     }
 
-    // Demo admin fallback
-    const token = 'jwt-demo-token-' + Date.now()
-    localStorage.setItem(STORAGE_KEYS.AUTH, token)
     return {
-      token,
-      user: {
-        id: 'user-admin-1',
-        email,
-        fullName: 'Administrator TestHub',
-        role: 'admin',
-      },
+      id: 'usr-admin-01',
+      email: 'admin@testhub.com',
+      fullName: 'Administrator TestHub',
+      role: 'admin',
     }
   },
 
@@ -435,8 +463,11 @@ export const api = {
       if (res.ok) {
         return await res.json()
       }
-    } catch {
-      // Fallback
+      if (res.status === 401 || res.status === 403) {
+        throw new Error('Sesi kedaluwarsa atau akses tidak diizinkan.')
+      }
+    } catch (err) {
+      if ((err as Error).message.includes('Sesi kedaluwarsa')) throw err
     }
 
     initLocalStorage()
@@ -486,7 +517,7 @@ export const api = {
             options: (q.options || []).map((o) => ({
               option_letter: o.option_letter,
               option_text: o.option_text,
-              is_correct: o.is_correct || false,
+              is_correct: !!o.is_correct,
             })),
           })),
         }),
@@ -598,50 +629,36 @@ export const api = {
     return true
   },
 
-  async generateQuestionsAI(params: {
-    category: TestCategory
-    subject: string
-    difficulty: DifficultyLevel
-    count: number
-  }): Promise<Question[]> {
-    try {
-      const res = await fetch(`${API_BASE}/ai/generate-questions`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(params),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        return data.map((q: Question) => ({
-          ...q,
-          options: q.options || [],
-        }))
-      }
-    } catch {
-      // Fallback
+  // 4. AI Multi-Provider Question Generation (Gemini 2.5, Groq, or Local Fallback)
+  async generateQuestionsAI(
+    params: {
+      category: TestCategory
+      subject: string
+      difficulty: DifficultyLevel
+      count: number
+    },
+    signal?: AbortSignal
+  ): Promise<Question[]> {
+    const res = await fetch(`${API_BASE}/ai/generate-questions`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(params),
+      signal,
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || `Gagal generate soal AI (HTTP ${res.status})`)
     }
 
-    // Local deterministic generator conforming to AI_AGENT_AND_SECURITY.md
-    const result: Question[] = []
-    for (let i = 0; i < params.count; i++) {
-      result.push({
-        id: `ai-gen-${Date.now()}-${i}`,
-        test_id: '',
-        question_number: i + 1,
-        question_text: `[AI-Agent: ${params.subject}] Evaluasi komprehensif butir asesmen standar tingkat ${params.difficulty.toUpperCase()} untuk topik ${params.subject}.`,
-        question_type: 'multiple_choice',
-        difficulty_level: params.difficulty,
-        points: params.difficulty === 'hard' ? 10 : params.difficulty === 'medium' ? 5 : 3,
-        explanation: `Analisis AI: Pilihan kunci menguraikan sintesis langsung dari prinsip ${params.subject} dengan regulasi baku yang berlaku.`,
-        options: [
-          { id: `opt-ai-${i}-a`, option_letter: 'A', option_text: 'Implementasi terintegrasi sesuai regulasi resmi dengan pengawasan berkala dan evaluasi terukur.', is_correct: true },
-          { id: `opt-ai-${i}-b`, option_letter: 'B', option_text: 'Penetapan target tanpa mempertimbangkan kapasitas sumber daya dan batasan waktu realistis.', is_correct: false },
-          { id: `opt-ai-${i}-c`, option_letter: 'C', option_text: 'Pendelegasian sepihak ke pihak eksternal tanpa audit kepatuhan tata kelola independen.', is_correct: false },
-          { id: `opt-ai-${i}-d`, option_letter: 'D', option_text: 'Peniadaan prosedur standar operasional (SOP) demi fleksibilitas jangka pendek.', is_correct: false },
-          { id: `opt-ai-${i}-e`, option_letter: 'E', option_text: 'Sentralisasi tertutup tanpa mekanisme transparansi dan akuntabilitas pemangku kepentingan.', is_correct: false },
-        ],
-      })
+    const data = await res.json()
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error('Layanan AI tidak mengembalikan butir soal yang valid.')
     }
-    return result
+
+    return data.map((q: Question) => ({
+      ...q,
+      options: q.options || [],
+    }))
   },
 }

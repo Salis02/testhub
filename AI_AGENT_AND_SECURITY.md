@@ -5,17 +5,19 @@
 
 ## 1. AI AGENT ARCHITECTURE (Current & Future)
 
-### Current Phase (MVP - Web-based AI only)
-- ✅ Manual question creation by admin
-- ✅ Scoring formulas (template-based)
-- ✅ Feedback generation (template-based)
-- ✅ **Placeholder for future AI features**
+### Current Implemented State (Oct 2026 - Active in Go Backend)
+- ✅ **AI Question Generator (`POST /api/ai/generate-questions`)**: Implemented in `internal/services/ai_agent.go` and `internal/handlers/ai.go`.
+- ✅ **Domain-Specific Topic Synthesis**: CPNS (TWK/TIU), SBMPTN (TPS/Matematika), IQ (Raven Matrices/Spasial), BUMN (AKHLAK/Leadership).
+- ✅ **Strict Format Compliance**: 1 correct answer + 3-4 plausible distractors, balanced length, clear Indonesian explanation, difficulty rating (easy/medium/hard).
+- ✅ **Automated Constraint Validation**: Enforces length checks, single correct option guarantee, 3-5 options count, explanation validation before returning response.
+- ✅ Scoring formulas & automated grading for multiple-choice tests.
+- ✅ Admin review & manual grading workflow for essay submissions.
 
-### Future Phases (AI-Powered)
-- Phase 2A: Intelligent feedback generation
-- Phase 2B: Question difficulty assessment
-- Phase 2C: Adaptive test generation
-- Phase 3: Auto-question generation with fact-checking
+### Next Roadmap Phases
+- Phase 2A: Intelligent feedback & study recommendations generation per score range.
+- Phase 2B: Question difficulty rating calibration based on live examinee performance data.
+- Phase 2C: Adaptive testing algorithm (dynamic difficulty adjustment).
+- Phase 3: External LLM fact-checking integration (OpenAI/Anthropic/Gemini API via background workers).
 
 ---
 

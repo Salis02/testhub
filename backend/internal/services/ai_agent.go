@@ -1,19 +1,50 @@
 package services
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"strings"
+	"sync/atomic"
 	"time"
 
+	"testhub/internal/config"
 	"testhub/internal/models"
 )
 
-type AIAgentService struct{}
-
-func NewAIAgentService() *AIAgentService {
-	return &AIAgentService{}
+type AIAgentService struct {
+	cfg          *config.Config
+	httpClient   *http.Client
+	geminiKeyIdx uint64
+	groqKeyIdx   uint64
 }
 
-// GenerateQuestions generates questions complying with AI_AGENT_AND_SECURITY.md constraints
+func NewAIAgentService(cfg *config.Config) *AIAgentService {
+	return &AIAgentService{
+		cfg: cfg,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
+type AIQuestionJSON struct {
+	QuestionText    string `json:"question_text"`
+	DifficultyLevel string `json:"difficulty_level"`
+	Points          int    `json:"points"`
+	Explanation     string `json:"explanation"`
+	Options         []struct {
+		OptionLetter string `json:"option_letter"`
+		OptionText   string `json:"option_text"`
+		IsCorrect    bool   `json:"is_correct"`
+	} `json:"options"`
+}
+
+// GenerateQuestions generates questions using Multi-Provider with auto-key failover
 func (s *AIAgentService) GenerateQuestions(req models.AIGenerateRequest) ([]models.TestQuestion, error) {
 	if req.Count <= 0 {
 		req.Count = 1
@@ -22,6 +53,341 @@ func (s *AIAgentService) GenerateQuestions(req models.AIGenerateRequest) ([]mode
 		req.Count = 10
 	}
 
+	// 1. Try Gemini if API keys configured
+	if s.cfg != nil && len(s.cfg.GeminiAPIKeys) > 0 {
+		questions, err := s.generateWithGemini(req)
+		if err == nil && len(questions) > 0 {
+			log.Printf("[AI-Agent] Successfully generated %d questions using Google Gemini (%s)", len(questions), s.cfg.GeminiModel)
+			return questions, nil
+		}
+		log.Printf("[AI-Agent] Gemini generation failed: %v. Attempting Groq fallback...", err)
+	}
+
+	// 2. Try Groq if API keys configured
+	if s.cfg != nil && len(s.cfg.GroqAPIKeys) > 0 {
+		questions, err := s.generateWithGroq(req)
+		if err == nil && len(questions) > 0 {
+			log.Printf("[AI-Agent] Successfully generated %d questions using Groq (%s)", len(questions), s.cfg.GroqModel)
+			return questions, nil
+		}
+		log.Printf("[AI-Agent] Groq generation failed: %v. Falling back to local generator...", err)
+	}
+
+	// 3. Fallback to Local Deterministic Generator (Zero Downtime guarantee)
+	log.Printf("[AI-Agent] Using local deterministic generator for category %s, subject %s", req.Category, req.Subject)
+	return s.generateLocalDeterministic(req)
+}
+
+// -------------------------------------------------------------
+// GOOGLE GEMINI PROVIDER WITH MULTI-KEY ROTATION
+// -------------------------------------------------------------
+func (s *AIAgentService) generateWithGemini(req models.AIGenerateRequest) ([]models.TestQuestion, error) {
+	keys := s.cfg.GeminiAPIKeys
+	totalKeys := len(keys)
+	if totalKeys == 0 {
+		return nil, fmt.Errorf("no gemini api keys configured")
+	}
+
+	prompt := s.buildPrompt(req)
+	model := s.cfg.GeminiModel
+	if model == "" {
+		model = "gemini-1.5-flash"
+	}
+
+	startIndex := int(atomic.AddUint64(&s.geminiKeyIdx, 1) % uint64(totalKeys))
+
+	// Try each key sequentially if rate limited (HTTP 429)
+	var lastErr error
+	for i := 0; i < totalKeys; i++ {
+		keyIndex := (startIndex + i) % totalKeys
+		apiKey := keys[keyIndex]
+
+		url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
+
+		reqBody := map[string]interface{}{
+			"contents": []map[string]interface{}{
+				{
+					"parts": []map[string]interface{}{
+						{"text": prompt},
+					},
+				},
+			},
+			"generationConfig": map[string]interface{}{
+				"response_mime_type": "application/json",
+				"temperature":        0.7,
+			},
+		}
+
+		bodyBytes, _ := json.Marshal(reqBody)
+		httpReq, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewBuffer(bodyBytes))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		resp, err := s.httpClient.Do(httpReq)
+		if err != nil {
+			lastErr = fmt.Errorf("gemini key %d network error: %w", keyIndex+1, err)
+			continue
+		}
+
+		respBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == 403 {
+			log.Printf("[AI-Agent] Gemini Key %d rate-limited (HTTP %d). Rotating to next key...", keyIndex+1, resp.StatusCode)
+			lastErr = fmt.Errorf("gemini key %d rate limited (status %d)", keyIndex+1, resp.StatusCode)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("gemini key %d error: status %d, body: %s", keyIndex+1, resp.StatusCode, string(respBytes))
+			continue
+		}
+
+		// Parse Gemini response structure
+		var geminiResp struct {
+			Candidates []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+		}
+
+		if err := json.Unmarshal(respBytes, &geminiResp); err != nil {
+			lastErr = fmt.Errorf("parse gemini response: %w", err)
+			continue
+		}
+
+		if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
+			lastErr = fmt.Errorf("empty gemini candidates")
+			continue
+		}
+
+		rawJSON := geminiResp.Candidates[0].Content.Parts[0].Text
+		questions, err := s.parseAIQuestionJSON(rawJSON, req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		return questions, nil
+	}
+
+	return nil, fmt.Errorf("all gemini keys failed: %w", lastErr)
+}
+
+// -------------------------------------------------------------
+// GROQ PROVIDER WITH MULTI-KEY ROTATION
+// -------------------------------------------------------------
+func (s *AIAgentService) generateWithGroq(req models.AIGenerateRequest) ([]models.TestQuestion, error) {
+	keys := s.cfg.GroqAPIKeys
+	totalKeys := len(keys)
+	if totalKeys == 0 {
+		return nil, fmt.Errorf("no groq api keys configured")
+	}
+
+	prompt := s.buildPrompt(req)
+	model := s.cfg.GroqModel
+	if model == "" {
+		model = "llama-3.3-70b-versatile"
+	}
+
+	startIndex := int(atomic.AddUint64(&s.groqKeyIdx, 1) % uint64(totalKeys))
+
+	var lastErr error
+	for i := 0; i < totalKeys; i++ {
+		keyIndex := (startIndex + i) % totalKeys
+		apiKey := keys[keyIndex]
+
+		url := "https://api.groq.com/openai/v1/chat/completions"
+
+		reqBody := map[string]interface{}{
+			"model": model,
+			"messages": []map[string]string{
+				{
+					"role":    "system",
+					"content": "You are an expert exam question generator for Indonesian national assessments (CPNS, UTBK-SNBT, IQ, BUMN). Always return raw valid JSON array conforming strictly to requested schema without extra prose.",
+				},
+				{
+					"role":    "user",
+					"content": prompt,
+				},
+			},
+			"temperature": 0.7,
+		}
+
+		bodyBytes, _ := json.Marshal(reqBody)
+		httpReq, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewBuffer(bodyBytes))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		resp, err := s.httpClient.Do(httpReq)
+		if err != nil {
+			lastErr = fmt.Errorf("groq key %d network error: %w", keyIndex+1, err)
+			continue
+		}
+
+		respBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == 403 {
+			log.Printf("[AI-Agent] Groq Key %d rate-limited (HTTP %d). Rotating to next key...", keyIndex+1, resp.StatusCode)
+			lastErr = fmt.Errorf("groq key %d rate limited (status %d)", keyIndex+1, resp.StatusCode)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("groq key %d error: status %d, body: %s", keyIndex+1, resp.StatusCode, string(respBytes))
+			continue
+		}
+
+		var groqResp struct {
+			Choices []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			} `json:"choices"`
+		}
+
+		if err := json.Unmarshal(respBytes, &groqResp); err != nil {
+			lastErr = fmt.Errorf("parse groq response: %w", err)
+			continue
+		}
+
+		if len(groqResp.Choices) == 0 {
+			lastErr = fmt.Errorf("empty groq choices")
+			continue
+		}
+
+		rawJSON := groqResp.Choices[0].Message.Content
+		questions, err := s.parseAIQuestionJSON(rawJSON, req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		return questions, nil
+	}
+
+	return nil, fmt.Errorf("all groq keys failed: %w", lastErr)
+}
+
+// -------------------------------------------------------------
+// PROMPT BUILDER & JSON PARSER
+// -------------------------------------------------------------
+func (s *AIAgentService) buildPrompt(req models.AIGenerateRequest) string {
+	return fmt.Sprintf(`Tolong buatkan %d soal ujian berkualitas tinggi dalam Bahasa Indonesia untuk:
+- Kategori Tes: %s
+- Topik / Mata Uji: %s
+- Tingkat Kesulitan: %s
+
+Aturan Mutlak (AI_AGENT_AND_SECURITY.md):
+1. Setiap soal bertipe pilihan ganda (multiple_choice) dengan opsi A, B, C, D, E.
+2. Harus ada TEPAT SATU opsi dengan is_correct = true, dan 4 opsi lainnya is_correct = false.
+3. Distractor (pilihan salah) harus masuk akal, tidak konyol, dan panjang kalimat opsi relatif seimbang.
+4. Sertakan penjelasan ilmiah (explanation) yang mendalam mengapa opsi tersebut benar.
+5. Soal harus faktual, akurat, dan relevan dengan standar asesmen nasional di Indonesia.
+
+Wajib kembalikan HANYA JSON object murni tanpa pembuka/penutup markdown dengan format persis seperti ini:
+{
+  "questions": [
+    {
+      "question_text": "Isi teks pertanyaan...",
+      "difficulty_level": "%s",
+      "points": 5,
+      "explanation": "Penjelasan kunci jawaban...",
+      "options": [
+        {"option_letter": "A", "option_text": "Pilihan A", "is_correct": true},
+        {"option_letter": "B", "option_text": "Pilihan B", "is_correct": false},
+        {"option_letter": "C", "option_text": "Pilihan C", "is_correct": false},
+        {"option_letter": "D", "option_text": "Pilihan D", "is_correct": false},
+        {"option_letter": "E", "option_text": "Pilihan E", "is_correct": false}
+      ]
+    }
+  ]
+}`, req.Count, req.Category, req.Subject, req.Difficulty, req.Difficulty)
+}
+
+func (s *AIAgentService) parseAIQuestionJSON(rawText string, req models.AIGenerateRequest) ([]models.TestQuestion, error) {
+	cleanText := strings.TrimSpace(rawText)
+	cleanText = strings.TrimPrefix(cleanText, "```json")
+	cleanText = strings.TrimPrefix(cleanText, "```")
+	cleanText = strings.TrimSuffix(cleanText, "```")
+	cleanText = strings.TrimSpace(cleanText)
+
+	var items []AIQuestionJSON
+	// Try parsing directly as array
+	if err := json.Unmarshal([]byte(cleanText), &items); err != nil {
+		// Try parsing as object {"questions": [...]}
+		var obj struct {
+			Questions []AIQuestionJSON `json:"questions"`
+		}
+		if errObj := json.Unmarshal([]byte(cleanText), &obj); errObj == nil && len(obj.Questions) > 0 {
+			items = obj.Questions
+		} else {
+			return nil, fmt.Errorf("failed to parse AI JSON array: %w", err)
+		}
+	}
+
+	var result []models.TestQuestion
+	now := time.Now().UnixNano()
+
+	for idx, item := range items {
+		qID := fmt.Sprintf("ai-live-%d-%d", now, idx+1)
+		diff := item.DifficultyLevel
+		if diff == "" {
+			diff = req.Difficulty
+		}
+		pts := item.Points
+		if pts <= 0 {
+			pts = 5
+		}
+
+		q := models.TestQuestion{
+			ID:              qID,
+			TestID:          "",
+			QuestionNumber:  idx + 1,
+			QuestionText:    item.QuestionText,
+			QuestionType:    "multiple_choice",
+			DifficultyLevel: diff,
+			Points:          pts,
+			Explanation:     item.Explanation,
+			Options:         make([]models.QuestionOption, len(item.Options)),
+		}
+
+		for optIdx, opt := range item.Options {
+			isCorr := opt.IsCorrect
+			q.Options[optIdx] = models.QuestionOption{
+				ID:           fmt.Sprintf("opt-%s-%s", qID, strings.ToLower(opt.OptionLetter)),
+				QuestionID:   qID,
+				OptionLetter: opt.OptionLetter,
+				OptionText:   opt.OptionText,
+				IsCorrect:    &isCorr,
+			}
+		}
+
+		if err := validateQuestion(&q); err != nil {
+			return nil, err
+		}
+
+		result = append(result, q)
+	}
+
+	return result, nil
+}
+
+// -------------------------------------------------------------
+// LOCAL DETERMINISTIC GENERATOR (FALLBACK)
+// -------------------------------------------------------------
+func (s *AIAgentService) generateLocalDeterministic(req models.AIGenerateRequest) ([]models.TestQuestion, error) {
 	sampleTopics := map[string][]string{
 		"cpns": {
 			"Hierarki Peraturan Perundang-undangan menurut UU No. 12 Tahun 2011",
@@ -71,7 +437,7 @@ func (s *AIAgentService) GenerateQuestions(req models.AIGenerateRequest) ([]mode
 
 	for i := 0; i < req.Count; i++ {
 		topic := topics[i%len(topics)]
-		qID := fmt.Sprintf("ai-gen-%d-%d", time.Now().UnixNano(), i+1)
+		qID := fmt.Sprintf("ai-local-%d-%d", time.Now().UnixNano(), i+1)
 
 		q := models.TestQuestion{
 			ID:              qID,
@@ -117,7 +483,6 @@ func (s *AIAgentService) GenerateQuestions(req models.AIGenerateRequest) ([]mode
 			},
 		}
 
-		// Validation check rule from AI_AGENT_AND_SECURITY.md section 2.1
 		if err := validateQuestion(&q); err != nil {
 			return nil, err
 		}

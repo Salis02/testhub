@@ -34,7 +34,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 	authHandler := NewAuthHandler(db, cfg)
 	publicHandler := NewPublicHandler(db, cacheClient)
 	adminHandler := NewAdminHandler(db)
-	aiService := services.NewAIAgentService()
+	aiService := services.NewAIAgentService(cfg)
 	aiHandler := NewAIHandler(aiService)
 
 	api := router.Group("/api")
