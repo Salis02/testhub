@@ -60,6 +60,12 @@
 - [x] Nginx reverse proxy configuration (`nginx/nginx.conf`)
 - [x] Automation shell scripts in `scripts/` (`init-db.sh`, `health-check.sh`, `backup.sh`, `deploy.sh`)
 
+#### Production Hardening & Reliability (Completed)
+- [x] **Graceful Shutdown**: `http.Server` dengan OS signal trap (`SIGINT`, `SIGTERM`) dan timeout 10 detik agar request ujian/grading yang sedang aktif tidak terputus paksa.
+- [x] **Context Propagation & Upstream Abort**: Request AI (`POST /api/ai/generate-questions`) meneruskan `c.Request.Context()` ke upstream HTTP request Gemini/Groq sehingga jika user menutup tab/membatalkan request (`AbortController`), pemanggilan LLM langsung berhenti untuk menghemat kuota gratis.
+- [x] **Robust Auto-Migrations**: Fallback deteksi multi-path (`migrations`, `backend/migrations`, `../migrations`) sehingga server dapat dijalankan dari direktori manapun tanpa error path.
+- [x] **Production Gin Mode**: Otomatis mengaktifkan `gin.SetMode(gin.ReleaseMode)` ketika `ENVIRONMENT=production`.
+
 ---
 
 ### ✅ Phase 2: Enhancement (Core Implemented)

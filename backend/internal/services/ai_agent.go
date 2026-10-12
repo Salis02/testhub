@@ -45,7 +45,7 @@ type AIQuestionJSON struct {
 }
 
 // GenerateQuestions generates questions using Multi-Provider with auto-key failover
-func (s *AIAgentService) GenerateQuestions(req models.AIGenerateRequest) ([]models.TestQuestion, error) {
+func (s *AIAgentService) GenerateQuestions(ctx context.Context, req models.AIGenerateRequest) ([]models.TestQuestion, error) {
 	if req.Count <= 0 {
 		req.Count = 1
 	}
@@ -55,7 +55,7 @@ func (s *AIAgentService) GenerateQuestions(req models.AIGenerateRequest) ([]mode
 
 	// 1. Try Gemini if API keys configured
 	if s.cfg != nil && len(s.cfg.GeminiAPIKeys) > 0 {
-		questions, err := s.generateWithGemini(req)
+		questions, err := s.generateWithGemini(ctx, req)
 		if err == nil && len(questions) > 0 {
 			log.Printf("[AI-Agent] Successfully generated %d questions using Google Gemini (%s)", len(questions), s.cfg.GeminiModel)
 			return questions, nil
@@ -65,7 +65,7 @@ func (s *AIAgentService) GenerateQuestions(req models.AIGenerateRequest) ([]mode
 
 	// 2. Try Groq if API keys configured
 	if s.cfg != nil && len(s.cfg.GroqAPIKeys) > 0 {
-		questions, err := s.generateWithGroq(req)
+		questions, err := s.generateWithGroq(ctx, req)
 		if err == nil && len(questions) > 0 {
 			log.Printf("[AI-Agent] Successfully generated %d questions using Groq (%s)", len(questions), s.cfg.GroqModel)
 			return questions, nil
@@ -81,7 +81,7 @@ func (s *AIAgentService) GenerateQuestions(req models.AIGenerateRequest) ([]mode
 // -------------------------------------------------------------
 // GOOGLE GEMINI PROVIDER WITH MULTI-KEY ROTATION
 // -------------------------------------------------------------
-func (s *AIAgentService) generateWithGemini(req models.AIGenerateRequest) ([]models.TestQuestion, error) {
+func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGenerateRequest) ([]models.TestQuestion, error) {
 	keys := s.cfg.GeminiAPIKeys
 	totalKeys := len(keys)
 	if totalKeys == 0 {
@@ -119,7 +119,7 @@ func (s *AIAgentService) generateWithGemini(req models.AIGenerateRequest) ([]mod
 		}
 
 		bodyBytes, _ := json.Marshal(reqBody)
-		httpReq, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewBuffer(bodyBytes))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bodyBytes))
 		if err != nil {
 			lastErr = err
 			continue
@@ -183,7 +183,7 @@ func (s *AIAgentService) generateWithGemini(req models.AIGenerateRequest) ([]mod
 // -------------------------------------------------------------
 // GROQ PROVIDER WITH MULTI-KEY ROTATION
 // -------------------------------------------------------------
-func (s *AIAgentService) generateWithGroq(req models.AIGenerateRequest) ([]models.TestQuestion, error) {
+func (s *AIAgentService) generateWithGroq(ctx context.Context, req models.AIGenerateRequest) ([]models.TestQuestion, error) {
 	keys := s.cfg.GroqAPIKeys
 	totalKeys := len(keys)
 	if totalKeys == 0 {
@@ -221,7 +221,7 @@ func (s *AIAgentService) generateWithGroq(req models.AIGenerateRequest) ([]model
 		}
 
 		bodyBytes, _ := json.Marshal(reqBody)
-		httpReq, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewBuffer(bodyBytes))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bodyBytes))
 		if err != nil {
 			lastErr = err
 			continue

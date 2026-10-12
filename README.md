@@ -18,6 +18,8 @@ Semua dokumentasi arsitektur, panduan teknis, dan keamanan disimpan dalam file m
    Aturan prompt deterministik AI Question Generator, validasi kualitas soal, proteksi form non-auth, dan threat model keamanan.
 5. [DEPLOYMENT_AND_MAKEFILE.md](file:///home/sans/coding/quiz_app/DEPLOYMENT_AND_MAKEFILE.md)  
    Panduan orkestrasi Makefile, Docker Compose, skrip backup, health check, dan panduan scaling VPS 2GB.
+6. [FRONTEND_PROGRESS_AND_HANDOVER.md](file:///home/sans/coding/quiz_app/FRONTEND_PROGRESS_AND_HANDOVER.md)  
+   **Dokumentasi frontend terkini & panduan serah terima AI agent**: Integrasi backend AI generator, skeleton loading & progressing dynamic bar, RBAC route protection, dan universal toast & modal confirmation (DRY).
 
 ---
 

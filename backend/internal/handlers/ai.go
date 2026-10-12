@@ -24,7 +24,7 @@ func (h *AIHandler) GenerateQuestions(c *gin.Context) {
 		return
 	}
 
-	questions, err := h.aiService.GenerateQuestions(req)
+	questions, err := h.aiService.GenerateQuestions(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
