@@ -76,7 +76,7 @@ Single platform untuk:
     - [x] **DONE** - Essay (Soal esai dengan antrean review manual admin)
     - [ ] **IN PROGRESS** - Matching (Menjodohkan pasangan premis & opsi)
   - [x] **DONE** - Test categories: CPNS, SBMPTN, IQ, Custom
-  - [ ] **IN PROGRESS** - Media support: Images & attachments (kolom `media_url` sudah ada di DB schema, upload UI & image preview belum terpasang)
+  - [x] **DONE** - Media support: Images & attachments (Endpoint `POST /api/admin/upload-media`, static serving `/uploads/*`, limit 2MB, magic-byte sniffing, UUID sanitization)
   - [x] **DONE** - Shuffle questions & answers (dukungan database flag & query ordering)
   - [x] **DONE** - Timer & auto-submit (countdown real-time & otomatis submit saat 00:00)
 
@@ -112,9 +112,9 @@ Single platform untuk:
 ### 4.4 Admin Dashboard
 - **Test Management**
   - [x] **DONE** - Create test (Modal pembuatan tes interaktif)
+  - [x] **DONE** - Edit existing test (`GET /api/admin/tests/:id` & `PUT /api/admin/tests/:id` dengan update atomik metadata, butir soal, dan opsi jawaban)
   - [x] **DONE** - Publish & unpublish toggle (`POST /api/admin/tests/:id/toggle-publish`)
   - [x] **DONE** - Delete test (soft-delete dengan konfirmasi aman)
-  - [ ] **IN PROGRESS** - Edit existing test (form penyuntingan soal & parameter tes yang sudah ada)
   - [x] **DONE** - View test statistics (`GET /api/admin/stats`)
   - [x] **DONE** - Manage questions & answers (editor opsi jawaban A-E)
 

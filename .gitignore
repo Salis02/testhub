@@ -82,3 +82,13 @@ redis_data/
 *.dump
 *.sqlite
 *.sqlite3
+
+# ------------------------------------------
+# User Uploads
+# ------------------------------------------
+uploads/*
+!uploads/.gitkeep
+!uploads/**/.gitkeep
+backend/uploads/*
+!backend/uploads/.gitkeep
+!backend/uploads/**/.gitkeep

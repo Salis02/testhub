@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -31,11 +34,31 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		})
 	})
 
+	// Initialize Local Storage Provider (Search candidate directories)
+	candidateUploadDirs := []string{"uploads", filepath.Join("..", "uploads"), filepath.Join("backend", "uploads")}
+	uploadBaseDir := "uploads"
+	for _, dir := range candidateUploadDirs {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			uploadBaseDir = dir
+			break
+		}
+	}
+	_ = os.MkdirAll(filepath.Join(uploadBaseDir, "questions"), 0755)
+
+	storage, err := services.NewLocalStorageProvider(filepath.Join(uploadBaseDir, "questions"), "/uploads/questions", 2*1024*1024)
+	if err != nil {
+		log.Printf("[Server] Warning: Failed to init storage provider: %v", err)
+	}
+
 	authHandler := NewAuthHandler(db, cfg)
 	publicHandler := NewPublicHandler(db, cacheClient)
 	adminHandler := NewAdminHandler(db)
+	mediaHandler := NewMediaHandler(storage)
 	aiService := services.NewAIAgentService(cfg)
 	aiHandler := NewAIHandler(aiService)
+
+	// Serve Static Media Uploads (Fast & Cacheable)
+	router.Static("/uploads", uploadBaseDir)
 
 	api := router.Group("/api")
 	{
@@ -83,6 +106,8 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			admin.GET("/stats", adminHandler.GetStats)
 			admin.GET("/tests", adminHandler.ListTests)
 			admin.POST("/tests", adminHandler.CreateTest)
+			admin.GET("/tests/:testId", adminHandler.GetTest)
+			admin.PUT("/tests/:testId", adminHandler.UpdateTest)
 			admin.POST("/tests/:testId/toggle-publish", adminHandler.TogglePublish)
 			admin.PATCH("/tests/:testId/toggle-publish", adminHandler.TogglePublish)
 			admin.POST("/tests/:testId/publish", adminHandler.TogglePublish)
@@ -90,6 +115,10 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			admin.GET("/tests/:testId/analytics", adminHandler.GetAnalytics)
 			admin.GET("/essays", adminHandler.GetPendingEssays)
 			admin.POST("/essays/:essayId/grade", adminHandler.GradeEssay)
+
+			// Media Uploads
+			admin.POST("/upload-media", mediaHandler.UploadMedia)
+			admin.DELETE("/media", mediaHandler.DeleteMedia)
 		}
 	}
 

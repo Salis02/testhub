@@ -158,10 +158,10 @@ func (h *AdminHandler) CreateTest(c *gin.Context) {
 		}
 
 		insertQuestionSQL := `
-			INSERT INTO test_questions (id, test_id, question_number, question_text, question_type, difficulty_level, explanation, points, is_deleted, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9)
+			INSERT INTO test_questions (id, test_id, question_number, question_text, question_type, media_url, difficulty_level, explanation, points, is_deleted, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
 		`
-		_, err = tx.Exec(insertQuestionSQL, qID, testID, idx+1, q.QuestionText, qType, diff, q.Explanation, pts, now)
+		_, err = tx.Exec(insertQuestionSQL, qID, testID, idx+1, q.QuestionText, qType, q.MediaURL, diff, q.Explanation, pts, now)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan soal: " + err.Error()})
 			return
@@ -191,6 +191,167 @@ func (h *AdminHandler) CreateTest(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, test)
+}
+
+// GetTest handles GET /api/admin/tests/:testId
+func (h *AdminHandler) GetTest(c *gin.Context) {
+	testID := c.Param("testId")
+
+	var test models.Test
+	err := h.db.Get(&test, "SELECT * FROM tests WHERE id = $1 AND is_deleted = false", testID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
+		return
+	}
+
+	var questions []models.TestQuestion
+	err = h.db.Select(&questions, "SELECT * FROM test_questions WHERE test_id = $1 AND is_deleted = false ORDER BY question_number ASC", testID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat soal: " + err.Error()})
+		return
+	}
+
+	for i := range questions {
+		var options []models.QuestionOption
+		// For admin edit view, is_correct is NOT stripped so the editor can show correct answers
+		err = h.db.Select(&options, "SELECT id, question_id, option_letter, option_text, is_correct FROM question_options WHERE question_id = $1 ORDER BY option_letter ASC", questions[i].ID)
+		if err == nil {
+			questions[i].Options = options
+		} else {
+			questions[i].Options = []models.QuestionOption{}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"test":      test,
+		"questions": questions,
+	})
+}
+
+// UpdateTest handles PUT /api/admin/tests/:testId
+func (h *AdminHandler) UpdateTest(c *gin.Context) {
+	testID := c.Param("testId")
+
+	var req struct {
+		Title                  string                `json:"title" binding:"required"`
+		Description            string                `json:"description"`
+		Category               string                `json:"category" binding:"required"`
+		DurationMinutes        int                   `json:"duration_minutes" binding:"required"`
+		PassingScorePercentage int                   `json:"passing_score_percentage"`
+		ShuffleQuestions       bool                  `json:"shuffle_questions"`
+		ShuffleAnswers         bool                  `json:"shuffle_answers"`
+		Published              bool                  `json:"published"`
+		Questions              []models.TestQuestion `json:"questions"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format permintaan tidak valid: " + err.Error()})
+		return
+	}
+
+	// Verify test exists
+	var existing models.Test
+	if err := h.db.Get(&existing, "SELECT * FROM tests WHERE id = $1 AND is_deleted = false", testID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
+		return
+	}
+
+	passing := req.PassingScorePercentage
+	if passing <= 0 {
+		passing = 60
+	}
+
+	now := time.Now()
+	totalQuestions := len(req.Questions)
+
+	tx, err := h.db.Beginx()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memulai transaksi: " + err.Error()})
+		return
+	}
+	defer tx.Rollback()
+
+	// 1. Update Test Metadata
+	updateTestSQL := `
+		UPDATE tests 
+		SET title = $1, description = $2, category = $3, duration_minutes = $4,
+		    passing_score_percentage = $5, total_questions = $6, shuffle_questions = $7,
+		    shuffle_answers = $8, published = $9, updated_at = $10
+		WHERE id = $11
+	`
+	_, err = tx.Exec(updateTestSQL,
+		req.Title, req.Description, req.Category, req.DurationMinutes,
+		passing, totalQuestions, req.ShuffleQuestions,
+		req.ShuffleAnswers, req.Published, now, testID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui data ujian: " + err.Error()})
+		return
+	}
+
+	// 2. If questions provided, atomically replace old questions and options
+	if req.Questions != nil {
+		// Due to ON DELETE CASCADE, deleting from test_questions also cleans options
+		_, err = tx.Exec("DELETE FROM test_questions WHERE test_id = $1", testID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui butir soal: " + err.Error()})
+			return
+		}
+
+		for idx, q := range req.Questions {
+			qID := fmt.Sprintf("q-%s-%d-%d", testID, idx+1, now.Unix())
+			pts := q.Points
+			if pts <= 0 {
+				pts = 5
+			}
+			diff := q.DifficultyLevel
+			if diff == "" {
+				diff = "medium"
+			}
+			qType := q.QuestionType
+			if qType == "" {
+				qType = "multiple_choice"
+			}
+
+			insertQuestionSQL := `
+				INSERT INTO test_questions (id, test_id, question_number, question_text, question_type, media_url, difficulty_level, explanation, points, is_deleted, created_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
+			`
+			_, err = tx.Exec(insertQuestionSQL, qID, testID, idx+1, q.QuestionText, qType, q.MediaURL, diff, q.Explanation, pts, now)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan butir soal baru: " + err.Error()})
+				return
+			}
+
+			for _, opt := range q.Options {
+				optID := fmt.Sprintf("opt-%s-%s", qID, opt.OptionLetter)
+				isCorrect := false
+				if opt.IsCorrect != nil {
+					isCorrect = *opt.IsCorrect
+				}
+				insertOptSQL := `
+					INSERT INTO question_options (id, question_id, option_text, option_letter, is_correct, created_at)
+					VALUES ($1, $2, $3, $4, $5, $6)
+				`
+				_, err = tx.Exec(insertOptSQL, optID, qID, opt.OptionText, opt.OptionLetter, isCorrect, now)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan opsi baru: " + err.Error()})
+					return
+				}
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengonfirmasi transaksi: " + err.Error()})
+		return
+	}
+
+	// Fetch updated object
+	var updatedTest models.Test
+	_ = h.db.Get(&updatedTest, "SELECT * FROM tests WHERE id = $1", testID)
+
+	c.JSON(http.StatusOK, updatedTest)
 }
 
 // TogglePublish handles POST/PATCH /api/admin/tests/:testId/toggle-publish and /api/admin/tests/:testId/publish

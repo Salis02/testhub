@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -221,3 +222,238 @@ func TestAIGenerator(t *testing.T) {
 		t.Errorf("Expected 3 questions, got %d", len(questions))
 	}
 }
+
+func TestMediaUploadFlow(t *testing.T) {
+	_, _, router := setupTestApp(t)
+
+	// 1. Register admin to get token
+	adminEmail := "media-admin-" + time.Now().Format("20060102150405.000") + "@example.com"
+	regBody, _ := json.Marshal(models.RegisterRequest{
+		Email:    adminEmail,
+		Password: "Password123!",
+		FullName: "Media Admin",
+		Role:     "admin",
+	})
+	reqReg, _ := http.NewRequest("POST", "/api/auth/register", bytes.NewBuffer(regBody))
+	reqReg.Header.Set("Content-Type", "application/json")
+	wReg := httptest.NewRecorder()
+	router.ServeHTTP(wReg, reqReg)
+
+	var authResp models.AuthResponse
+	_ = json.Unmarshal(wReg.Body.Bytes(), &authResp)
+	token := authResp.Token
+
+	// 2. Upload valid 1x1 PNG image
+	pngBytes := []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+		0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+		0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+		0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+		0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+	}
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "diagram_soal.png")
+	if err != nil {
+		t.Fatalf("Failed to create form file: %v", err)
+	}
+	_, _ = part.Write(pngBytes)
+	_ = writer.Close()
+
+	reqUpload, _ := http.NewRequest("POST", "/api/admin/upload-media", body)
+	reqUpload.Header.Set("Content-Type", writer.FormDataContentType())
+	reqUpload.Header.Set("Authorization", "Bearer "+token)
+	wUpload := httptest.NewRecorder()
+	router.ServeHTTP(wUpload, reqUpload)
+
+	if wUpload.Code != http.StatusCreated {
+		t.Fatalf("Upload media failed with status %d: %s", wUpload.Code, wUpload.Body.String())
+	}
+
+	var uploadResp struct {
+		URL string `json:"url"`
+	}
+	_ = json.Unmarshal(wUpload.Body.Bytes(), &uploadResp)
+	if uploadResp.URL == "" {
+		t.Fatalf("Expected url in upload response")
+	}
+
+	// 3. Test static file serving of the uploaded media
+	reqStatic, _ := http.NewRequest("GET", uploadResp.URL, nil)
+	wStatic := httptest.NewRecorder()
+	router.ServeHTTP(wStatic, reqStatic)
+
+	if wStatic.Code != http.StatusOK {
+		t.Fatalf("Failed to serve static uploaded media from %s: status %d", uploadResp.URL, wStatic.Code)
+	}
+
+	// 4. Test upload invalid file (plain text script)
+	invalidBody := &bytes.Buffer{}
+	invalidWriter := multipart.NewWriter(invalidBody)
+	invalidPart, _ := invalidWriter.CreateFormFile("file", "exploit.jpg")
+	_, _ = invalidPart.Write([]byte("<?php echo 'malicious script'; ?>"))
+	_ = invalidWriter.Close()
+
+	reqInvalid, _ := http.NewRequest("POST", "/api/admin/upload-media", invalidBody)
+	reqInvalid.Header.Set("Content-Type", invalidWriter.FormDataContentType())
+	reqInvalid.Header.Set("Authorization", "Bearer "+token)
+	wInvalid := httptest.NewRecorder()
+	router.ServeHTTP(wInvalid, reqInvalid)
+
+	if wInvalid.Code != http.StatusBadRequest {
+		t.Fatalf("Expected malicious file to be rejected with 400, got: %d", wInvalid.Code)
+	}
+}
+
+func TestAdminEditTestFlow(t *testing.T) {
+	_, _, router := setupTestApp(t)
+
+	// 1. Register admin
+	adminEmail := "edit-admin-" + time.Now().Format("20060102150405.000") + "@example.com"
+	regBody, _ := json.Marshal(models.RegisterRequest{
+		Email:    adminEmail,
+		Password: "Password123!",
+		FullName: "Edit Admin",
+		Role:     "admin",
+	})
+	reqReg, _ := http.NewRequest("POST", "/api/auth/register", bytes.NewBuffer(regBody))
+	reqReg.Header.Set("Content-Type", "application/json")
+	wReg := httptest.NewRecorder()
+	router.ServeHTTP(wReg, reqReg)
+
+	var authResp models.AuthResponse
+	_ = json.Unmarshal(wReg.Body.Bytes(), &authResp)
+	token := authResp.Token
+
+	// 2. Create initial test
+	isTrue := true
+	isFalse := false
+	createBody, _ := json.Marshal(map[string]interface{}{
+		"title":                    "Tes Figural Awal",
+		"description":              "Deskripsi Awal",
+		"category":                 "iq",
+		"duration_minutes":         30,
+		"passing_score_percentage": 65,
+		"published":                false,
+		"questions": []models.TestQuestion{
+			{
+				QuestionText:    "Manakah gambar pola berikutnya?",
+				QuestionType:    "multiple_choice",
+				DifficultyLevel: "medium",
+				Points:          5,
+				Options: []models.QuestionOption{
+					{OptionLetter: "A", OptionText: "Pola Rotasi 90", IsCorrect: &isTrue},
+					{OptionLetter: "B", OptionText: "Pola Rotasi 180", IsCorrect: &isFalse},
+				},
+			},
+		},
+	})
+
+	reqCreate, _ := http.NewRequest("POST", "/api/admin/tests", bytes.NewBuffer(createBody))
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.Header.Set("Authorization", "Bearer "+token)
+	wCreate := httptest.NewRecorder()
+	router.ServeHTTP(wCreate, reqCreate)
+
+	if wCreate.Code != http.StatusCreated {
+		t.Fatalf("Create test failed with status %d: %s", wCreate.Code, wCreate.Body.String())
+	}
+
+	var createdTest models.Test
+	_ = json.Unmarshal(wCreate.Body.Bytes(), &createdTest)
+	testID := createdTest.ID
+
+	// 3. Fetch test via GET /api/admin/tests/:testId
+	reqGet, _ := http.NewRequest("GET", "/api/admin/tests/"+testID, nil)
+	reqGet.Header.Set("Authorization", "Bearer "+token)
+	wGet := httptest.NewRecorder()
+	router.ServeHTTP(wGet, reqGet)
+
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("Get test failed with status %d: %s", wGet.Code, wGet.Body.String())
+	}
+
+	var fetched struct {
+		Test      models.Test           `json:"test"`
+		Questions []models.TestQuestion `json:"questions"`
+	}
+	_ = json.Unmarshal(wGet.Body.Bytes(), &fetched)
+	if len(fetched.Questions) != 1 {
+		t.Fatalf("Expected 1 question, got %d", len(fetched.Questions))
+	}
+	if fetched.Questions[0].Options[0].IsCorrect == nil || !*fetched.Questions[0].Options[0].IsCorrect {
+		t.Fatalf("Expected is_correct to be preserved for admin view")
+	}
+
+	// 4. Update test via PUT /api/admin/tests/:testId (with updated title, duration, and question with media_url)
+	testMediaURL := "/uploads/questions/img_diagram_pola.png"
+	updateBody, _ := json.Marshal(map[string]interface{}{
+		"title":                    "Tes Figural CPNS (Updated)",
+		"description":              "Deskripsi yang telah diperbarui",
+		"category":                 "cpns",
+		"duration_minutes":         45,
+		"passing_score_percentage": 70,
+		"published":                true,
+		"questions": []models.TestQuestion{
+			{
+				QuestionText:    "Perhatikan gambar rotasi matriks berikut:",
+				QuestionType:    "multiple_choice",
+				MediaURL:        &testMediaURL,
+				DifficultyLevel: "hard",
+				Points:          10,
+				Explanation:     "Pola bergerak searah jarum jam sebesar 45 derajat.",
+				Options: []models.QuestionOption{
+					{OptionLetter: "A", OptionText: "Gambar A", IsCorrect: &isFalse},
+					{OptionLetter: "B", OptionText: "Gambar B", IsCorrect: &isTrue},
+				},
+			},
+		},
+	})
+
+	reqUpdate, _ := http.NewRequest("PUT", "/api/admin/tests/"+testID, bytes.NewBuffer(updateBody))
+	reqUpdate.Header.Set("Content-Type", "application/json")
+	reqUpdate.Header.Set("Authorization", "Bearer "+token)
+	wUpdate := httptest.NewRecorder()
+	router.ServeHTTP(wUpdate, reqUpdate)
+
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("Update test failed with status %d: %s", wUpdate.Code, wUpdate.Body.String())
+	}
+
+	// 5. Verify the updated test details
+	reqVerify, _ := http.NewRequest("GET", "/api/admin/tests/"+testID, nil)
+	reqVerify.Header.Set("Authorization", "Bearer "+token)
+	wVerify := httptest.NewRecorder()
+	router.ServeHTTP(wVerify, reqVerify)
+
+	var verified struct {
+		Test      models.Test           `json:"test"`
+		Questions []models.TestQuestion `json:"questions"`
+	}
+	_ = json.Unmarshal(wVerify.Body.Bytes(), &verified)
+
+	if verified.Test.Title != "Tes Figural CPNS (Updated)" {
+		t.Errorf("Expected updated title 'Tes Figural CPNS (Updated)', got '%s'", verified.Test.Title)
+	}
+	if verified.Test.DurationMinutes != 45 {
+		t.Errorf("Expected updated duration 45, got %d", verified.Test.DurationMinutes)
+	}
+	if verified.Test.PassingScorePercentage != 70 {
+		t.Errorf("Expected updated passing score 70, got %d", verified.Test.PassingScorePercentage)
+	}
+	if !verified.Test.Published {
+		t.Errorf("Expected test to be published")
+	}
+	if len(verified.Questions) != 1 {
+		t.Fatalf("Expected 1 question, got %d", len(verified.Questions))
+	}
+	if verified.Questions[0].MediaURL == nil || *verified.Questions[0].MediaURL != testMediaURL {
+		t.Errorf("Expected media_url '%s', got '%v'", testMediaURL, verified.Questions[0].MediaURL)
+	}
+	if verified.Questions[0].Points != 10 {
+		t.Errorf("Expected points 10, got %d", verified.Questions[0].Points)
+	}
+}
+
