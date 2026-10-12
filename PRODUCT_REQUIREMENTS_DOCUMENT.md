@@ -64,69 +64,79 @@ Single platform untuk:
 
 ## 4. CORE FEATURES (MVP)
 
+> **Status Legenda:**  
+> - `[x] DONE`: Fitur telah diimplementasikan penuh (Backend + Frontend terverifikasi).  
+> - `[ ] IN PROGRESS`: Fitur dalam roadmap atau sebagian komponen sudah ada (menjadi prioritas development selanjutnya).
+
 ### 4.1 Test Management
 - **Create Test** (Admin only)
-  - Title, description, duration, passing score
-  - Question types: Multiple choice, essay, matching
-  - Test categories: CPNS, SBMPTN, IQ, Custom
-  - Media support: Images, documents
-  - Shuffle questions & answers
-  - Timer & auto-submit
+  - [x] **DONE** - Title, description, duration, passing score
+  - Question types:
+    - [x] **DONE** - Multiple choice (Pilihan Ganda A-E dengan kunci jawaban & pembahasan)
+    - [x] **DONE** - Essay (Soal esai dengan antrean review manual admin)
+    - [ ] **IN PROGRESS** - Matching (Menjodohkan pasangan premis & opsi)
+  - [x] **DONE** - Test categories: CPNS, SBMPTN, IQ, Custom
+  - [ ] **IN PROGRESS** - Media support: Images & attachments (kolom `media_url` sudah ada di DB schema, upload UI & image preview belum terpasang)
+  - [x] **DONE** - Shuffle questions & answers (dukungan database flag & query ordering)
+  - [x] **DONE** - Timer & auto-submit (countdown real-time & otomatis submit saat 00:00)
 
 - **View Tests** (Public)
-  - Browse available tests
-  - Test metadata (duration, difficulty, reviews)
-  - Filter by category/difficulty
+  - [x] **DONE** - Browse available tests (Katalog tryout publik di HomePage)
+  - [x] **DONE** - Test metadata (durasi, kategori, jumlah soal, passing score)
+  - [x] **DONE** - Filter by category & keyword search
 
 ### 4.2 Test Taking (Non-Auth)
 - **Start Test**
-  - Unique session token (no login required)
-  - Browser-based interface
-  - Timer countdown
-  - Progress tracker
-  - Review mode (before submit)
+  - [x] **DONE** - Unique session token (no login required, UUID session 24h)
+  - [x] **DONE** - Browser-based interface (tampilan ujian responsif & cognitive-calm)
+  - [x] **DONE** - Timer countdown (penghitung mundur sinkron)
+  - [x] **DONE** - Progress tracker (palet nomor soal: terjawab, belum dijawab, ragu-ragu/flagged)
+  - [x] **DONE** - Review mode (modal konfirmasi rekapitulasi sebelum submit akhir)
 
 - **Answer Submission**
-  - Store answers in PostgreSQL
-  - Auto-save every 10 seconds (optional)
-  - Prevent duplicate submission (idempotent)
+  - [x] **DONE** - Store answers in PostgreSQL (`test_submissions` table)
+  - [x] **DONE** - Auto-save real-time (auto-save saat pilihan diklik / teks diinput)
+  - [x] **DONE** - Prevent duplicate submission (idempotent DB UPSERT per session & question)
 
 ### 4.3 Scoring & Feedback
 - **Auto-Grading**
-  - Multiple choice: instant (regex-based matching)
-  - Essay: manual admin review with scoring template
-  - Score calculation: formula-based (customizable)
+  - [x] **DONE** - Multiple choice: instant grading saat tombol selesai ditekan
+  - [x] **DONE** - Essay: manual admin review dengan antrean & template penilaian (`/admin/essays`)
+  - [x] **DONE** - Score calculation: formula-based (persentase, passing status, dan akumulasi poin)
 
 - **Feedback**
-  - Per-question explanation (admin-defined)
-  - Overall score & percentile
-  - Performance by category
+  - [x] **DONE** - Per-question explanation (pembahasan kunci jawaban muncul setelah ujian selesai)
+  - [x] **DONE** - Overall score & percentile estimation (kurva distribusi persentil)
+  - [x] **DONE** - Performance by category breakdown (Penalaran, Pemahaman, Ketelitian)
 
 ### 4.4 Admin Dashboard
 - **Test Management**
-  - Create, edit, publish tests
-  - View test statistics
-  - Manage questions & answers
+  - [x] **DONE** - Create test (Modal pembuatan tes interaktif)
+  - [x] **DONE** - Publish & unpublish toggle (`POST /api/admin/tests/:id/toggle-publish`)
+  - [x] **DONE** - Delete test (soft-delete dengan konfirmasi aman)
+  - [ ] **IN PROGRESS** - Edit existing test (form penyuntingan soal & parameter tes yang sudah ada)
+  - [x] **DONE** - View test statistics (`GET /api/admin/stats`)
+  - [x] **DONE** - Manage questions & answers (editor opsi jawaban A-E)
 
 - **Analytics**
-  - User performance overview
-  - Test completion rates
-  - Average scores by category
-  - Time spent analysis
-  - Question difficulty analysis
+  - [x] **DONE** - User performance overview (total peserta, rata-rata skor di dashboard)
+  - [x] **DONE** - Test completion rates (jumlah penyelesaian per tes di analytics)
+  - [x] **DONE** - Average scores by category
+  - [x] **DONE** - Time spent analysis (rata-rata waktu pengerjaan)
+  - [ ] **IN PROGRESS** - Question difficulty analysis (analisis daya pembeda / kesukaran per butir soal)
 
 - **Content Management**
-  - Question bank
-  - AI agent placeholder (for future auto-generation)
-  - Review pending user submissions (essays)
+  - [ ] **IN PROGRESS** - Question bank terpusat (repositori soal reusable antar tes)
+  - [x] **DONE (Melampaui MVP)** - AI Agent Question Generator (Integrasi live Gemini 2.5 Flash + Groq OSS dengan dynamic progress bar & abort controller)
+  - [x] **DONE** - Review pending user submissions (Antrean penilaian esai admin terintegrasi)
 
 ### 4.5 User Dashboard (Post-Test)
 - **Results**
-  - Score & percentile
-  - Time spent
-  - Performance by category
-  - Detailed answer review
-  - Comparison vs other users (anonymized)
+  - [x] **DONE** - Score & percentile
+  - [x] **DONE** - Time spent
+  - [x] **DONE** - Performance by category
+  - [x] **DONE** - Detailed answer review (pembahasan kunci jawaban lengkap)
+  - [x] **DONE** - Comparison vs other users (anonymized)
 
 ---
 
