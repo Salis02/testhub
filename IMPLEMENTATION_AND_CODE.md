@@ -154,30 +154,69 @@ Berdasarkan audit mendalam arsitektur Go backend, seluruh area perbaikan teknis 
 
 ---
 
-## 6. Roadmap Fitur Masa Depan Berbasis ROI & Profitabilitas
+## 6. Roadmap Fitur Berbasis ROI & Catatan Teknis untuk Tim FE & BE
 
 Prioritas pengembangan fitur baru disusun berdasarkan rasio keuntungan bisnis (*high profit*) terhadap kompleksitas teknis (lihat [PRODUCT_REQUIREMENTS_DOCUMENT.md](file:///home/sans/coding/quiz_app/PRODUCT_REQUIREMENTS_DOCUMENT.md)):
 
-### 🚀 Sprint Revenue & Virality (Fase P1 - Prioritas Utama)
-- [ ] **Payment Gateway QRIS Instan (Midtrans / Xendit Webhook)**:
-  - Pembuatan invoice instan QRIS / E-wallet untuk pembelian tiket tryout per-modul (Rp 10.000–Rp 25.000) dan Season Pass.
-  - Webhook callback handler di backend Go dengan verifikasi signature cryptographic dan unlocking sesi otomatis.
-- [ ] **Generator Sertifikat & Report Card PDF**:
-  - Unduh sertifikat nilai resmi ber-QR Code verifikasi via worker backend (atau `@react-pdf/renderer` di frontend).
-  - Pemicu viralitas organik peserta di media sosial (LinkedIn/Instagram).
-- [ ] **Leaderboard & Ranking Nasional Instan**:
-  - Redis Sorted Sets (`ZADD`, `ZRANK`) untuk menghitung peringkat ribuan peserta tryout akbar secara real-time tanpa membebani PostgreSQL.
+---
 
-### 📈 Sprint Engagement & Marketplace (Fase P2)
-- [ ] **Diagnostic Weakness Heatmap**:
-  - Analitik visual pengelompokan kelemahan sub-kategori (misal: analisis daya serap TIU/TWK) untuk alasan upgrade akun.
-- [ ] **Creator Monetization & Marketplace**:
-  - Fitur penetapan harga modul oleh guru/bimbel dengan potongan komisi platform 20%–30%.
-- [ ] **Bulk Import Soal Massal (Excel / Word / CSV)**:
-  - Parser berkas soal untuk mempercepat onboarding konten ribuan butir soal dari mitra bimbel.
+### 🚀 FASE P1: Revenue & Virality (Fokus Sprint 1 - 2)
 
-### 🛡️ Sprint Institusi & Keamanan Ujian (Fase P3)
-- [ ] **Anti-Cheat Focus Mode**:
-  - Deteksi event `window.blur` (perpindahan tab peserta), fullscreen lock, dan cegah copy-paste naskah soal.
-- [ ] **Streaming AI Question Generator (SSE)**:
-  - Server-Sent Events (`text/event-stream`) untuk mengalirkan butir soal AI satu per satu ke modal admin.
+#### 1. Payment Gateway QRIS Instan (Midtrans / Xendit Webhook)
+* **Target Bisnis**: Monetisasi langsung per modul tryout (Rp 10.000–Rp 25.000) dan Season Pass.
+* **Catatan Teknis Backend (BE)**:
+  - Buat tabel `orders` / `payments` (`id`, `user_id/session_id`, `test_id`, `amount`, `payment_method`, `status: pending/settled/expired`, `payment_url/qr_code`, `created_at`, `settled_at`).
+  - Endpoint `POST /api/payments/create-invoice`: Generate QRIS via Midtrans Snap / Xendit Invoice.
+  - Endpoint `POST /api/payments/webhook`: Webhook listener idempoten dengan verifikasi signature cryptographic HMAC-SHA512. Mengubah status order menjadi `settled` dan meng-unlock akses tes.
+  - Middleware `RequireTestAccess()`: Mengecek apakah modul tes bersifat gratis (`price_idr == 0`) atau sudah dibayar sebelum mengizinkan `POST /api/tests/:testId/start`.
+* **Catatan Teknis Frontend (FE)**:
+  - Komponen `PaymentModal.tsx`: Menampilkan dynamic QR Code QRIS, total harga Rupiah, dan countdown kadaluarsa pembayaran 15 menit.
+  - Gunakan TanStack Query polling (interval 3s) atau Server-Sent Event untuk mendengarkan perubahan status pembayaran hingga `settled`.
+  - Tampilkan badge harga yang jelas pada kartu kuis di [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) (`Gratis` vs `Rp 15.000`).
+
+#### 2. Generator Sertifikat & Report Card PDF
+* **Target Bisnis**: Bukti kelulusan resmi & materi pamer media sosial peserta (*viral growth loop* gratis).
+* **Catatan Teknis Backend (BE)**:
+  - Buat endpoint `GET /api/results/:resultId/certificate`: Mengembalikan data sertifikat ber-UUID verifikasi unik.
+  - Halaman/endpoint publik `GET /verify/:certificateId`: Untuk siapa saja yang memindai QR code sertifikat dapat melihat keaslian nilai peserta.
+* **Catatan Teknis Frontend (FE)**:
+  - Lakukan rendering PDF di sisi peramban klien (menggunakan `@react-pdf/renderer` atau `jspdf` + `html2canvas`) untuk menghemat beban CPU server VPS 2GB.
+  - Sediakan tombol `Unduh Sertifikat Resmi (PDF)` di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) dengan desain elegan bergaris emas/biru sesuai [style.md](file:///home/sans/coding/quiz_app/style.md).
+
+#### 3. Leaderboard & Ranking Nasional Instan
+* **Target Bisnis**: Memicu kompetisi dan urgensi peserta (*FOMO*) untuk melihat posisinya di antara ribuan peserta lain.
+* **Catatan Teknis Backend (BE)**:
+  - Gunakan **Redis Sorted Sets** (`ZADD leaderboard:{testId} score session_id`).
+  - Ambil ranking secara instan via `ZREVRANK` dan ambil 50 besar via `ZREVRANGEBYSCORE` (latensi < 5ms tanpa membebani PostgreSQL).
+  - Endpoint: `GET /api/tests/:testId/leaderboard?limit=50`.
+* **Catatan Teknis Frontend (FE)**:
+  - Komponen `LeaderboardDrawer.tsx` atau tab baru pada halaman hasil.
+  - Tampilkan medali Top 3, percentile badge, dan card stat posisi user (contoh: *"Peringkat #142 dari 3.420 peserta"*).
+
+---
+
+### 📈 FASE P2: Engagement & Marketplace (Fokus Sprint 3 - 4)
+
+#### 4. Diagnostic Weakness Heatmap
+* **Backend (BE)**: Analisis per-subtopik butir soal yang salah (`SELECT sub_topic, COUNT(*) ...`) dan simpan di kolom JSONB `results.category_breakdown`.
+* **Frontend (FE)**: Komponen radar chart atau bar chart interaktif di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) yang menunjukkan kekuatan dan kelemahan sub-materi peserta beserta rekomendasi belajar.
+
+#### 5. Creator Monetization & Marketplace Listing
+* **Backend (BE)**: Tambahkan kolom `price_idr` di tabel `tests` dan tabel `creator_balances`. Otomatis potong fee platform 20%–30% saat pembayaran berhasil.
+* **Frontend (FE)**: Tambahkan toggle *"Modul Berbayar"* dan input harga di [TestCreatorModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestCreatorModal.tsx), serta panel dompet penarikan dana (*Payout Dashboard*) di [AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx).
+
+#### 6. Bulk Import Soal Massal (Excel / Word / CSV)
+* **Backend (BE)**: Endpoint `POST /api/admin/tests/import-csv` yang mem-parsing multipart file CSV/Excel dan memvalidasinya menggunakan `dto.ValidateRelational()`.
+* **Frontend (FE)**: Komponen `BulkImportModal.tsx` dengan fitur unduh template file `.csv` / `.xlsx` contoh dan live preview tabel sebelum disimpan.
+
+---
+
+### 🛡️ FASE P3: Keamanan Ujian & Fitur Institusi (Fokus Sprint 5)
+
+#### 7. Anti-Cheat Focus Mode
+* **Backend (BE)**: Simpan log pelanggaran `blur_count` dan `copy_attempts` di database `test_submissions`.
+* **Frontend (FE)**: Pasang event listener `window.onblur` pada [TestPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/TestPage.tsx) dengan batas toleransi 3 kali peringatan, kunci mode fullscreen, dan disable fungsi `contextmenu` serta shortcut `Ctrl+C`.
+
+#### 8. Streaming AI Question Generator (SSE)
+* **Backend (BE)**: Implementasikan Server-Sent Events (`c.Stream()`) dengan header `Content-Type: text/event-stream`.
+* **Frontend (FE)**: Menggunakan `fetch-event-source` di [AIAssistantModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/AIAssistantModal.tsx) untuk me-render butir soal satu per satu secara langsung saat dihasilkan model LLM.
