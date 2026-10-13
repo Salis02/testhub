@@ -2,7 +2,9 @@ import { apiClient } from './client'
 import { Question, TestSession, TestResult, UserSubmission } from '@/types'
 
 export interface SessionQuestionsResponse {
-  test: TestSession['test']
+  session_id?: string
+  duration_minutes?: number
+  test?: TestSession['test']
   questions: Question[]
 }
 

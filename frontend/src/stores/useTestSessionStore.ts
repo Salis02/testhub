@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { Question, TestSession, UserSubmission } from '@/types'
 import { sessionsApi } from '@/services/sessions.api'
+import { testsApi } from '@/services/tests.api'
 
 interface TestSessionState {
   // State
@@ -42,31 +43,62 @@ export const useTestSessionStore = create<TestSessionState>((set, get) => ({
     try {
       set({ loading: true, error: null })
       let activeSessionId = searchSessionId
+      let createdTestMeta: TestSession['test'] | undefined = undefined
 
       if (!activeSessionId && testId) {
         const createdSession = await sessionsApi.startTest(testId)
         activeSessionId = createdSession.session_id
+        createdTestMeta = createdSession.test
       }
 
       if (!activeSessionId) {
         throw new Error('Sesi ujian tidak valid.')
       }
 
-      const { test, questions: qList } = await sessionsApi.getSessionQuestions(activeSessionId)
+      const sessionQData = await sessionsApi.getSessionQuestions(activeSessionId)
+      const qList = sessionQData.questions || []
       if (qList.length === 0) {
         throw new Error('Modul ini belum memiliki butir soal aktif.')
+      }
+
+      // Resolve test metadata with multi-tier fallback
+      let testMeta = createdTestMeta || sessionQData.test
+      if (!testMeta && testId) {
+        try {
+          const testDetail = await testsApi.getTestById(testId)
+          testMeta = {
+            id: testDetail.id,
+            title: testDetail.title,
+            category: testDetail.category,
+            duration_minutes: testDetail.duration_minutes,
+            total_questions: testDetail.total_questions,
+            passing_score_percentage: testDetail.passing_score_percentage,
+          }
+        } catch {
+          // ignore error to allow fallback below
+        }
+      }
+
+      const durationMinutes = testMeta?.duration_minutes || sessionQData.duration_minutes || 25
+      const finalTest: TestSession['test'] = testMeta || {
+        id: testId,
+        title: 'Modul Ujian',
+        category: 'custom',
+        duration_minutes: durationMinutes,
+        total_questions: qList.length,
+        passing_score_percentage: 65,
       }
 
       const existingSubs = await sessionsApi.getSubmissions(activeSessionId)
 
       const sess: TestSession = {
         session_id: activeSessionId,
-        test,
+        test: finalTest,
         started_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
       }
 
-      const totalSecs = test.duration_minutes * 60
+      const totalSecs = durationMinutes * 60
 
       set({
         session: sess,

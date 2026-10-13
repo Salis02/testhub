@@ -171,7 +171,7 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 func (h *PublicHandler) GetQuestions(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 
-	questions, durationMinutes, err := h.examRepo.GetSessionQuestions(c.Request.Context(), sessionID)
+	test, questions, err := h.examRepo.GetSessionQuestions(c.Request.Context(), sessionID)
 	if err != nil {
 		if errors.Is(err, repository.ErrSessionNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Sesi ujian tidak valid atau telah kadaluarsa"})
@@ -185,7 +185,17 @@ func (h *PublicHandler) GetQuestions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"session_id":       sessionID,
 		"questions":        questions,
-		"duration_minutes": durationMinutes,
+		"duration_minutes": test.DurationMinutes,
+		"test": gin.H{
+			"id":                       test.ID,
+			"title":                    test.Title,
+			"description":              test.Description,
+			"category":                 test.Category,
+			"duration_minutes":         test.DurationMinutes,
+			"total_questions":          test.TotalQuestions,
+			"passing_score_percentage": test.PassingScorePercentage,
+			"published":                test.Published,
+		},
 	})
 }
 

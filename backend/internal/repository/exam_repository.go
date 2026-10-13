@@ -28,7 +28,7 @@ type ExamRepository interface {
 	GetPublicTest(ctx context.Context, testID string) (*models.Test, error)
 	CreateSession(ctx context.Context, session *models.TestSession) error
 	GetSessionByID(ctx context.Context, sessionID string) (*models.TestSession, error)
-	GetSessionQuestions(ctx context.Context, sessionID string) ([]models.TestQuestion, int, error)
+	GetSessionQuestions(ctx context.Context, sessionID string) (*models.Test, []models.TestQuestion, error)
 	GetSubmissionsBySession(ctx context.Context, sessionID string) (map[string]models.UserSubmission, error)
 	SaveSubmission(ctx context.Context, sessionID string, questionID string, optionID *string, answerText *string, isFlagged bool) (*time.Time, error)
 	FinishExamTx(ctx context.Context, sessionID string, timeSpentSeconds int) (*models.TestResult, error)
@@ -117,22 +117,22 @@ func (r *PostgresExamRepository) GetSessionByID(ctx context.Context, sessionID s
 }
 
 // GetSessionQuestions fetches sanitized questions and options for exam taking (strips correct answers)
-func (r *PostgresExamRepository) GetSessionQuestions(ctx context.Context, sessionID string) ([]models.TestQuestion, int, error) {
+func (r *PostgresExamRepository) GetSessionQuestions(ctx context.Context, sessionID string) (*models.Test, []models.TestQuestion, error) {
 	session, err := r.GetSessionByID(ctx, sessionID)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 
 	var test models.Test
 	err = r.db.GetContext(ctx, &test, "SELECT * FROM tests WHERE id = $1", session.TestID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("get test for session %s: %w", sessionID, err)
+		return nil, nil, fmt.Errorf("get test for session %s: %w", sessionID, err)
 	}
 
 	var questions []models.TestQuestion
 	err = r.db.SelectContext(ctx, &questions, "SELECT * FROM test_questions WHERE test_id = $1 AND is_deleted = false ORDER BY question_number ASC", test.ID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("select questions for test %s: %w", test.ID, err)
+		return nil, nil, fmt.Errorf("select questions for test %s: %w", test.ID, err)
 	}
 
 	for i := range questions {
@@ -141,7 +141,7 @@ func (r *PostgresExamRepository) GetSessionQuestions(ctx context.Context, sessio
 		var options []models.QuestionOption
 		err = r.db.SelectContext(ctx, &options, "SELECT id, question_id, option_letter, option_text FROM question_options WHERE question_id = $1 ORDER BY option_letter ASC", questions[i].ID)
 		if err != nil {
-			return nil, 0, fmt.Errorf("select options for question %s: %w", questions[i].ID, err)
+			return nil, nil, fmt.Errorf("select options for question %s: %w", questions[i].ID, err)
 		}
 
 		for j := range options {
@@ -150,7 +150,7 @@ func (r *PostgresExamRepository) GetSessionQuestions(ctx context.Context, sessio
 		questions[i].Options = options
 	}
 
-	return questions, test.DurationMinutes, nil
+	return &test, questions, nil
 }
 
 // GetSubmissionsBySession returns all saved examinee submissions mapped by question ID
