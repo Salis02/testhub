@@ -133,3 +133,43 @@ export interface AuthResponse {
   refresh_token?: string
   user?: User
 }
+
+export type SubscriptionStatus = 'active' | 'suspended' | 'revoked'
+export type SubscriptionTier = 'per_test' | 'season_pass'
+export type SubscriptionSource = 'payment_gateway' | 'admin_manual'
+
+export interface Subscription {
+  id: string
+  user_identifier: string
+  test_id?: string | null
+  tier: SubscriptionTier
+  status: SubscriptionStatus
+  source: SubscriptionSource
+  amount_paid: number
+  admin_notes?: string | null
+  valid_until?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SubscriptionsListResponse {
+  subscriptions: Subscription[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface ManualGrantDTO {
+  user_identifier: string
+  test_id?: string | null
+  plan_type: SubscriptionTier
+  valid_days: number
+  reason_notes: string
+}
+
+export interface UpdateSubscriptionStatusDTO {
+  status: SubscriptionStatus
+  extend_days?: number
+  admin_notes?: string
+}
+

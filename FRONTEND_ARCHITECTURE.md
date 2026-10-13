@@ -16,12 +16,13 @@ frontend/src/
 ├── index.css                   # Token CSS (Strict Tri-Color, derived opacities)
 ├── types/index.ts              # Interface Domain (User, Test, Question, Option, Session, AuthResponse)
 ├── schemas/                    # Single Source of Truth Validasi Runtime (Zod)
-│   └── test.schema.ts          # Zod schema untuk TestForm, Question, Option, passing score, rules
+│   ├── test.schema.ts          # Zod schema untuk TestForm, Question, Option, passing score, rules
+│   └── subscription.schema.ts  # Zod schema untuk ManualGrant dan ExtendSubscription
 ├── services/                   # Modular API Layer (Bebas Dual-Backend / localStorage Mock)
 │   ├── client.ts               # Core HTTP Client, ApiError, synchronized token management
 │   ├── tests.api.ts            # Public test catalog & detail endpoint
 │   ├── sessions.api.ts         # Exam session lifecycle, submissions, result evaluation
-│   ├── admin.api.ts            # Admin dashboard metrics, test & question CRUD, image uploads
+│   ├── admin.api.ts            # Admin dashboard metrics, test & question CRUD, subscriptions CRUD
 │   ├── ai.api.ts               # AI Agent question generation proxy
 │   ├── auth.api.ts             # Auth service & profile fetching
 │   └── api.ts                  # Facade adapter backward-compatible
@@ -34,14 +35,14 @@ frontend/src/
 │   └── ConfirmContext.tsx      # Universal Promise-based confirmation dialogs (DRY)
 ├── components/
 │   ├── common/                 # Header, Footer, ProtectedRoute, MediaUploader, Badge, Skeleton
-│   ├── admin/                  # AIAssistantModal, TestEditorModal, TestCreatorModal, QuestionFormField, TestManagement
+│   ├── admin/                  # AIAssistantModal, TestEditorModal, TestCreatorModal, QuestionFormField, TestManagement, SubscriptionManagement, ManualGrantModal, ExtendSubscriptionModal
 │   └── test/                   # TestCountdownTimer, TestHeader, QuestionCard, QuestionNav, FinishConfirmModal
 └── pages/
     ├── HomePage.tsx            # Katalog tryout publik (TanStack Query + AbortSignal)
     ├── TestPage.tsx            # Antarmuka ujian berwaktu (Zustand 60 FPS isolation)
     ├── ResultsPage.tsx         # Hasil nilai, persentil, dan pembahasan soal
     ├── LoginPage.tsx           # Form masuk admin (dengan Quick Fill)
-    └── AdminPage.tsx           # Dashboard pengajar & bank soal (TanStack Query mutations & invalidations)
+    └── AdminPage.tsx           # Dashboard pengajar, bank soal, & langganan (TanStack Query mutations)
 ```
 
 ---

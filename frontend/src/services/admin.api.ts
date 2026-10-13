@@ -123,4 +123,45 @@ export const adminApi = {
     })
     return true
   },
+
+  async listSubscriptions(
+    params?: { status?: string; search?: string; limit?: number; offset?: number },
+    signal?: AbortSignal
+  ): Promise<{ subscriptions: import('@/types').Subscription[]; total: number; limit: number; offset: number }> {
+    const searchParams = new URLSearchParams()
+    if (params?.status) searchParams.set('status', params.status)
+    if (params?.search) searchParams.set('search', params.search)
+    if (params?.limit) searchParams.set('limit', String(params.limit))
+    if (params?.offset) searchParams.set('offset', String(params.offset))
+
+    const query = searchParams.toString()
+    return apiClient(`/admin/subscriptions${query ? `?${query}` : ''}`, { signal })
+  },
+
+  async manualGrantSubscription(data: import('@/types').ManualGrantDTO): Promise<import('@/types').Subscription> {
+    return apiClient<import('@/types').Subscription>('/admin/subscriptions/manual-grant', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async updateSubscriptionStatus(
+    id: string,
+    data: import('@/types').UpdateSubscriptionStatusDTO
+  ): Promise<boolean> {
+    await apiClient(`/admin/subscriptions/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+    return true
+  },
+
+  async revokeSubscription(id: string, reason?: string): Promise<boolean> {
+    const query = reason ? `?reason=${encodeURIComponent(reason)}` : ''
+    await apiClient(`/admin/subscriptions/${id}/revoke${query}`, {
+      method: 'DELETE',
+    })
+    return true
+  },
 }
+

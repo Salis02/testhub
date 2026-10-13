@@ -7,14 +7,16 @@ import { adminApi } from '@/services/admin.api'
 import { AdminOverview } from '@/components/admin/AdminOverview'
 import { TestManagement } from '@/components/admin/TestManagement'
 import { EssayGradingView } from '@/components/admin/EssayGradingView'
+import { SubscriptionManagement } from '@/components/admin/SubscriptionManagement'
 import { TestCreatorModal } from '@/components/admin/TestCreatorModal'
 import { TestEditorModal } from '@/components/admin/TestEditorModal'
 import { AIAssistantModal } from '@/components/admin/AIAssistantModal'
 import { AdminOverviewSkeleton } from '@/components/common/Skeleton'
-import { LayoutDashboard, FileSpreadsheet, FileEdit, Sparkles, Plus } from 'lucide-react'
+import { LayoutDashboard, FileSpreadsheet, FileEdit, Sparkles, Plus, CreditCard } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
 
-type TabType = 'overview' | 'tests' | 'essays'
+type TabType = 'overview' | 'tests' | 'essays' | 'subscriptions'
+
 
 export const AdminPage: React.FC = () => {
   const { isAuthenticated } = useAuth()
@@ -209,6 +211,18 @@ export const AdminPage: React.FC = () => {
           <FileEdit className="w-3.5 h-3.5" />
           <span>Koreksi Esai ({stats.pending_essays} Pending)</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('subscriptions')}
+          className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium transition-colors ${
+            activeTab === 'subscriptions'
+              ? 'border-accent text-accent font-semibold'
+              : 'border-transparent text-ink-muted hover:text-ink'
+          }`}
+        >
+          <CreditCard className="w-3.5 h-3.5" />
+          <span>Langganan & Akses</span>
+        </button>
       </div>
 
       {/* Tab Panels */}
@@ -231,6 +245,10 @@ export const AdminPage: React.FC = () => {
 
       {activeTab === 'essays' && (
         <EssayGradingView submissions={essays} onGrade={handleGradeEssay} />
+      )}
+
+      {activeTab === 'subscriptions' && (
+        <SubscriptionManagement tests={tests} isLoadingTests={loadingTests} />
       )}
 
       {/* Modals */}
