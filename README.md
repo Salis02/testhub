@@ -9,7 +9,7 @@ TestHub adalah platform SaaS modern untuk pembuatan, pelaksanaan, dan analitik b
 Semua dokumentasi arsitektur, panduan teknis, dan keamanan disimpan dalam file markdown berikut:
 
 1. [IMPLEMENTATION_AND_CODE.md](file:///home/sans/coding/quiz_app/IMPLEMENTATION_AND_CODE.md)  
-   **Status implementasi aktif**, checklist fitur yang telah selesai, dan **Developer Extension Guide (Panduan Mengembangkan Fitur Baru)**.
+   **Status implementasi aktif**, Developer Extension Guide, dan **Audit Technical Debt Backend (Validasi, Rate Limiter, AI Fallback)**.
 2. [PRODUCT_REQUIREMENTS_DOCUMENT.md](file:///home/sans/coding/quiz_app/PRODUCT_REQUIREMENTS_DOCUMENT.md)  
    Deskripsi produk (PRD), user persona, spesifikasi fitur MVP, strategi monetisasi, dan metrik keberhasilan.
 3. [ARCHITECTURE_AND_SCHEMA.md](file:///home/sans/coding/quiz_app/ARCHITECTURE_AND_SCHEMA.md)  
