@@ -1,8 +1,11 @@
-import React, { useState } from 'react'
-import { Test, Question, TestCategory, QuestionType } from '@/types'
-import { X, Plus, Trash2, Sparkles } from 'lucide-react'
+import React from 'react'
+import { useForm, FormProvider, useFieldArray } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { Test, Question } from '@/types'
+import { TestFormSchema, TestFormValues } from '@/schemas/test.schema'
+import { QuestionFormField } from '@/components/admin/QuestionFormField'
+import { X, Plus, Sparkles } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
-import { MediaUploader } from '@/components/common/MediaUploader'
 
 interface TestCreatorModalProps {
   isOpen: boolean
@@ -11,98 +14,117 @@ interface TestCreatorModalProps {
   onOpenAIAssistant: () => void
 }
 
-export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
-  isOpen,
-  onClose,
-  onSubmit,
-  onOpenAIAssistant,
-}) => {
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [category, setCategory] = useState<TestCategory>('cpns')
-  const [durationMinutes, setDurationMinutes] = useState(25)
-  const [passingScore, setPassingScore] = useState(65)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const toast = useToast()
-
-  // Questions state
-  const [questions, setQuestions] = useState<Question[]>([
+const DEFAULT_FORM_VALUES: TestFormValues = {
+  title: '',
+  description: '',
+  category: 'cpns',
+  duration_minutes: 25,
+  passing_score_percentage: 65,
+  published: true,
+  questions: [
     {
-      id: 'q-new-1',
-      test_id: '',
       question_number: 1,
       question_text: '',
       question_type: 'multiple_choice',
       difficulty_level: 'medium',
       points: 5,
       explanation: '',
+      media_url: null,
       options: [
-        { id: 'opt-new-1', option_letter: 'A', option_text: '', is_correct: true },
-        { id: 'opt-new-2', option_letter: 'B', option_text: '', is_correct: false },
-        { id: 'opt-new-3', option_letter: 'C', option_text: '', is_correct: false },
-        { id: 'opt-new-4', option_letter: 'D', option_text: '', is_correct: false },
+        { option_letter: 'A', option_text: '', is_correct: true },
+        { option_letter: 'B', option_text: '', is_correct: false },
+        { option_letter: 'C', option_text: '', is_correct: false },
+        { option_letter: 'D', option_text: '', is_correct: false },
       ],
     },
-  ])
+  ],
+}
+
+export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  onOpenAIAssistant,
+}) => {
+  const toast = useToast()
+
+  const methods = useForm<TestFormValues>({
+    resolver: zodResolver(TestFormSchema) as any,
+    defaultValues: DEFAULT_FORM_VALUES,
+    mode: 'onTouched',
+  })
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = methods
+
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: 'questions',
+  })
 
   if (!isOpen) return null
 
   const handleAddQuestion = () => {
-    const nextNum = questions.length + 1
-    setQuestions([
-      ...questions,
-      {
-        id: `q-new-${Date.now()}`,
-        test_id: '',
-        question_number: nextNum,
-        question_text: '',
-        question_type: 'multiple_choice',
-        difficulty_level: 'medium',
-        points: 5,
-        explanation: '',
-        options: [
-          { id: `opt-${Date.now()}-1`, option_letter: 'A', option_text: '', is_correct: true },
-          { id: `opt-${Date.now()}-2`, option_letter: 'B', option_text: '', is_correct: false },
-          { id: `opt-${Date.now()}-3`, option_letter: 'C', option_text: '', is_correct: false },
-          { id: `opt-${Date.now()}-4`, option_letter: 'D', option_text: '', is_correct: false },
-        ],
-      },
-    ])
+    append({
+      question_number: fields.length + 1,
+      question_text: '',
+      question_type: 'multiple_choice',
+      difficulty_level: 'medium',
+      points: 5,
+      explanation: '',
+      media_url: null,
+      options: [
+        { option_letter: 'A', option_text: '', is_correct: true },
+        { option_letter: 'B', option_text: '', is_correct: false },
+        { option_letter: 'C', option_text: '', is_correct: false },
+        { option_letter: 'D', option_text: '', is_correct: false },
+      ],
+    })
   }
 
-  const handleRemoveQuestion = (idx: number) => {
-    if (questions.length <= 1) return
-    const filtered = questions.filter((_, i) => i !== idx)
-    setQuestions(filtered.map((q, i) => ({ ...q, question_number: i + 1 })))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!title.trim()) {
-      toast.warning('Validasi Diperlukan', 'Judul modul ujian tidak boleh kosong.')
-      return
-    }
-
+  const handleFormSubmit = async (values: TestFormValues) => {
     try {
-      setIsSubmitting(true)
+      const formattedQuestions: Question[] = values.questions.map((q, idx) => ({
+        id: q.id || `q-new-${idx + 1}-${Date.now()}`,
+        test_id: '',
+        question_number: idx + 1,
+        question_text: q.question_text,
+        question_type: q.question_type,
+        difficulty_level: q.difficulty_level,
+        points: q.points,
+        explanation: q.explanation || '',
+        media_url: q.media_url || null,
+        options: (q.options || []).map((o, optIdx) => ({
+          id: o.id || `opt-${idx + 1}-${optIdx + 1}-${Date.now()}`,
+          option_letter: o.option_letter,
+          option_text: o.option_text,
+          is_correct: o.is_correct,
+        })),
+      }))
+
       await onSubmit(
         {
-          title: title.trim(),
-          description: description.trim(),
-          category,
-          duration_minutes: Number(durationMinutes),
-          passing_score_percentage: Number(passingScore),
-          total_questions: questions.length,
-          published: true,
+          title: values.title.trim(),
+          description: values.description?.trim() || '',
+          category: values.category,
+          duration_minutes: values.duration_minutes,
+          passing_score_percentage: values.passing_score_percentage,
+          total_questions: formattedQuestions.length,
+          published: values.published,
         },
-        questions
+        formattedQuestions
       )
-      toast.success('Modul Berhasil Dibuat', `"${title.trim()}" telah dipublikasikan ke bank soal.`)
+
+      toast.success('Modul Berhasil Dibuat', `"${values.title.trim()}" telah dipublikasikan ke bank soal.`)
+      reset(DEFAULT_FORM_VALUES)
       onClose()
     } catch (err) {
       toast.error('Gagal Membuat Modul', (err as Error).message)
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -118,269 +140,163 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1 rounded text-ink-muted hover:text-ink hover:bg-surface-hover"
+            className="p-1 rounded text-ink-muted hover:text-ink hover:bg-surface-hover transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Metadata Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-ink uppercase tracking-wider mb-1">
-                Judul Ujian / Modul *
-              </label>
-              <input
-                type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Contoh: Tryout Nasional SKD CPNS 2026 - Paket A"
-                className="w-full px-3 py-2 text-sm rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-ink uppercase tracking-wider mb-1">
-                Deskripsi & Petunjuk Pengerjaan
-              </label>
-              <textarea
-                rows={2}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Deskripsi singkat mengenai materi uji dan peraturan..."
-                className="w-full px-3 py-2 text-sm rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-ink uppercase tracking-wider mb-1">
-                Kategori Ujian
-              </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as TestCategory)}
-                className="w-full px-3 py-2 text-sm rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-accent font-mono"
-              >
-                <option value="cpns">CPNS / Sekolah Kedinasan</option>
-                <option value="sbmptn">UTBK-SNBT Kemendikbud</option>
-                <option value="iq">IQ Matrix Assessment</option>
-                <option value="custom">BUMN AKHLAK / Custom</option>
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
+        <FormProvider {...methods}>
+          <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+            {/* Metadata Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-ink uppercase tracking-wider mb-1">
-                  Durasi (Menit)
+                  Judul Ujian / Modul *
                 </label>
                 <input
-                  type="number"
-                  min={5}
-                  max={240}
-                  value={durationMinutes}
-                  onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-sm rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-accent font-mono"
+                  type="text"
+                  {...register('title')}
+                  placeholder="Contoh: Tryout Nasional SKD CPNS 2026 - Paket A"
+                  className={`w-full px-3 py-2 text-sm rounded-md border bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-accent ${
+                    errors.title ? 'border-red-500' : 'border-borderline'
+                  }`}
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-ink uppercase tracking-wider mb-1">
-                  Passing Grade (%)
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={passingScore}
-                  onChange={(e) => setPassingScore(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-sm rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-accent font-mono"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Questions Section Header with AI Generator Button */}
-          <div className="border-t border-borderline pt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h4 className="text-sm font-semibold text-ink">
-                Daftar Butir Soal ({questions.length})
-              </h4>
-              <p className="text-xs text-ink-muted">
-                Tambahkan pilihan ganda atau esai lengkap dengan kunci & pembahasan.
-              </p>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={onOpenAIAssistant}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-accent/40 bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>AI Generator Soal</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleAddQuestion}
-                className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-md border border-borderline bg-canvas text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tambah Soal</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Questions Cards */}
-          <div className="space-y-6">
-            {questions.map((q, qIndex) => (
-              <div
-                key={q.id}
-                className="p-5 rounded-lg border border-borderline bg-canvas space-y-4"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-surface border border-borderline text-ink">
-                    SOAL #{qIndex + 1}
-                  </span>
-                  <div className="flex items-center space-x-2">
-                    <select
-                      value={q.question_type}
-                      onChange={(e) => {
-                        const updated = [...questions]
-                        updated[qIndex].question_type = e.target.value as QuestionType
-                        setQuestions(updated)
-                      }}
-                      className="px-2 py-1 text-xs rounded border border-borderline bg-surface text-ink font-mono"
-                    >
-                      <option value="multiple_choice">Pilihan Ganda</option>
-                      <option value="essay">Esai</option>
-                    </select>
-
-                    {questions.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveQuestion(qIndex)}
-                        className="p-1 text-ink-muted hover:text-red-500 rounded"
-                        title="Hapus soal"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Question Text */}
-                <div>
-                  <textarea
-                    rows={3}
-                    required
-                    value={q.question_text}
-                    onChange={(e) => {
-                      const updated = [...questions]
-                      updated[qIndex].question_text = e.target.value
-                      setQuestions(updated)
-                    }}
-                    placeholder={`Tuliskan teks pertanyaan soal #${qIndex + 1}...`}
-                    className="w-full px-3 py-2 text-sm rounded-md border border-borderline bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-accent"
-                  />
-                </div>
-
-                {/* Media Image Uploader */}
-                <MediaUploader
-                  mediaUrl={q.media_url}
-                  onChange={(url) => {
-                    const updated = [...questions]
-                    updated[qIndex].media_url = url
-                    setQuestions(updated)
-                  }}
-                  label="Lampirkan Gambar/Diagram Soal"
-                />
-
-                {/* Multiple Choice Options */}
-                {q.question_type === 'multiple_choice' && (
-                  <div className="space-y-2 pt-1">
-                    <span className="block text-xs font-semibold text-ink-muted uppercase tracking-wider">
-                      Opsi Jawaban & Kunci (Klik radio untuk tandai benar):
-                    </span>
-                    {q.options.map((opt, optIndex) => (
-                      <div key={opt.id} className="flex items-center space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = [...questions]
-                            updated[qIndex].options = updated[qIndex].options.map((o, idx) => ({
-                              ...o,
-                              is_correct: idx === optIndex,
-                            }))
-                            setQuestions(updated)
-                          }}
-                          className={`w-7 h-7 rounded font-mono text-xs flex items-center justify-center font-bold flex-shrink-0 transition-colors ${
-                            opt.is_correct
-                              ? 'bg-accent text-white shadow-xs'
-                              : 'bg-surface border border-borderline text-ink-muted hover:text-ink'
-                          }`}
-                        >
-                          {opt.option_letter}
-                        </button>
-                        <input
-                          type="text"
-                          required
-                          value={opt.option_text}
-                          onChange={(e) => {
-                            const updated = [...questions]
-                            updated[qIndex].options[optIndex].option_text = e.target.value
-                            setQuestions(updated)
-                          }}
-                          placeholder={`Jawaban opsi ${opt.option_letter}...`}
-                          className="flex-1 px-3 py-1.5 text-xs rounded border border-borderline bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        />
-                      </div>
-                    ))}
-                  </div>
+                {errors.title && (
+                  <p className="text-xs text-red-500 mt-1">{errors.title.message}</p>
                 )}
+              </div>
 
-                {/* Explanation */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-ink uppercase tracking-wider mb-1">
+                  Deskripsi & Petunjuk Pengerjaan
+                </label>
+                <textarea
+                  rows={2}
+                  {...register('description')}
+                  placeholder="Deskripsi singkat mengenai materi uji dan peraturan..."
+                  className="w-full px-3 py-2 text-sm rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink uppercase tracking-wider mb-1">
+                  Kategori Ujian
+                </label>
+                <select
+                  {...register('category')}
+                  className="w-full px-3 py-2 text-sm rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-accent font-mono"
+                >
+                  <option value="cpns">CPNS / Sekolah Kedinasan</option>
+                  <option value="sbmptn">UTBK-SNBT Kemendikbud</option>
+                  <option value="iq">IQ Matrix Assessment</option>
+                  <option value="custom">BUMN AKHLAK / Custom</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1">
-                    Pembahasan / Kriteria Penilaian:
+                  <label className="block text-xs font-semibold text-ink uppercase tracking-wider mb-1">
+                    Durasi (Menit)
                   </label>
                   <input
-                    type="text"
-                    value={q.explanation}
-                    onChange={(e) => {
-                      const updated = [...questions]
-                      updated[qIndex].explanation = e.target.value
-                      setQuestions(updated)
-                    }}
-                    placeholder="Rasionalisasi kunci jawaban atau rubrik penilaian esai..."
-                    className="w-full px-3 py-1.5 text-xs rounded border border-borderline bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                    type="number"
+                    min={5}
+                    max={300}
+                    {...register('duration_minutes', { valueAsNumber: true })}
+                    className="w-full px-3 py-2 text-sm rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-accent font-mono"
                   />
+                  {errors.duration_minutes && (
+                    <p className="text-[11px] text-red-500 mt-0.5">{errors.duration_minutes.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-ink uppercase tracking-wider mb-1">
+                    Passing Grade (%)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    {...register('passing_score_percentage', { valueAsNumber: true })}
+                    className="w-full px-3 py-2 text-sm rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-accent font-mono"
+                  />
+                  {errors.passing_score_percentage && (
+                    <p className="text-[11px] text-red-500 mt-0.5">{errors.passing_score_percentage.message}</p>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
 
-          {/* Modal Actions */}
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-borderline">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-medium rounded-md border border-borderline bg-canvas text-ink hover:bg-surface-hover transition-colors"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2 text-xs font-semibold rounded-md bg-accent text-white hover:opacity-95 shadow-xs transition-opacity"
-            >
-              {isSubmitting ? 'Menyimpan Ujian...' : 'Simpan & Publikasikan Ujian'}
-            </button>
-          </div>
-        </form>
+            {/* Questions Section Header with AI Generator Button */}
+            <div className="border-t border-borderline pt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-semibold text-ink">
+                  Daftar Butir Soal ({fields.length})
+                </h4>
+                <p className="text-xs text-ink-muted">
+                  Tambahkan pilihan ganda atau esai lengkap dengan kunci & pembahasan.
+                </p>
+                {errors.questions && typeof errors.questions.message === 'string' && (
+                  <p className="text-xs text-red-500 mt-1">{errors.questions.message}</p>
+                )}
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={onOpenAIAssistant}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-accent/40 bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>AI Generator Soal</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddQuestion}
+                  className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-md border border-borderline bg-canvas text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah Soal</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Questions Cards via useFieldArray */}
+            <div className="space-y-6">
+              {fields.map((field, idx) => (
+                <QuestionFormField
+                  key={field.id}
+                  index={idx}
+                  onRemove={() => remove(idx)}
+                  canRemove={fields.length > 1}
+                />
+              ))}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-borderline">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-xs font-medium rounded-md border border-borderline bg-canvas text-ink hover:bg-surface-hover transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-5 py-2 text-xs font-semibold rounded-md bg-accent text-white hover:opacity-95 shadow-xs transition-opacity disabled:opacity-50"
+              >
+                {isSubmitting ? 'Menyimpan Ujian...' : 'Simpan & Publikasikan Ujian'}
+              </button>
+            </div>
+          </form>
+        </FormProvider>
       </div>
     </div>
   )

@@ -123,3 +123,13 @@ export interface User {
   subscription_tier?: string
   is_active?: boolean
 }
+
+export interface AuthResponse {
+  user_id: string
+  email: string
+  full_name: string
+  role: 'admin' | 'creator' | 'user'
+  token: string
+  refresh_token?: string
+  user?: User
+}

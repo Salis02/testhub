@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { AuthProvider } from '@/context/AuthContext'
 import { ToastProvider } from '@/context/ToastContext'
@@ -13,19 +14,25 @@ import { ResultsPage } from '@/pages/ResultsPage'
 import { PricingPage } from '@/pages/PricingPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { AdminPage } from '@/pages/AdminPage'
-import { initLocalStorage } from '@/services/api'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 2,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
 export function App() {
-  useEffect(() => {
-    initLocalStorage()
-  }, [])
-
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <ConfirmProvider>
-            <BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <ConfirmProvider>
+              <BrowserRouter>
           <div className="min-h-screen flex flex-col bg-canvas text-ink transition-colors selection:bg-accent/20 selection:text-accent">
             <Header />
             <main className="flex-1">
@@ -58,6 +65,7 @@ export function App() {
       </ToastProvider>
     </AuthProvider>
   </ThemeProvider>
+</QueryClientProvider>
 )
 }
 

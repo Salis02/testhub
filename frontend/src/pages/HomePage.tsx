@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Test } from '@/types'
-import { api } from '@/services/api'
+import { testsApi } from '@/services/tests.api'
+import { sessionsApi } from '@/services/sessions.api'
 import { CategoryBadge } from '@/components/common/Badge'
 import { Search, Play, Clock, Award, CheckCircle2, Shield, Zap, ArrowRight } from 'lucide-react'
 
@@ -9,38 +11,28 @@ import { TestCardSkeleton } from '@/components/common/Skeleton'
 import { useToast } from '@/context/ToastContext'
 
 export const HomePage: React.FC = () => {
-  const [tests, setTests] = useState<Test[]>([])
-  const [loading, setLoading] = useState(true)
   const [searchParams, setSearchParams] = useSearchParams()
   const activeCategory = searchParams.get('category') || 'all'
   const [searchQuery, setSearchQuery] = useState('')
+  const [submittedQuery, setSubmittedQuery] = useState('')
   const navigate = useNavigate()
   const toast = useToast()
 
-  useEffect(() => {
-    loadTests()
-  }, [activeCategory])
+  const { data: rawTests = [], isLoading: loading } = useQuery({
+    queryKey: ['tests', activeCategory, submittedQuery],
+    queryFn: ({ signal }) => testsApi.listTests(activeCategory, submittedQuery, signal),
+  })
 
-  const loadTests = async () => {
-    try {
-      setLoading(true)
-      const data = await api.listTests(activeCategory, searchQuery)
-      setTests(data.filter((t) => t.published))
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const tests = rawTests.filter((t) => t.published)
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    loadTests()
+    setSubmittedQuery(searchQuery.trim())
   }
 
   const handleStartTest = async (testId: string) => {
     try {
-      const session = await api.startTest(testId)
+      const session = await sessionsApi.startTest(testId)
       navigate(`/test/${session.test.id}?session=${session.session_id}`)
     } catch (err) {
       toast.error('Gagal Memulai Ujian', (err as Error).message)

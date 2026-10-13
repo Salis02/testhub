@@ -1,12 +1,12 @@
 import React from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { useTestSessionStore } from '@/stores/useTestSessionStore'
 
 interface FinishConfirmModalProps {
   isOpen: boolean
   totalQuestions: number
   answeredCount: number
   flaggedCount: number
-  secondsLeft: number
   onConfirm: () => void
   onCancel: () => void
   isSubmitting: boolean
@@ -17,11 +17,12 @@ export const FinishConfirmModal: React.FC<FinishConfirmModalProps> = ({
   totalQuestions,
   answeredCount,
   flaggedCount,
-  secondsLeft,
   onConfirm,
   onCancel,
   isSubmitting,
 }) => {
+  const secondsLeft = useTestSessionStore((s) => s.secondsLeft)
+
   if (!isOpen) return null
 
   const unansweredCount = totalQuestions - answeredCount
@@ -31,8 +32,11 @@ export const FinishConfirmModal: React.FC<FinishConfirmModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/50 dark:bg-black/65 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-surface border border-borderline rounded-lg max-w-md w-full p-6 shadow-2xl space-y-5">
         <div className="flex items-center space-x-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasUnanswered ? 'bg-amber-500/10 text-amber-500' : 'bg-accent/10 text-accent'
-            }`}>
+          <div
+            className={`w-10 h-10 rounded-full flex items-center justify-center ${
+              hasUnanswered ? 'bg-amber-500/10 text-amber-500' : 'bg-accent/10 text-accent'
+            }`}
+          >
             <AlertTriangle className="w-5 h-5" />
           </div>
           <div>
@@ -93,11 +97,7 @@ export const FinishConfirmModal: React.FC<FinishConfirmModalProps> = ({
             disabled={isSubmitting}
             className="px-4 py-2 text-xs font-semibold rounded-md bg-accent text-white hover:opacity-95 shadow-xs transition-opacity flex items-center space-x-1.5"
           >
-            {isSubmitting ? (
-              <span>Menyimpan & Menilai...</span>
-            ) : (
-              <span>Ya, Selesaikan Tes</span>
-            )}
+            {isSubmitting ? <span>Menyimpan & Menilai...</span> : <span>Ya, Selesaikan Tes</span>}
           </button>
         </div>
       </div>

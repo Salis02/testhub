@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/context/AuthContext'
 import { Test, Question, AdminStats, EssaySubmission } from '@/types'
-import { api } from '@/services/api'
+import { adminApi } from '@/services/admin.api'
 import { AdminOverview } from '@/components/admin/AdminOverview'
 import { TestManagement } from '@/components/admin/TestManagement'
 import { EssayGradingView } from '@/components/admin/EssayGradingView'
@@ -19,12 +20,9 @@ export const AdminPage: React.FC = () => {
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
+  const queryClient = useQueryClient()
 
   const [activeTab, setActiveTab] = useState<TabType>('overview')
-  const [stats, setStats] = useState<AdminStats | null>(null)
-  const [tests, setTests] = useState<Test[]>([])
-  const [essays, setEssays] = useState<EssaySubmission[]>([])
-  const [loading, setLoading] = useState(true)
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -36,54 +34,106 @@ export const AdminPage: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login')
-      return
     }
-    loadData()
-  }, [isAuthenticated])
+  }, [isAuthenticated, navigate])
 
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      const [s, t, e] = await Promise.all([
-        api.getAdminStats(),
-        api.listTests(),
-        api.adminGetPendingEssays(),
-      ])
-      setStats(s)
-      setTests(t)
-      setEssays(e)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // 1. Declarative Server State with Auto-caching & Deduping
+  const { data: stats, isLoading: loadingStats } = useQuery({
+    queryKey: ['admin', 'stats'],
+    queryFn: ({ signal }) => adminApi.getStats(signal),
+    enabled: isAuthenticated,
+  })
+
+  const { data: tests = [], isLoading: loadingTests } = useQuery({
+    queryKey: ['admin', 'tests'],
+    queryFn: ({ signal }) => adminApi.listTests(signal),
+    enabled: isAuthenticated,
+  })
+
+  const { data: essays = [], isLoading: loadingEssays } = useQuery({
+    queryKey: ['admin', 'essays'],
+    queryFn: ({ signal }) => adminApi.getPendingEssays(signal),
+    enabled: isAuthenticated,
+  })
+
+  // 2. Targeted Mutations with Granular Cache Invalidation
+  const togglePublishMutation = useMutation({
+    mutationFn: (testId: string) => adminApi.togglePublish(testId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'tests'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] })
+    },
+    onError: (err: Error) => {
+      toast.error('Gagal Mengubah Status', err.message)
+    },
+  })
+
+  const deleteTestMutation = useMutation({
+    mutationFn: (testId: string) => adminApi.deleteTest(testId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'tests'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] })
+    },
+    onError: (err: Error) => {
+      toast.error('Gagal Menghapus Modul', err.message)
+    },
+  })
+
+  const createTestMutation = useMutation({
+    mutationFn: ({
+      testData,
+      questions,
+    }: {
+      testData: Omit<Test, 'id' | 'created_at' | 'updated_at'>
+      questions: Question[]
+    }) => adminApi.createTest(testData, questions),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'tests'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] })
+      setActiveTab('tests')
+    },
+    onError: (err: Error) => {
+      toast.error('Gagal Membuat Modul', err.message)
+    },
+  })
+
+  const gradeEssayMutation = useMutation({
+    mutationFn: ({ essayId, score, note }: { essayId: string; score: number; note: string }) =>
+      adminApi.gradeEssay(essayId, score, note),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'essays'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] })
+    },
+    onError: (err: Error) => {
+      toast.error('Gagal Menyimpan Penilaian', err.message)
+    },
+  })
 
   const handleTogglePublish = async (testId: string) => {
-    await api.adminTogglePublish(testId)
-    await loadData()
+    await togglePublishMutation.mutateAsync(testId)
   }
 
   const handleDeleteTest = async (testId: string) => {
-    await api.adminDeleteTest(testId)
-    await loadData()
+    await deleteTestMutation.mutateAsync(testId)
   }
 
   const handleCreateTest = async (
     testData: Omit<Test, 'id' | 'created_at' | 'updated_at'>,
     questions: Question[]
   ) => {
-    await api.adminCreateTest(testData, questions)
-    await loadData()
-    setActiveTab('tests')
+    await createTestMutation.mutateAsync({ testData, questions })
   }
 
   const handleGradeEssay = async (essayId: string, score: number, note: string) => {
-    await api.adminGradeEssay(essayId, score, note)
-    await loadData()
+    await gradeEssayMutation.mutateAsync({ essayId, score, note })
   }
 
-  if (loading || !stats) {
+  const handleDataRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin', 'tests'] })
+    queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] })
+  }
+
+  if (loadingStats || !stats) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
         <AdminOverviewSkeleton />
@@ -199,7 +249,7 @@ export const AdminPage: React.FC = () => {
         isOpen={!!editingTestId}
         testId={editingTestId}
         onClose={() => setEditingTestId(null)}
-        onUpdated={loadData}
+        onUpdated={handleDataRefresh}
         onOpenAIAssistant={() => {
           setAiContext('edit')
           setIsAIModalOpen(true)
@@ -219,7 +269,7 @@ export const AdminPage: React.FC = () => {
 
           // Auto-create test if generated from main overview
           if (newQuestions.length > 0) {
-            await api.adminCreateTest(
+            await adminApi.createTest(
               {
                 title: `Simulasi Otomatis AI: ${newQuestions[0].question_text.substring(0, 35)}...`,
                 description: 'Modul ujian hasil kurasi otomatis AI Agent sesuai batasan AI_AGENT_AND_SECURITY.md.',
@@ -231,7 +281,7 @@ export const AdminPage: React.FC = () => {
               },
               newQuestions
             )
-            await loadData()
+            handleDataRefresh()
             toast.success('Modul AI Ditambahkan', 'Modul ujian berbasis AI berhasil disimpan ke bank soal!')
           }
         }}

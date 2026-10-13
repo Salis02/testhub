@@ -1,10 +1,10 @@
 import React from 'react'
-import { Clock, ChevronLeft } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { TestCountdownTimer } from '@/components/test/TestCountdownTimer'
 
 interface TestHeaderProps {
   title: string
-  secondsLeft: number
   currentIndex: number
   totalQuestions: number
   answeredCount: number
@@ -16,7 +16,6 @@ interface TestHeaderProps {
 
 export const TestHeader: React.FC<TestHeaderProps> = ({
   title,
-  secondsLeft,
   currentIndex,
   totalQuestions,
   answeredCount,
@@ -25,19 +24,6 @@ export const TestHeader: React.FC<TestHeaderProps> = ({
   onToggleDrawer,
   isDrawerOpen,
 }) => {
-  // Format MM:SS or HH:MM:SS
-  const formatTime = (secs: number) => {
-    const hours = Math.floor(secs / 3600)
-    const minutes = Math.floor((secs % 3600) / 60)
-    const seconds = secs % 60
-
-    if (hours > 0) {
-      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-    }
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-  }
-
-  const isLowTime = secondsLeft < 300 // under 5 min
   const progressPercent = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0
 
   return (
@@ -76,17 +62,8 @@ export const TestHeader: React.FC<TestHeaderProps> = ({
             Daftar Soal ({answeredCount}/{totalQuestions})
           </button>
 
-          {/* Tabular Numerals Countdown Timer */}
-          <div
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded font-mono text-sm font-semibold tabular-nums border transition-colors ${
-              isLowTime
-                ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 animate-pulse'
-                : 'bg-surface text-ink border-borderline'
-            }`}
-          >
-            <Clock className={`w-4 h-4 ${isLowTime ? 'text-red-500' : 'text-accent'}`} />
-            <span>{formatTime(secondsLeft)}</span>
-          </div>
+          {/* Isolated Tabular Numerals Countdown Timer */}
+          <TestCountdownTimer />
 
           {/* Finish Button */}
           <button
