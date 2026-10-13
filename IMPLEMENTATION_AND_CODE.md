@@ -154,9 +154,30 @@ Berdasarkan audit mendalam arsitektur Go backend, seluruh area perbaikan teknis 
 
 ---
 
-## 6. Roadmap Fitur Masa Depan (Phase 3 & 4)
+## 6. Roadmap Fitur Masa Depan Berbasis ROI & Profitabilitas
 
-- [ ] **Email Notifications**: Worker goroutine untuk mengirim bukti kelulusan & sertifikat hasil tes via SMTP.
-- [ ] **Adaptive Testing**: Penyesuaian kesulitan soal dinamis secara real-time berdasarkan akurasi jawaban sebelumnya.
-- [ ] **Export PDF**: Unduh laporan analitik & sertifikat nilai dalam bentuk PDF.
-- [ ] **Monetisasi Payment Gateway**: Webhook integrasi Midtrans / Stripe untuk paket berlangganan Pro & B2B.
+Prioritas pengembangan fitur baru disusun berdasarkan rasio keuntungan bisnis (*high profit*) terhadap kompleksitas teknis (lihat [PRODUCT_REQUIREMENTS_DOCUMENT.md](file:///home/sans/coding/quiz_app/PRODUCT_REQUIREMENTS_DOCUMENT.md)):
+
+### 🚀 Sprint Revenue & Virality (Fase P1 - Prioritas Utama)
+- [ ] **Payment Gateway QRIS Instan (Midtrans / Xendit Webhook)**:
+  - Pembuatan invoice instan QRIS / E-wallet untuk pembelian tiket tryout per-modul (Rp 10.000–Rp 25.000) dan Season Pass.
+  - Webhook callback handler di backend Go dengan verifikasi signature cryptographic dan unlocking sesi otomatis.
+- [ ] **Generator Sertifikat & Report Card PDF**:
+  - Unduh sertifikat nilai resmi ber-QR Code verifikasi via worker backend (atau `@react-pdf/renderer` di frontend).
+  - Pemicu viralitas organik peserta di media sosial (LinkedIn/Instagram).
+- [ ] **Leaderboard & Ranking Nasional Instan**:
+  - Redis Sorted Sets (`ZADD`, `ZRANK`) untuk menghitung peringkat ribuan peserta tryout akbar secara real-time tanpa membebani PostgreSQL.
+
+### 📈 Sprint Engagement & Marketplace (Fase P2)
+- [ ] **Diagnostic Weakness Heatmap**:
+  - Analitik visual pengelompokan kelemahan sub-kategori (misal: analisis daya serap TIU/TWK) untuk alasan upgrade akun.
+- [ ] **Creator Monetization & Marketplace**:
+  - Fitur penetapan harga modul oleh guru/bimbel dengan potongan komisi platform 20%–30%.
+- [ ] **Bulk Import Soal Massal (Excel / Word / CSV)**:
+  - Parser berkas soal untuk mempercepat onboarding konten ribuan butir soal dari mitra bimbel.
+
+### 🛡️ Sprint Institusi & Keamanan Ujian (Fase P3)
+- [ ] **Anti-Cheat Focus Mode**:
+  - Deteksi event `window.blur` (perpindahan tab peserta), fullscreen lock, dan cegah copy-paste naskah soal.
+- [ ] **Streaming AI Question Generator (SSE)**:
+  - Server-Sent Events (`text/event-stream`) untuk mengalirkan butir soal AI satu per satu ke modal admin.

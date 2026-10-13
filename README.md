@@ -11,7 +11,7 @@ Semua dokumentasi arsitektur, panduan teknis, dan keamanan disimpan dalam file m
 1. [IMPLEMENTATION_AND_CODE.md](file:///home/sans/coding/quiz_app/IMPLEMENTATION_AND_CODE.md)  
    **Status implementasi aktif**, Developer Extension Guide, dan **Audit Technical Debt Backend (Validasi, Rate Limiter, AI Fallback)**.
 2. [PRODUCT_REQUIREMENTS_DOCUMENT.md](file:///home/sans/coding/quiz_app/PRODUCT_REQUIREMENTS_DOCUMENT.md)  
-   Deskripsi produk (PRD), user persona, spesifikasi fitur MVP, strategi monetisasi, dan metrik keberhasilan.
+   **Deskripsi produk (PRD)**, analisis kebutuhan pengguna (siswa/guru/admin), strategi profitabilitas tinggi (QRIS/Season Pass/Komisi Marketplace), dan roadmap prioritas.
 3. [ARCHITECTURE_AND_SCHEMA.md](file:///home/sans/coding/quiz_app/ARCHITECTURE_AND_SCHEMA.md)  
    Diagram arsitektur sistem, skema relasional database PostgreSQL, caching strategy Redis, dan spesifikasi API.
 4. [AI_AGENT_AND_SECURITY.md](file:///home/sans/coding/quiz_app/AI_AGENT_AND_SECURITY.md)  
@@ -116,7 +116,7 @@ Alur Penambahan Fitur:
 4. HTTP Handler    -> backend/internal/handlers/nama_handler.go
 5. Registrasi Rute -> backend/internal/handlers/routes.go
 6. Unit Test       -> backend/tests/api_test.go
-7. Integrasi UI    -> frontend/src/services/api.ts
+7. Integrasi UI    -> frontend/src/services/client.ts & domain services
 ```
 
 > 📖 **Detail lengkap langkah-demi-langkah beserta contoh kode:** Lihat Bagian 2 di [IMPLEMENTATION_AND_CODE.md](file:///home/sans/coding/quiz_app/IMPLEMENTATION_AND_CODE.md).
