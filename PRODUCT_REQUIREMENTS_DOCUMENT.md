@@ -79,9 +79,10 @@
 |:---:|---|---|---|:---:|
 | **P0** | Core Engine: Start Sesi Non-Auth, Auto-Grading, Admin CRUD, AI Modal | Siswa, Guru | Fondasi platform ujian berkinerja tinggi | ✅ Selesai |
 | **P0** | Refactored Architecture: TanStack Query v5, Zustand, Zod, Repository Pattern | Developer, AI | Stabilitas 10 tahun & pencegahan technical debt | ✅ Selesai |
-| **P1** | **Payment Gateway QRIS (Midtrans/Xendit Webhook)** | Siswa, Admin | **Monetisasi Langsung**: Membuka gembok tes berbayar seketika | 🚀 Siap Rilis |
-| **P1** | **Sertifikat Kelulusan & Report Card PDF** | Siswa | **Pemicu Viralitas**: Syarat fitur premium / branding platform | 🚀 Siap Rilis |
-| **P1** | **Leaderboard & Ranking Nasional Instan** | Siswa | **Meningkatkan Retensi**: Benchmarking kompetitif peserta | 📋 Terjadwal |
+| **P1** | **Payment Gateway QRIS & Paywall Enforcement** | Siswa, Admin | **Monetisasi Langsung**: Membuka gembok tes berbayar seketika | ✅ Selesai (Backend) |
+| **P1** | **Admin Manual Subscription Override** | Admin | **Fleksibilitas B2B / Offline**: Grant, extend, revoke akses | ✅ Selesai (Backend) |
+| **P1** | **Sertifikat Kelulusan & Verifikasi Publik** | Siswa, Publik | **Pemicu Viralitas**: UUID verifikasi resmi & anti-pemalsuan | ✅ Selesai (Backend) |
+| **P1** | **Leaderboard & Ranking Nasional Instan** | Siswa | **Meningkatkan Retensi**: Benchmarking kompetitif peserta | ✅ Selesai (Backend) |
 | **P2** | **Weakness Diagnostic Report (Heatmap Topik)** | Siswa, Guru | **Alasan Upgrade**: Memberi nilai tambah dibanding tryout gratis | 📋 Terjadwal |
 | **P2** | **Creator Monetization & Payout Dashboard** | Guru, Admin | **Marketplace Expansion**: Komisi pasif dari konten kreator | 📋 Terjadwal |
 | **P2** | **Bulk Import Soal (Excel / Word / CSV)** | Guru | **Efisiensi Onboarding**: Memperbanyak bank soal dalam hitungan menit | 📋 Terjadwal |
@@ -97,3 +98,69 @@
 - **AC-03 (Auto-Submit Saat Waktu Habis)**: Countdown timer mencapai `00:00:00` otomatis mengunci pengerjaan dan mengirim lembar jawaban ke server.
 - **AC-04 (Keandalan Skalabilitas)**: Single VPS 2GB mampu melayani lonjakan 1.000 RPS saat Tryout Akbar serentak tanpa *service crash*.
 - **AC-05 (Admin Manual Subscription Override)**: Admin dapat secara manual mengaktifkan, memperpanjang, atau mencabut langganan pengguna dengan alasan audit yang tercatat di database, dan hak akses tes langsung aktif seketika tanpa melalui payment gateway.
+- **AC-06 (Verifikasi Sertifikat)**: Siapa saja dapat memverifikasi keaslian nilai sertifikat kelulusan melalui endpoint `/api/verify/certificate/:certificateId`.
+
+---
+
+## 6. Spesifikasi Pengelompokan Endpoint API Berdasarkan Role
+
+Untuk menjaga arsitektur bersih (*Clean Architecture*) selama 10+ tahun ke depan dan mencegah percampuran hak akses (*security privilege escalation*), seluruh rute API backend dikelompokkan secara ketat menjadi 3 tingkatan role:
+
+### 🌐 1. Role: Public (Unauthenticated Examinees & Visitors)
+Endpoint yang dapat diakses publik tanpa header autentikasi JWT token:
+- `GET /health`: Health check server & status timestamp.
+- `GET /uploads/*`: Penyajian media gambar diagram/grafik soal secara statis dan ter-cache.
+- **Autentikasi & Registrasi**:
+  - `POST /api/auth/register`: Mendaftarkan akun peserta/guru baru (Rate limit: 20 req/menit).
+  - `POST /api/auth/login`: Autentikasi kredensial dan penerbitan JWT token (Rate limit: 30 req/menit).
+- **Katalog Ujian & Leaderboard**:
+  - `GET /api/tests`: Mengambil daftar modul ujian yang dipublikasikan (filter kategori, pencarian).
+  - `GET /api/tests/:testId`: Mengambil metadata modul ujian publik.
+  - `GET /api/tests/:testId/leaderboard`: Mengambil 50 peringkat teratas nilai ujian (latensi ultra-rendah).
+- **Mesin Sesi Ujian (*Frictionless Exam Engine*)**:
+  - `POST /api/tests/:testId/start`: Membuka lembar ujian. **Dilengkapi Paywall**: mengembalikan `HTTP 402 Payment Required` jika modul berbayar dan peserta belum memiliki langganan aktif.
+  - `GET /api/sessions/:sessionId/questions`: Mengambil butir soal ujian (tanpa kunci jawaban).
+  - `GET /api/sessions/:sessionId/submissions`: Mengambil lembar jawaban tersimpan peserta.
+  - `POST /api/sessions/:sessionId/submit-answer`: Menyimpan jawaban butir soal secara berkala.
+  - `POST /api/sessions/:sessionId/finish`: Menyelesaikan ujian dan melakukan auto-grading seketika.
+- **Hasil & Verifikasi Sertifikat**:
+  - `GET /api/results/:resultId`: Menampilkan skor akhir, persentil, dan pembahasan detail soal.
+  - `GET /api/results/:resultId/certificate`: Menghasilkan metadata sertifikat resmi ber-UUID unik.
+  - `GET /api/verify/certificate/:certificateId`: Halaman verifikasi publik keaslian sertifikat nilai.
+- **Payment Gateway Invoicing & Webhook**:
+  - `POST /api/payments/create-invoice`: Generate QRIS dynamic / Snap token per modul atau Season Pass.
+  - `GET /api/payments/status/:orderId`: Polling status settlement pesanan.
+  - `POST /api/payments/webhook`: Webhook notifikasi pembayaran otomatis dari payment gateway.
+- **AI Question Assistant**:
+  - `POST /api/ai/generate-questions`: Generator butir soal tryout berbasis LLM.
+
+### 👤 2. Role: User / Peserta (Authenticated Examinees)
+Endpoint khusus pengguna terdaftar, dilindungi middleware `AuthRequired(JWTSecret)`:
+- `GET /api/user/me`: Profil data akun pengguna aktif.
+- `GET /api/user/subscriptions`: Riwayat langganan dan modul ujian aktif milik pengguna.
+- `GET /api/auth/me`: *Alias backward-compatible* untuk kompatibilitas frontend lama.
+
+### 👑 3. Role: Admin & Creator (Platform Managers)
+Endpoint manajemen penuh yang dilindungi dua lapis middleware `AuthRequired` + `RequireAdmin`:
+- **Dashboard & Analitik**:
+  - `GET /api/admin/stats`: Statistik ringkasan platform (total user, tes aktif, penyelesaian).
+  - `GET /api/admin/tests/:testId/analytics`: Analisis butir soal dan distribusi skor peserta.
+- **Manajemen Bank Soal & Modul Tes**:
+  - `GET /api/admin/tests`: Daftar seluruh modul tes (termasuk draf belum dipublikasikan).
+  - `POST /api/admin/tests`: Membuat modul tes baru dengan validasi relasional DTO lengkap.
+  - `GET /api/admin/tests/:testId`: Mengambil detail lengkap tes dan butir soal untuk diedit.
+  - `PUT /api/admin/tests/:testId`: Memperbarui data tes dan butir-butir soal.
+  - `POST /api/admin/tests/:testId/toggle-publish`: Mengubah status publikasi tes.
+  - `DELETE /api/admin/tests/:testId`: Soft-delete modul ujian.
+- **Penilaian Manual Esai**:
+  - `GET /api/admin/essays`: Daftar jawaban esai yang menunggu penilaian manusia (*pending review*).
+  - `POST /api/admin/essays/:essayId/grade`: Memberikan nilai skor dan catatan evaluasi guru.
+- **Manajemen Berkas Media**:
+  - `POST /api/admin/upload-media`: Unggah gambar diagram soal dengan validasi tipe berkas dan limit 2MB.
+  - `DELETE /api/admin/media`: Menghapus gambar soal yang tidak lagi terpakai.
+- **Manajemen Langganan & Manual Override (Bypass Paywall)**:
+  - `GET /api/admin/subscriptions`: Daftar seluruh riwayat transaksi langganan peserta.
+  - `POST /api/admin/subscriptions/manual-grant`: Memberikan akses ujian / season pass secara manual (misal kesepakatan B2B offline / transfer bank).
+  - `PUT /api/admin/subscriptions/:id/status`: Memperbarui status langganan atau memperpanjang masa aktif.
+  - `DELETE /api/admin/subscriptions/:id/revoke`: Mencabut hak akses peserta dengan catatan audit.
+

@@ -1,28 +1,41 @@
 package handlers
 
 import (
-	"database/sql"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
 	"testhub/internal/cache"
-	"testhub/internal/database"
 	"testhub/internal/models"
-	"testhub/internal/services"
+	"testhub/internal/repository"
 )
 
+// PublicHandler handles all examinee test-taking and public interactions
 type PublicHandler struct {
-	db    *database.DB
-	cache *cache.Client
+	examRepo repository.ExamRepository
+	subRepo  repository.SubscriptionRepository
+	testRepo repository.TestRepository
+	cache    *cache.Client
 }
 
-func NewPublicHandler(db *database.DB, cache *cache.Client) *PublicHandler {
-	return &PublicHandler{db: db, cache: cache}
+func NewPublicHandler(
+	examRepo repository.ExamRepository,
+	subRepo repository.SubscriptionRepository,
+	testRepo repository.TestRepository,
+	cache *cache.Client,
+) *PublicHandler {
+	return &PublicHandler{
+		examRepo: examRepo,
+		subRepo:  subRepo,
+		testRepo: testRepo,
+		cache:    cache,
+	}
 }
 
 // ListTests handles GET /api/tests
@@ -33,33 +46,11 @@ func (h *PublicHandler) ListTests(c *gin.Context) {
 		query = c.Query("search")
 	}
 
-	sqlQuery := "SELECT * FROM tests WHERE is_deleted = false AND published = true"
-	var args []interface{}
-	argIdx := 1
-
-	if category != "" && category != "all" {
-		sqlQuery += fmt.Sprintf(" AND category = $%d", argIdx)
-		args = append(args, category)
-		argIdx++
-	}
-
-	if query != "" {
-		sqlQuery += fmt.Sprintf(" AND (LOWER(title) LIKE $%d OR LOWER(description) LIKE $%d)", argIdx, argIdx)
-		args = append(args, "%"+query+"%")
-		argIdx++
-	}
-
-	sqlQuery += " ORDER BY created_at DESC"
-
-	var tests []models.Test
-	err := h.db.Select(&tests, sqlQuery, args...)
+	tests, err := h.examRepo.ListPublicTests(c.Request.Context(), category, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar ujian: " + err.Error()})
+		log.Printf("[PublicHandler.ListTests] internal error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar modul ujian."})
 		return
-	}
-
-	if tests == nil {
-		tests = []models.Test{}
 	}
 
 	c.JSON(http.StatusOK, tests)
@@ -69,10 +60,14 @@ func (h *PublicHandler) ListTests(c *gin.Context) {
 func (h *PublicHandler) GetTest(c *gin.Context) {
 	testID := c.Param("testId")
 
-	var test models.Test
-	err := h.db.Get(&test, "SELECT * FROM tests WHERE id = $1 AND is_deleted = false", testID)
+	test, err := h.examRepo.GetPublicTest(c.Request.Context(), testID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
+		if errors.Is(err, repository.ErrTestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan atau belum dipublikasikan"})
+			return
+		}
+		log.Printf("[PublicHandler.GetTest] internal error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data modul ujian."})
 		return
 	}
 
@@ -83,11 +78,52 @@ func (h *PublicHandler) GetTest(c *gin.Context) {
 func (h *PublicHandler) StartTest(c *gin.Context) {
 	testID := c.Param("testId")
 
-	var test models.Test
-	err := h.db.Get(&test, "SELECT * FROM tests WHERE id = $1 AND is_deleted = false AND published = true", testID)
-	if err != nil {
+	test, err := h.testRepo.GetTestByID(c.Request.Context(), testID)
+	if err != nil || !test.Published {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan atau belum dipublikasikan"})
 		return
+	}
+
+	// Resolve user identifier from JWT context, headers, query, or body DTO
+	userIdentifier := ""
+	if emailVal, exists := c.Get("email"); exists {
+		if s, ok := emailVal.(string); ok && s != "" {
+			userIdentifier = s
+		}
+	}
+	if userIdentifier == "" {
+		userIdentifier = c.GetHeader("X-User-Email")
+	}
+	if userIdentifier == "" {
+		userIdentifier = c.Query("email")
+	}
+
+	var startDTO models.StartSessionDTO
+	if err := c.ShouldBindJSON(&startDTO); err == nil && startDTO.Email != "" && userIdentifier == "" {
+		userIdentifier = startDTO.Email
+	}
+
+	// Paywall Enforcement: Cek akses langganan jika modul ujian berbayar
+	if test.PriceIDR > 0 {
+		hasAccess := false
+		if userIdentifier != "" && h.subRepo != nil {
+			var errAccess error
+			hasAccess, errAccess = h.subRepo.HasActiveAccess(c.Request.Context(), userIdentifier, test.ID)
+			if errAccess != nil {
+				log.Printf("[PublicHandler.StartTest] Subscription access error: %v", errAccess)
+			}
+		}
+
+		if !hasAccess {
+			c.JSON(http.StatusPaymentRequired, gin.H{
+				"error":     "Modul ujian ini berbayar. Silakan selesaikan pembayaran invoice terlebih dahulu.",
+				"paywall":   true,
+				"test_id":   test.ID,
+				"title":     test.Title,
+				"price_idr": test.PriceIDR,
+			})
+			return
+		}
 	}
 
 	sessionID := "sess-" + uuid.New().String()[:8] + "-" + fmt.Sprintf("%d", time.Now().Unix())
@@ -107,17 +143,13 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 		CreatedAt: startedAt,
 	}
 
-	insertSessionSQL := `
-		INSERT INTO test_sessions (id, test_id, ip_address, user_agent, started_at, expires_at, is_active, created_at)
-		VALUES (:id, :test_id, :ip_address, :user_agent, :started_at, :expires_at, :is_active, :created_at)
-	`
-	_, err = h.db.NamedExec(insertSessionSQL, session)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat sesi ujian: " + err.Error()})
+	if err := h.examRepo.CreateSession(c.Request.Context(), &session); err != nil {
+		log.Printf("[PublicHandler.StartTest] create session error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memulai sesi ujian baru."})
 		return
 	}
 
-	// Cache session
+	// Cache session for fast access
 	_ = h.cache.Set("session:"+sessionID, session, 24*time.Hour)
 
 	resp := models.TestSessionResponse{
@@ -139,62 +171,21 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 func (h *PublicHandler) GetQuestions(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 
-	var session models.TestSession
-	err := h.db.Get(&session, "SELECT * FROM test_sessions WHERE id = $1 AND is_active = true", sessionID)
+	questions, durationMinutes, err := h.examRepo.GetSessionQuestions(c.Request.Context(), sessionID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Sesi ujian tidak valid atau telah kedaluwarsa"})
-		return
-	}
-
-	var test models.Test
-	err = h.db.Get(&test, "SELECT * FROM tests WHERE id = $1", session.TestID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
-		return
-	}
-
-	var questions []models.TestQuestion
-	err = h.db.Select(&questions, "SELECT * FROM test_questions WHERE test_id = $1 AND is_deleted = false ORDER BY question_number ASC", test.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat soal: " + err.Error()})
-		return
-	}
-
-	for i := range questions {
-		var options []models.QuestionOption
-		err = h.db.Select(&options, "SELECT id, question_id, option_letter, option_text FROM question_options WHERE question_id = $1 ORDER BY option_letter ASC", questions[i].ID)
-		if err == nil {
-			// Strip is_correct for examinee privacy and security
-			for j := range options {
-				options[j].IsCorrect = nil
-			}
-			questions[i].Options = options
-		} else {
-			questions[i].Options = []models.QuestionOption{}
+		if errors.Is(err, repository.ErrSessionNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Sesi ujian tidak valid atau telah kadaluarsa"})
+			return
 		}
-		// Strip explanation during test taking
-		questions[i].Explanation = ""
-	}
-
-	testMeta := struct {
-		ID                     string `json:"id"`
-		Title                  string `json:"title"`
-		Category               string `json:"category"`
-		DurationMinutes        int    `json:"duration_minutes"`
-		TotalQuestions         int    `json:"total_questions"`
-		PassingScorePercentage int    `json:"passing_score_percentage"`
-	}{
-		ID:                     test.ID,
-		Title:                  test.Title,
-		Category:               test.Category,
-		DurationMinutes:        test.DurationMinutes,
-		TotalQuestions:         test.TotalQuestions,
-		PassingScorePercentage: test.PassingScorePercentage,
+		log.Printf("[PublicHandler.GetQuestions] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar soal ujian."})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"test":      testMeta,
-		"questions": questions,
+		"session_id":       sessionID,
+		"questions":        questions,
+		"duration_minutes": durationMinutes,
 	})
 }
 
@@ -202,57 +193,29 @@ func (h *PublicHandler) GetQuestions(c *gin.Context) {
 func (h *PublicHandler) GetSubmissions(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 
-	type SubRow struct {
-		QuestionID          string    `db:"question_id"`
-		UserAnswerOptionID  *string   `db:"user_answer_option_id"`
-		UserAnswerText      *string   `db:"user_answer_text"`
-		IsFlagged           bool      `db:"is_flagged"`
-		SubmittedAt         time.Time `db:"submitted_at"`
-	}
-
-	var rows []SubRow
-	err := h.db.Select(&rows, "SELECT question_id, user_answer_option_id, user_answer_text, is_flagged, submitted_at FROM test_submissions WHERE session_id = $1", sessionID)
+	submissions, err := h.examRepo.GetSubmissionsBySession(c.Request.Context(), sessionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat jawaban: " + err.Error()})
+		log.Printf("[PublicHandler.GetSubmissions] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat lembar jawaban peserta."})
 		return
 	}
 
-	result := make(map[string]models.UserSubmission)
-	for _, r := range rows {
-		result[r.QuestionID] = models.UserSubmission{
-			QuestionID:       r.QuestionID,
-			SelectedOptionID: r.UserAnswerOptionID,
-			AnswerText:       r.UserAnswerText,
-			IsFlagged:        r.IsFlagged,
-			AnsweredAt:       r.SubmittedAt.Format(time.RFC3339),
-		}
-	}
-
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, submissions)
 }
 
-// SubmitAnswer handles POST /api/sessions/:sessionId/submit-answer and /api/sessions/:sessionId/questions/:questionId/submit
+// SubmitAnswer handles POST /api/sessions/:sessionId/submit-answer and questions/:questionId/submit
 func (h *PublicHandler) SubmitAnswer(c *gin.Context) {
 	sessionID := c.Param("sessionId")
-	qIDParam := c.Param("questionId")
+	questionID := c.Param("questionId")
 
-	var body struct {
-		QuestionID       string  `json:"question_id"`
-		OptionID         *string `json:"optionId"`
-		SelectedOptionID *string `json:"selected_option_id"`
-		AnswerText       *string `json:"answerText"`
-		AnswerTextAlt    *string `json:"answer_text"`
-		IsFlagged        *bool   `json:"isFlagged"`
-	}
-
+	var body models.SubmitAnswerDTO
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Format permintaan tidak valid: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format payload jawaban tidak valid"})
 		return
 	}
 
-	questionID := body.QuestionID
 	if questionID == "" {
-		questionID = qIDParam
+		questionID = body.QuestionID
 	}
 	if questionID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "question_id wajib disertakan"})
@@ -278,60 +241,20 @@ func (h *PublicHandler) SubmitAnswer(c *gin.Context) {
 		isFlagged = *body.IsFlagged
 	}
 
-	// Verify session exists
-	var session models.TestSession
-	if err := h.db.Get(&session, "SELECT * FROM test_sessions WHERE id = $1 AND is_active = true", sessionID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Sesi ujian tidak valid"})
-		return
-	}
-
-	// Check if multiple choice and calculate is_correct
-	var isCorrect *bool
-	var score *float64
-	if selectedOption != nil {
-		var opt models.QuestionOption
-		err := h.db.Get(&opt, "SELECT is_correct FROM question_options WHERE id = $1", *selectedOption)
-		if err == nil && opt.IsCorrect != nil {
-			isCorrect = opt.IsCorrect
-			if *opt.IsCorrect {
-				sc := 5.0
-				score = &sc
-			} else {
-				sc := 0.0
-				score = &sc
-			}
-		}
-	}
-
-	// Upsert submission
-	var existingID string
-	err := h.db.Get(&existingID, "SELECT id FROM test_submissions WHERE session_id = $1 AND question_id = $2", sessionID, questionID)
-	now := time.Now()
-
-	if err == sql.ErrNoRows {
-		subID := uuid.New().String()
-		insertSQL := `
-			INSERT INTO test_submissions (id, session_id, question_id, user_answer_text, user_answer_option_id, is_correct, score, is_flagged, submitted_at, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		`
-		_, err = h.db.Exec(insertSQL, subID, sessionID, questionID, answerText, selectedOption, isCorrect, score, isFlagged, now, now)
-	} else {
-		updateSQL := `
-			UPDATE test_submissions
-			SET user_answer_text = $1, user_answer_option_id = $2, is_correct = $3, score = $4, is_flagged = $5, submitted_at = $6
-			WHERE session_id = $7 AND question_id = $8
-		`
-		_, err = h.db.Exec(updateSQL, answerText, selectedOption, isCorrect, score, isFlagged, now, sessionID, questionID)
-	}
-
+	savedAt, err := h.examRepo.SaveSubmission(c.Request.Context(), sessionID, questionID, selectedOption, answerText, isFlagged)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan jawaban: " + err.Error()})
+		if errors.Is(err, repository.ErrSessionNotFound) || errors.Is(err, repository.ErrSessionInactive) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Sesi ujian tidak valid atau telah diselesaikan"})
+			return
+		}
+		log.Printf("[PublicHandler.SubmitAnswer] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan jawaban butir soal."})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"savedAt": now.Format(time.RFC3339),
+		"savedAt": savedAt.Format(time.RFC3339),
 	})
 }
 
@@ -342,119 +265,22 @@ func (h *PublicHandler) FinishTest(c *gin.Context) {
 	var req models.FinishTestRequest
 	_ = c.ShouldBindJSON(&req)
 
-	var session models.TestSession
-	if err := h.db.Get(&session, "SELECT * FROM test_sessions WHERE id = $1", sessionID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Sesi ujian tidak ditemukan"})
-		return
-	}
-
-	var test models.Test
-	if err := h.db.Get(&test, "SELECT * FROM tests WHERE id = $1", session.TestID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
-		return
-	}
-
-	// Get all questions with options
-	var questions []models.TestQuestion
-	if err := h.db.Select(&questions, "SELECT * FROM test_questions WHERE test_id = $1 AND is_deleted = false ORDER BY question_number ASC", test.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat soal: " + err.Error()})
-		return
-	}
-
-	for i := range questions {
-		var options []models.QuestionOption
-		_ = h.db.Select(&options, "SELECT id, question_id, option_letter, option_text, is_correct FROM question_options WHERE question_id = $1", questions[i].ID)
-		questions[i].Options = options
-	}
-
-	// Get all submissions for session
-	type SubRow struct {
-		QuestionID         string    `db:"question_id"`
-		UserAnswerOptionID *string   `db:"user_answer_option_id"`
-		UserAnswerText     *string   `db:"user_answer_text"`
-		IsFlagged          bool      `db:"is_flagged"`
-		SubmittedAt        time.Time `db:"submitted_at"`
-	}
-
-	var rows []SubRow
-	_ = h.db.Select(&rows, "SELECT question_id, user_answer_option_id, user_answer_text, is_flagged, submitted_at FROM test_submissions WHERE session_id = $1", sessionID)
-
-	submissions := make(map[string]models.UserSubmission)
-	for _, r := range rows {
-		submissions[r.QuestionID] = models.UserSubmission{
-			QuestionID:       r.QuestionID,
-			SelectedOptionID: r.UserAnswerOptionID,
-			AnswerText:       r.UserAnswerText,
-			IsFlagged:        r.IsFlagged,
-			AnsweredAt:       r.SubmittedAt.Format(time.RFC3339),
-		}
-	}
-
-	// Calculate score
-	scoring := services.CalculateScore(questions, submissions, test.PassingScorePercentage)
-
-	// Time spent
-	timeSpent := req.TimeSpentSeconds
-	if timeSpent <= 0 {
-		timeSpent = int(time.Since(session.StartedAt).Seconds())
-	}
-	maxDurationSec := test.DurationMinutes * 60
-	if timeSpent > maxDurationSec {
-		timeSpent = maxDurationSec
-	}
-
-	// Mark session submitted
-	now := time.Now()
-	_, _ = h.db.Exec("UPDATE test_sessions SET submitted_at = $1, is_active = false WHERE id = $2", now, sessionID)
-
-	resultID := "res-" + uuid.New().String()[:8]
-	breakdownJSON, _ := json.Marshal(scoring.CategoryBreakdown)
-	submissionsJSON, _ := json.Marshal(submissions)
-
-	result := models.TestResult{
-		ID:                     resultID,
-		SessionID:              sessionID,
-		TestID:                 test.ID,
-		TestTitle:              test.Title,
-		Category:               test.Category,
-		TotalScore:             scoring.TotalScore,
-		PercentageScore:        scoring.PercentageScore,
-		Passing:                scoring.Passing,
-		PassingScorePercentage: test.PassingScorePercentage,
-		TimeSpentSeconds:       timeSpent,
-		DurationSeconds:        maxDurationSec,
-		QuestionsAnswered:      scoring.QuestionsAnswered,
-		QuestionsCorrect:       scoring.QuestionsCorrect,
-		TotalQuestions:         len(questions),
-		Percentile:             scoring.Percentile,
-		CategoryBreakdown:      scoring.CategoryBreakdown,
-		Submissions:            submissions,
-		SubmittedAt:            now,
-		CreatedAt:              now,
-	}
-
-	insertResultSQL := `
-		INSERT INTO test_results 
-		(id, session_id, test_id, test_title, category, total_score, percentage_score, passing, passing_score_percentage,
-		 time_spent_seconds, duration_seconds, questions_answered, questions_correct, total_questions, percentile,
-		 category_breakdown, submissions, submitted_at, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-	`
-
-	_, err := h.db.Exec(insertResultSQL,
-		result.ID, result.SessionID, result.TestID, result.TestTitle, result.Category,
-		result.TotalScore, result.PercentageScore, result.Passing, result.PassingScorePercentage,
-		result.TimeSpentSeconds, result.DurationSeconds, result.QuestionsAnswered, result.QuestionsCorrect,
-		result.TotalQuestions, result.Percentile, breakdownJSON, submissionsJSON, result.SubmittedAt, result.CreatedAt,
-	)
-
+	result, err := h.examRepo.FinishExamTx(c.Request.Context(), sessionID, req.TimeSpentSeconds)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan hasil tes: " + err.Error()})
+		if errors.Is(err, repository.ErrSessionNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Sesi ujian tidak ditemukan"})
+			return
+		}
+		log.Printf("[PublicHandler.FinishTest] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memproses penilaian akhir ujian."})
 		return
 	}
 
-	// Cache result
-	_ = h.cache.Set("result:"+resultID, result, 7*24*time.Hour)
+	// Cache result for rapid lookup
+	_ = h.cache.Set("result:"+result.ID, result, 7*24*time.Hour)
+
+	// Push score to Redis leaderboard ZSET (key "leaderboard:" + testID)
+	_ = h.cache.ZAdd("leaderboard:"+result.TestID, result.PercentageScore, result.SessionID)
 
 	c.JSON(http.StatusOK, result)
 }
@@ -463,79 +289,84 @@ func (h *PublicHandler) FinishTest(c *gin.Context) {
 func (h *PublicHandler) GetResult(c *gin.Context) {
 	resultID := c.Param("resultId")
 
-	type ResultRow struct {
-		ID                     string    `db:"id"`
-		SessionID              string    `db:"session_id"`
-		TestID                 string    `db:"test_id"`
-		TestTitle              string    `db:"test_title"`
-		Category               string    `db:"category"`
-		TotalScore             float64   `db:"total_score"`
-		PercentageScore        float64   `db:"percentage_score"`
-		Passing                bool      `db:"passing"`
-		PassingScorePercentage int       `db:"passing_score_percentage"`
-		TimeSpentSeconds       int       `db:"time_spent_seconds"`
-		DurationSeconds        int       `db:"duration_seconds"`
-		QuestionsAnswered      int       `db:"questions_answered"`
-		QuestionsCorrect       int       `db:"questions_correct"`
-		TotalQuestions         int       `db:"total_questions"`
-		Percentile             int       `db:"percentile"`
-		CategoryBreakdownJSON  []byte    `db:"category_breakdown"`
-		SubmissionsJSON        []byte    `db:"submissions"`
-		SubmittedAt            time.Time `db:"submitted_at"`
-		CreatedAt              time.Time `db:"created_at"`
-	}
-
-	var row ResultRow
-	err := h.db.Get(&row, "SELECT * FROM test_results WHERE id = $1", resultID)
+	result, questions, err := h.examRepo.GetResultByID(c.Request.Context(), resultID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Hasil ujian tidak ditemukan"})
+		if errors.Is(err, repository.ErrResultNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Hasil ujian tidak ditemukan"})
+			return
+		}
+		log.Printf("[PublicHandler.GetResult] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat hasil ujian."})
 		return
-	}
-
-	var breakdown []models.CategoryScore
-	if len(row.CategoryBreakdownJSON) > 0 {
-		_ = json.Unmarshal(row.CategoryBreakdownJSON, &breakdown)
-	}
-
-	var submissions map[string]models.UserSubmission
-	if len(row.SubmissionsJSON) > 0 {
-		_ = json.Unmarshal(row.SubmissionsJSON, &submissions)
-	}
-
-	result := models.TestResult{
-		ID:                     row.ID,
-		SessionID:              row.SessionID,
-		TestID:                 row.TestID,
-		TestTitle:              row.TestTitle,
-		Category:               row.Category,
-		TotalScore:             row.TotalScore,
-		PercentageScore:        row.PercentageScore,
-		Passing:                row.Passing,
-		PassingScorePercentage: row.PassingScorePercentage,
-		TimeSpentSeconds:       row.TimeSpentSeconds,
-		DurationSeconds:        row.DurationSeconds,
-		QuestionsAnswered:      row.QuestionsAnswered,
-		QuestionsCorrect:       row.QuestionsCorrect,
-		TotalQuestions:         row.TotalQuestions,
-		Percentile:             row.Percentile,
-		CategoryBreakdown:      breakdown,
-		Submissions:            submissions,
-		SubmittedAt:            row.SubmittedAt,
-		CreatedAt:              row.CreatedAt,
-	}
-
-	// Get full questions with explanations and correct options for post-test review
-	var questions []models.TestQuestion
-	_ = h.db.Select(&questions, "SELECT * FROM test_questions WHERE test_id = $1 AND is_deleted = false ORDER BY question_number ASC", result.TestID)
-
-	for i := range questions {
-		var options []models.QuestionOption
-		_ = h.db.Select(&options, "SELECT id, question_id, option_letter, option_text, is_correct FROM question_options WHERE question_id = $1 ORDER BY option_letter ASC", questions[i].ID)
-		questions[i].Options = options
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"result":    result,
 		"questions": questions,
+	})
+}
+
+// GetLeaderboard handles GET /api/tests/:testId/leaderboard
+func (h *PublicHandler) GetLeaderboard(c *gin.Context) {
+	testID := c.Param("testId")
+
+	entries, err := h.examRepo.GetLeaderboard(c.Request.Context(), testID, 50)
+	if err != nil {
+		log.Printf("[PublicHandler.GetLeaderboard] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat papan peringkat ujian."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"test_id":     testID,
+		"leaderboard": entries,
+		"total":       len(entries),
+	})
+}
+
+// GetCertificate handles GET /api/results/:resultId/certificate
+func (h *PublicHandler) GetCertificate(c *gin.Context) {
+	resultID := c.Param("resultId")
+
+	cert, err := h.examRepo.GetCertificate(c.Request.Context(), resultID)
+	if err != nil {
+		if errors.Is(err, repository.ErrResultNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Hasil ujian tidak ditemukan"})
+			return
+		}
+		log.Printf("[PublicHandler.GetCertificate] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menerbitkan sertifikat kelulusan."})
+		return
+	}
+
+	c.JSON(http.StatusOK, cert)
+}
+
+// VerifyCertificate handles GET /api/verify/certificate/:certificateId
+func (h *PublicHandler) VerifyCertificate(c *gin.Context) {
+	certID := c.Param("certificateId")
+	resultID := strings.TrimPrefix(certID, "CERT-")
+
+	cert, err := h.examRepo.GetCertificate(c.Request.Context(), resultID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"valid": false,
+			"error": "Sertifikat tidak ditemukan atau tidak valid",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"valid":                    true,
+		"certificate_id":           cert.CertificateID,
+		"result_id":                cert.ResultID,
+		"test_title":               cert.TestTitle,
+		"category":                 cert.Category,
+		"percentage_score":         cert.PercentageScore,
+		"passing":                  cert.Passing,
+		"passing_score_percentage": cert.PassingScorePercentage,
+		"issued_at":                cert.IssuedAt.Format(time.RFC3339),
+		"status":                   "VERIFIED_AUTHENTIC",
+		"issuer":                   cert.Issuer,
 	})
 }

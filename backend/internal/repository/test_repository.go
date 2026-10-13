@@ -46,8 +46,8 @@ func (r *PostgresTestRepository) CreateTestTx(ctx context.Context, test *models.
 	defer tx.Rollback()
 
 	insertTestSQL := `
-		INSERT INTO tests (id, creator_id, title, description, category, duration_minutes, passing_score_percentage, total_questions, shuffle_questions, shuffle_answers, published, is_deleted, created_at, updated_at)
-		VALUES (:id, :creator_id, :title, :description, :category, :duration_minutes, :passing_score_percentage, :total_questions, :shuffle_questions, :shuffle_answers, :published, :is_deleted, :created_at, :updated_at)
+		INSERT INTO tests (id, creator_id, title, description, category, duration_minutes, passing_score_percentage, total_questions, price_idr, shuffle_questions, shuffle_answers, published, is_deleted, created_at, updated_at)
+		VALUES (:id, :creator_id, :title, :description, :category, :duration_minutes, :passing_score_percentage, :total_questions, :price_idr, :shuffle_questions, :shuffle_answers, :published, :is_deleted, :created_at, :updated_at)
 	`
 	_, err = tx.NamedExecContext(ctx, insertTestSQL, test)
 	if err != nil {
@@ -99,13 +99,13 @@ func (r *PostgresTestRepository) UpdateTestTx(ctx context.Context, test *models.
 	updateTestSQL := `
 		UPDATE tests 
 		SET title = $1, description = $2, category = $3, duration_minutes = $4,
-		    passing_score_percentage = $5, total_questions = $6, shuffle_questions = $7,
-		    shuffle_answers = $8, published = $9, updated_at = $10
-		WHERE id = $11 AND is_deleted = false
+		    passing_score_percentage = $5, total_questions = $6, price_idr = $7,
+		    shuffle_questions = $8, shuffle_answers = $9, published = $10, updated_at = $11
+		WHERE id = $12 AND is_deleted = false
 	`
 	res, err := tx.ExecContext(ctx, updateTestSQL,
 		test.Title, test.Description, test.Category, test.DurationMinutes,
-		test.PassingScorePercentage, test.TotalQuestions, test.ShuffleQuestions,
+		test.PassingScorePercentage, test.TotalQuestions, test.PriceIDR, test.ShuffleQuestions,
 		test.ShuffleAnswers, test.Published, test.UpdatedAt, test.ID,
 	)
 	if err != nil {

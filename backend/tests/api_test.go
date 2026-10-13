@@ -16,6 +16,7 @@ import (
 	"testhub/internal/database"
 	"testhub/internal/handlers"
 	"testhub/internal/models"
+	"testhub/internal/repository"
 )
 
 func setupTestApp(t *testing.T) (*database.DB, *handlers.PublicHandler, http.Handler) {
@@ -32,8 +33,11 @@ func setupTestApp(t *testing.T) (*database.DB, *handlers.PublicHandler, http.Han
 
 	cacheClient := cache.New(cfg.RedisURL, cfg.RedisPassword)
 	router := handlers.SetupRouter(db, cacheClient, cfg)
+	examRepo := repository.NewPostgresExamRepository(db)
+	subRepo := repository.NewPostgresSubscriptionRepository(db)
+	testRepo := repository.NewPostgresTestRepository(db)
 
-	return db, handlers.NewPublicHandler(db, cacheClient), router
+	return db, handlers.NewPublicHandler(examRepo, subRepo, testRepo, cacheClient), router
 }
 
 func TestHealthCheck(t *testing.T) {
@@ -107,10 +111,20 @@ func TestTestTakingFlow(t *testing.T) {
 		t.Skip("No tests seeded yet, skipping test taking flow")
 	}
 
-	testID := tests[0].ID
+	var testID string
+	for _, tItem := range tests {
+		if tItem.PriceIDR == 0 {
+			testID = tItem.ID
+			break
+		}
+	}
+	if testID == "" {
+		t.Skip("No free tests found, skipping test taking flow")
+	}
 
 	// 2. Start test
 	reqStart, _ := http.NewRequest("POST", "/api/tests/"+testID+"/start", nil)
+	reqStart.Header.Set("X-Forwarded-For", fmt.Sprintf("192.0.2.%d", time.Now().UnixNano()%250+1))
 	wStart := httptest.NewRecorder()
 	router.ServeHTTP(wStart, reqStart)
 
@@ -607,6 +621,189 @@ func TestRateLimiterAtomicIncr(t *testing.T) {
 	if c3 != 1 {
 		t.Errorf("Expected count 1 after window reset, got %d", c3)
 	}
+}
+
+func getAdminToken(t *testing.T, router http.Handler) string {
+	uniqueEmail := fmt.Sprintf("admin-%d-%d@testhub.id", time.Now().UnixNano(), time.Now().Unix())
+	regBody, _ := json.Marshal(models.RegisterRequest{
+		Email:    uniqueEmail,
+		Password: "SecurePassword123!",
+		FullName: "System Administrator",
+		Role:     "admin",
+	})
+	reqReg, _ := http.NewRequest("POST", "/api/auth/register", bytes.NewBuffer(regBody))
+	reqReg.Header.Set("Content-Type", "application/json")
+	wReg := httptest.NewRecorder()
+	router.ServeHTTP(wReg, reqReg)
+
+	var authResp models.AuthResponse
+	_ = json.Unmarshal(wReg.Body.Bytes(), &authResp)
+	return authResp.Token
+}
+
+func TestPaywallAndSubscriptionFlow(t *testing.T) {
+	db, _, router := setupTestApp(t)
+	adminToken := getAdminToken(t, router)
+
+	// 1. Create a Paid Test with price_idr = 25000
+	paidTestTitle := "Tryout Akbar Berbayar SKD CPNS 2026"
+	price := 25000.0
+	trueVal := true
+	falseVal := false
+	createBody, _ := json.Marshal(models.SaveTestDTO{
+		Title:                  paidTestTitle,
+		Description:            "Ujian berbayar dengan paywall otomatis",
+		Category:               "cpns",
+		DurationMinutes:        90,
+		PassingScorePercentage: 70,
+		PriceIDR:               price,
+		Published:              true,
+		Questions: []models.QuestionDTO{
+			{
+				QuestionNumber:  1,
+				QuestionType:    "multiple_choice",
+				QuestionText:    "Apa ibu kota Nusantara?",
+				DifficultyLevel: "medium",
+				Points:          5,
+				Options: []models.OptionDTO{
+					{OptionLetter: "A", OptionText: "Penajam Paser Utara", IsCorrect: &trueVal},
+					{OptionLetter: "B", OptionText: "Jakarta", IsCorrect: &falseVal},
+				},
+			},
+		},
+	})
+
+	req, _ := http.NewRequest("POST", "/api/admin/tests", bytes.NewBuffer(createBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Failed to create paid test: %d: %s", w.Code, w.Body.String())
+	}
+
+	var created models.Test
+	_ = json.Unmarshal(w.Body.Bytes(), &created)
+	testID := created.ID
+
+	// 2. An examinee tries to start the test without paying -> Expect HTTP 402 Payment Required
+	userEmail := "examinee-student@example.com"
+	startReq, _ := http.NewRequest("POST", "/api/tests/"+testID+"/start", bytes.NewBuffer([]byte(fmt.Sprintf(`{"email":"%s"}`, userEmail))))
+	startReq.Header.Set("Content-Type", "application/json")
+	startReq.Header.Set("X-User-Email", userEmail)
+	startReq.Header.Set("X-Forwarded-For", fmt.Sprintf("198.51.100.%d", time.Now().UnixNano()%200+10))
+	wStart := httptest.NewRecorder()
+	router.ServeHTTP(wStart, startReq)
+
+	if wStart.Code != http.StatusPaymentRequired {
+		t.Fatalf("Expected HTTP 402 Payment Required for unpaid test, got %d: %s", wStart.Code, wStart.Body.String())
+	}
+
+	// 3. User creates an invoice via POST /api/payments/create-invoice
+	invReqBody, _ := json.Marshal(models.CreateInvoiceDTO{
+		UserEmail: userEmail,
+		PlanType:  "per_test",
+		TestID:    &testID,
+	})
+	invReq, _ := http.NewRequest("POST", "/api/payments/create-invoice", bytes.NewBuffer(invReqBody))
+	invReq.Header.Set("Content-Type", "application/json")
+	wInv := httptest.NewRecorder()
+	router.ServeHTTP(wInv, invReq)
+
+	if wInv.Code != http.StatusCreated {
+		t.Fatalf("Failed to create invoice: %d: %s", wInv.Code, wInv.Body.String())
+	}
+
+	var invResp map[string]interface{}
+	_ = json.Unmarshal(wInv.Body.Bytes(), &invResp)
+	orderID := invResp["order_id"].(string)
+
+	// 4. Check Order status -> pending
+	statusReq, _ := http.NewRequest("GET", "/api/payments/status/"+orderID, nil)
+	wStatus := httptest.NewRecorder()
+	router.ServeHTTP(wStatus, statusReq)
+	if wStatus.Code != http.StatusOK {
+		t.Fatalf("Failed to get order status: %d", wStatus.Code)
+	}
+
+	// 5. Payment Webhook settlement occurs
+	webhookBody, _ := json.Marshal(models.PaymentWebhookDTO{
+		OrderID:           orderID,
+		TransactionStatus: "settlement",
+		SignatureKey:      "TEST_SIGNATURE_KEY_123",
+	})
+	webReq, _ := http.NewRequest("POST", "/api/payments/webhook", bytes.NewBuffer(webhookBody))
+	webReq.Header.Set("Content-Type", "application/json")
+	wWeb := httptest.NewRecorder()
+	router.ServeHTTP(wWeb, webReq)
+
+	if wWeb.Code != http.StatusOK {
+		t.Fatalf("Webhook failed with status %d: %s", wWeb.Code, wWeb.Body.String())
+	}
+
+	// 6. Examinee now starts the test -> Expect HTTP 200 OK (Paywall unlocked!)
+	startReq2, _ := http.NewRequest("POST", "/api/tests/"+testID+"/start", bytes.NewBuffer([]byte(fmt.Sprintf(`{"email":"%s"}`, userEmail))))
+	startReq2.Header.Set("Content-Type", "application/json")
+	startReq2.Header.Set("X-User-Email", userEmail)
+	startReq2.Header.Set("X-Forwarded-For", fmt.Sprintf("198.51.100.%d", time.Now().UnixNano()%200+11))
+	wStart2 := httptest.NewRecorder()
+	router.ServeHTTP(wStart2, startReq2)
+
+	if wStart2.Code != http.StatusOK {
+		t.Fatalf("Expected HTTP 200 after payment settlement, got %d: %s", wStart2.Code, wStart2.Body.String())
+	}
+
+	_ = db
+}
+
+func TestAdminManualGrantAndSubscriptions(t *testing.T) {
+	_, _, router := setupTestApp(t)
+	adminToken := getAdminToken(t, router)
+
+	// Admin manually grants a season pass
+	manualEmail := "b2b-student-vip@bimbel.id"
+	grantBody, _ := json.Marshal(models.ManualGrantSubscriptionDTO{
+		UserIdentifier: manualEmail,
+		PlanType:       "season_pass",
+		ValidDays:      60,
+		ReasonNotes:    "B2B Bimbel Mitra Agreement #9921",
+	})
+
+	req, _ := http.NewRequest("POST", "/api/admin/subscriptions/manual-grant", bytes.NewBuffer(grantBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Expected 201 Created for manual grant, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Admin lists subscriptions
+	listReq, _ := http.NewRequest("GET", "/api/admin/subscriptions?search="+manualEmail, nil)
+	listReq.Header.Set("Authorization", "Bearer "+adminToken)
+	wList := httptest.NewRecorder()
+	router.ServeHTTP(wList, listReq)
+
+	if wList.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for listing subscriptions, got %d", wList.Code)
+	}
+}
+
+func TestLeaderboardAndCertificates(t *testing.T) {
+	_, publicHandler, router := setupTestApp(t)
+
+	// 1. Check leaderboard endpoint returns empty array or rankings without crashing
+	req, _ := http.NewRequest("GET", "/api/tests/test-123-dummy/leaderboard", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for leaderboard endpoint, got %d", w.Code)
+	}
+
+	_ = publicHandler
 }
 
 

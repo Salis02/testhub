@@ -217,3 +217,19 @@ func (c *Client) Expire(key string, expiration time.Duration) error {
 	}
 	return nil
 }
+
+// ZAdd adds or updates a member score in a sorted set
+func (c *Client) ZAdd(key string, score float64, member string) error {
+	if !c.useMemory {
+		return c.rdb.ZAdd(c.ctx, key, redis.Z{Score: score, Member: member}).Err()
+	}
+	return nil
+}
+
+// ZRevRangeWithScores retrieves members ordered by score descending
+func (c *Client) ZRevRangeWithScores(key string, start, stop int64) ([]redis.Z, error) {
+	if !c.useMemory {
+		return c.rdb.ZRevRangeWithScores(c.ctx, key, start, stop).Result()
+	}
+	return []redis.Z{}, nil
+}

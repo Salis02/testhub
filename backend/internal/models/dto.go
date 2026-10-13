@@ -32,6 +32,7 @@ type SaveTestDTO struct {
 	Category               string        `json:"category" binding:"required,oneof=cpns sbmptn iq custom"`
 	DurationMinutes        int           `json:"duration_minutes" binding:"required,min=5,max=300"`
 	PassingScorePercentage int           `json:"passing_score_percentage" binding:"required,min=1,max=100"`
+	PriceIDR               float64       `json:"price_idr"`
 	ShuffleQuestions       bool          `json:"shuffle_questions"`
 	ShuffleAnswers         bool          `json:"shuffle_answers"`
 	Published              bool          `json:"published"`
@@ -121,3 +122,51 @@ func (dto *SaveTestDTO) ToDomainQuestions(testID string) []TestQuestion {
 
 	return questions
 }
+
+// CreateInvoiceDTO represents payload to generate payment invoice / QRIS token
+type CreateInvoiceDTO struct {
+	TestID    *string `json:"test_id"`
+	PlanType  string  `json:"plan_type" binding:"required,oneof=per_test season_pass"`
+	UserEmail string  `json:"user_email" binding:"required,email"`
+}
+
+// ManualGrantSubscriptionDTO represents admin manual override payload
+type ManualGrantSubscriptionDTO struct {
+	UserIdentifier string  `json:"user_identifier" binding:"required"`
+	TestID         *string `json:"test_id"`
+	PlanType       string  `json:"plan_type" binding:"required,oneof=per_test season_pass lifetime institution"`
+	ValidDays      int     `json:"valid_days" binding:"required,min=1,max=3650"`
+	ReasonNotes    string  `json:"reason_notes" binding:"required,min=3"`
+}
+
+// UpdateSubscriptionStatusDTO represents admin payload to change status or extend expiry
+type UpdateSubscriptionStatusDTO struct {
+	Status     string  `json:"status" binding:"required,oneof=active suspended expired revoked"`
+	ExtendDays int     `json:"extend_days"`
+	AdminNotes *string `json:"admin_notes"`
+}
+
+// PaymentWebhookDTO represents incoming webhook notification from Midtrans/Xendit/simulator
+type PaymentWebhookDTO struct {
+	OrderID           string `json:"order_id" binding:"required"`
+	TransactionStatus string `json:"transaction_status" binding:"required"`
+	GrossAmount       string `json:"gross_amount"`
+	SignatureKey      string `json:"signature_key"`
+	StatusCode        string `json:"status_code"`
+}
+
+// StartSessionDTO represents payload when examinee starts an exam session
+type StartSessionDTO struct {
+	Email string `json:"email" binding:"omitempty,email"`
+}
+
+// SubmitAnswerDTO represents sanitized payload when examinee submits an answer
+type SubmitAnswerDTO struct {
+	QuestionID       string  `json:"question_id"`
+	OptionID         *string `json:"option_id"`
+	SelectedOptionID *string `json:"selected_option_id"`
+	AnswerText       *string `json:"answer_text"`
+	AnswerTextAlt    *string `json:"answer"`
+	IsFlagged        *bool   `json:"is_flagged"`
+}
+

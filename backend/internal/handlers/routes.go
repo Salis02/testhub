@@ -52,10 +52,14 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 	}
 
 	testRepo := repository.NewPostgresTestRepository(db)
+	examRepo := repository.NewPostgresExamRepository(db)
+	subRepo := repository.NewPostgresSubscriptionRepository(db)
 
 	authHandler := NewAuthHandler(db, cfg)
-	publicHandler := NewPublicHandler(db, cacheClient)
+	publicHandler := NewPublicHandler(examRepo, subRepo, testRepo, cacheClient)
 	adminHandler := NewAdminHandler(db, testRepo)
+	paymentHandler := NewPaymentHandler(subRepo, testRepo)
+	adminSubHandler := NewAdminSubscriptionHandler(subRepo, testRepo)
 	mediaHandler := NewMediaHandler(storage)
 	aiService := services.NewAIAgentService(cfg)
 	aiHandler := NewAIHandler(aiService)
@@ -65,22 +69,28 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 
 	api := router.Group("/api")
 	{
-		// Auth Endpoints
+		// =========================================================================
+		// 1. PUBLIC ROLE ENDPOINTS (Unauthenticated examinees & visitors)
+		// =========================================================================
+
+		// Public Authentication & Identification
 		auth := api.Group("/auth")
 		{
 			auth.POST("/register", middleware.RateLimit(cacheClient, 20, time.Minute, "register"), authHandler.Register)
 			auth.POST("/login", middleware.RateLimit(cacheClient, 30, time.Minute, "login"), authHandler.Login)
-			auth.GET("/me", middleware.AuthRequired(cfg.JWTSecret), authHandler.Me)
+			auth.GET("/me", middleware.AuthRequired(cfg.JWTSecret), authHandler.Me) // Backward-compatible alias
 		}
 
-		// Public Test Taking Endpoints
+		// Public Test Discovery & Leaderboard
 		tests := api.Group("/tests")
 		{
 			tests.GET("", publicHandler.ListTests)
 			tests.GET("/:testId", publicHandler.GetTest)
+			tests.GET("/:testId/leaderboard", publicHandler.GetLeaderboard)
 			tests.POST("/:testId/start", middleware.RateLimit(cacheClient, 10, time.Minute, "start_test"), publicHandler.StartTest)
 		}
 
+		// Public Test Session Engine (Frictionless Exam Taking)
 		sessions := api.Group("/sessions")
 		{
 			sessions.GET("/:sessionId/questions", publicHandler.GetQuestions)
@@ -90,23 +100,54 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			sessions.POST("/:sessionId/finish", publicHandler.FinishTest)
 		}
 
+		// Public Test Results & Verification Certificates
 		results := api.Group("/results")
 		{
 			results.GET("/:resultId", publicHandler.GetResult)
+			results.GET("/:resultId/certificate", publicHandler.GetCertificate)
 		}
 
-		// AI Assistant
+		verify := api.Group("/verify")
+		{
+			verify.GET("/certificate/:certificateId", publicHandler.VerifyCertificate)
+		}
+
+		// Public Payment Gateway (Invoicing, Polling, & Webhooks)
+		payments := api.Group("/payments")
+		{
+			payments.POST("/create-invoice", middleware.RateLimit(cacheClient, 15, time.Minute, "create_invoice"), paymentHandler.CreateInvoice)
+			payments.GET("/status/:orderId", paymentHandler.GetOrderStatus)
+			payments.POST("/webhook", paymentHandler.HandleWebhook)
+		}
+
+		// Public AI Assistance
 		ai := api.Group("/ai")
 		{
 			ai.POST("/generate-questions", aiHandler.GenerateQuestions)
 		}
 
-		// Admin & Creator Protected Endpoints
+		// =========================================================================
+		// 2. USER ROLE ENDPOINTS (Authenticated Examinees / Students)
+		// =========================================================================
+		user := api.Group("/user")
+		user.Use(middleware.AuthRequired(cfg.JWTSecret))
+		{
+			user.GET("/me", authHandler.Me)
+			user.GET("/subscriptions", paymentHandler.GetUserSubscriptions)
+		}
+
+		// =========================================================================
+		// 3. ADMIN & CREATOR ROLE ENDPOINTS (Admin & Platform Managers)
+		// =========================================================================
 		admin := api.Group("/admin")
 		admin.Use(middleware.AuthRequired(cfg.JWTSecret))
 		admin.Use(middleware.RequireAdmin())
 		{
+			// Dashboard & Analytics
 			admin.GET("/stats", adminHandler.GetStats)
+			admin.GET("/tests/:testId/analytics", adminHandler.GetAnalytics)
+
+			// Test & Question Bank Management
 			admin.GET("/tests", adminHandler.ListTests)
 			admin.POST("/tests", adminHandler.CreateTest)
 			admin.GET("/tests/:testId", adminHandler.GetTest)
@@ -115,13 +156,20 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			admin.PATCH("/tests/:testId/toggle-publish", adminHandler.TogglePublish)
 			admin.POST("/tests/:testId/publish", adminHandler.TogglePublish)
 			admin.DELETE("/tests/:testId", adminHandler.DeleteTest)
-			admin.GET("/tests/:testId/analytics", adminHandler.GetAnalytics)
+
+			// Essay Manual Grading
 			admin.GET("/essays", adminHandler.GetPendingEssays)
 			admin.POST("/essays/:essayId/grade", adminHandler.GradeEssay)
 
 			// Media Uploads
 			admin.POST("/upload-media", mediaHandler.UploadMedia)
 			admin.DELETE("/media", mediaHandler.DeleteMedia)
+
+			// Subscription Management & Manual Overrides
+			admin.GET("/subscriptions", adminSubHandler.ListSubscriptions)
+			admin.POST("/subscriptions/manual-grant", adminSubHandler.ManualGrant)
+			admin.PUT("/subscriptions/:id/status", adminSubHandler.UpdateStatus)
+			admin.DELETE("/subscriptions/:id/revoke", adminSubHandler.Revoke)
 		}
 	}
 

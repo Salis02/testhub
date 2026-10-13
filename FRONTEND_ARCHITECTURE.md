@@ -106,3 +106,80 @@ cd frontend && bun run dev
 cd frontend && bun run build
 # Hasil: 0 TypeScript errors, bundle Vite terkompilasi optimal di dist/
 ```
+
+---
+
+## 5. Standard Operasional Prosedur (SOP) Pencegahan Technical Debt Frontend
+
+Untuk memastikan kode frontend tetap bersih, bebas dari regresi, dan mudah di-maintain selama bertahun-tahun, seluruh developer frontend **WAJIB** mematuhi 6 aturan baku berikut:
+
+### 1. Larangan Duplikasi Server State ke `useState` Lokal
+- **Anti-Pattern**:
+  ```tsx
+  // ❌ BURUK: Menyimpan duplikat server state di useState lokal
+  const { data } = useQuery({ queryKey: ['tests'], queryFn: fetchTests });
+  const [testList, setTestList] = useState([]);
+  useEffect(() => { if (data) setTestList(data); }, [data]);
+  ```
+- **Solusi Bersih**:
+  - Konsumsi langsung `data` dari `useQuery`.
+  - Jika butuh filtering atau sorting, gunakan derived state dengan `useMemo`:
+    ```tsx
+    // ✅ BENAR: Derived state murni tanpa state duplikat
+    const { data: tests = [] } = useQuery({ queryKey: ['tests'], queryFn: fetchTests });
+    const filteredTests = useMemo(() => tests.filter(t => t.category === category), [tests, category]);
+    ```
+  - Saat melakukan mutasi data (`useMutation`), selalu invalidasikan cache terpusat: `queryClient.invalidateQueries({ queryKey: ['tests'] })`.
+
+### 2. Polling Hygiene & Pembersihan Timer (No Memory Leaks)
+- **Anti-Pattern**:
+  - Menggunakan `setInterval` manual di dalam `useEffect` untuk memeriksa status pembayaran QRIS. Ini sering menyebabkan *zombie network requests* jika modal ditutup atau komponen unmount.
+- **Solusi Bersih**:
+  - Gunakan `refetchInterval` bawaan TanStack Query yang otomatis berhenti (*auto-pause*) saat tab browser tidak aktif atau status sudah `settled`:
+    ```tsx
+    // ✅ BENAR: Polling otomatis aman dengan TanStack Query
+    const { data: order } = useQuery({
+      queryKey: ['payment-status', orderId],
+      queryFn: () => getOrderStatus(orderId),
+      enabled: isOpen && !!orderId,
+      refetchInterval: (query) => query.state.data?.status === 'settled' ? false : 3000,
+    });
+    ```
+
+### 3. Chunk Splitting & Dynamic Imports (Pencegahan Bundle Bloat)
+- **Anti-Pattern**:
+  - Mengimpor pustaka berat seperti `@react-pdf/renderer`, `jspdf`, `html2canvas`, atau editor grafik secara statis di level atas komponen halaman. Hal ini membuat file `index.js` membengkak di atas 500kB.
+- **Solusi Bersih**:
+  - Lakukan lazy-loading komponen dengan `React.lazy()` atau dynamic `import()` saat pengguna mengklik tombol aksi:
+    ```tsx
+    // ✅ BENAR: Impor dinamis saat tombol diklik
+    const handleDownloadCertificate = async () => {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF();
+      // Render sertifikat...
+      doc.save(`sertifikat-${resultId}.pdf`);
+    };
+    ```
+
+### 4. Validasi Form Wajib Schema Zod & `useFieldArray`
+- Dilarang membuat form kompleks dengan manual `useState` per input dan manual `if (!title) error = ...`.
+- Setiap form baru wajib didefinisikan skema Zod-nya di [src/schemas/](file:///home/sans/coding/quiz_app/frontend/src/schemas/) dan dihubungkan via `react-hook-form` (`useForm({ resolver: zodResolver(schema) })`).
+- Manipulasi daftar soal dan opsi jawaban dinamis **WAJIB** menggunakan `useFieldArray` untuk mencegah mutasi state nested langsung yang memicu stale closures di React 19.
+
+### 5. Isolasi State Per-Detik dengan Zustand Atomic Selectors
+- State ujian real-time (hitungan mundur per detik, status offline, auto-save ping) wajib disimpan di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts).
+- Komponen hanya boleh me-subscribe slice state spesifik yang dibutuhkannya:
+  ```tsx
+  // ✅ BENAR: Hanya re-render saat secondsLeft berubah
+  const secondsLeft = useTestSessionStore((s) => s.secondsLeft);
+  ```
+- Dilarang memanggil store utuh tanpa selector (`const store = useTestSessionStore()`) di komponen container utama, karena akan memaksa seluruh halaman re-render 60 kali per menit.
+
+### 6. Strict Tri-Color Styling Governance ([style.md](file:///home/sans/coding/quiz_app/style.md))
+- Dilarang menggunakan arbitrary hex color tailwind di markup (`bg-[#4f46e5]`, `text-[#1e293b]`).
+- Wajib menggunakan token semantik CSS yang telah didefinisikan:
+  - Background: `bg-slate-950` / `bg-slate-900`
+  - Cards: `bg-slate-900/80 border border-slate-800`
+  - Aksen / Brand: `text-indigo-400`, `bg-indigo-600 hover:bg-indigo-500`
+  - Sukses / Error: `text-emerald-400`, `text-rose-400`
+

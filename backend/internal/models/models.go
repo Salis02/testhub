@@ -50,6 +50,7 @@ type Test struct {
 	DurationMinutes        int       `db:"duration_minutes" json:"duration_minutes"`
 	PassingScorePercentage int       `db:"passing_score_percentage" json:"passing_score_percentage"`
 	TotalQuestions         int       `db:"total_questions" json:"total_questions"`
+	PriceIDR               float64   `db:"price_idr" json:"price_idr"`
 	ShuffleQuestions       bool      `db:"shuffle_questions" json:"shuffle_questions"`
 	ShuffleAnswers         bool      `db:"shuffle_answers" json:"shuffle_answers"`
 	Published              bool      `db:"published" json:"published"`
@@ -199,4 +200,60 @@ type TestAnalytics struct {
 	AverageScore     float64 `json:"average_score"`
 	PassingRate      float64 `json:"passing_rate"`
 }
+
+type Subscription struct {
+	ID             string     `db:"id" json:"id"`
+	UserIdentifier string     `db:"user_identifier" json:"user_identifier"`
+	TestID         *string    `db:"test_id" json:"test_id,omitempty"`
+	Tier           string     `db:"tier" json:"tier"`
+	Status         string     `db:"status" json:"status"`
+	Source         string     `db:"source" json:"source"`
+	AdminNotes     *string    `db:"admin_notes" json:"admin_notes,omitempty"`
+	AmountPaid     float64    `db:"amount_paid" json:"amount_paid"`
+	ValidUntil     *time.Time `db:"valid_until" json:"valid_until,omitempty"`
+	CreatedAt      time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt      time.Time  `db:"updated_at" json:"updated_at"`
+}
+
+type Order struct {
+	ID               string     `db:"id" json:"id"`
+	UserEmail        string     `db:"user_email" json:"user_email"`
+	TestID           *string    `db:"test_id" json:"test_id,omitempty"`
+	PlanType         string     `db:"plan_type" json:"plan_type"`
+	Amount           float64    `db:"amount" json:"amount"`
+	Status           string     `db:"status" json:"status"`
+	PaymentMethod    string     `db:"payment_method" json:"payment_method"`
+	PaymentReference string     `db:"payment_reference" json:"payment_reference"`
+	SnapToken        string     `db:"snap_token" json:"snap_token"`
+	QRPayload        string     `db:"qr_payload" json:"qr_payload"`
+	SettledAt        *time.Time `db:"settled_at" json:"settled_at,omitempty"`
+	ExpiresAt        *time.Time `db:"expires_at" json:"expires_at,omitempty"`
+	CreatedAt        time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt        time.Time  `db:"updated_at" json:"updated_at"`
+}
+
+type LeaderboardEntry struct {
+	Rank             int       `json:"rank"`
+	SessionID        string    `json:"session_id"`
+	UserIdentifier   string    `json:"user_identifier"`
+	Score            float64   `json:"score"`
+	PercentageScore  float64   `json:"percentage_score"`
+	TimeSpentSeconds int       `json:"time_spent_seconds"`
+	SubmittedAt      time.Time `json:"submitted_at"`
+}
+
+type CertificateData struct {
+	CertificateID          string    `json:"certificate_id"`
+	ResultID               string    `json:"result_id"`
+	TestID                 string    `json:"test_id"`
+	TestTitle              string    `json:"test_title"`
+	Category               string    `json:"category"`
+	PercentageScore        float64   `json:"percentage_score"`
+	Passing                bool      `json:"passing"`
+	PassingScorePercentage int       `json:"passing_score_percentage"`
+	IssuedAt               time.Time `json:"issued_at"`
+	VerificationURL        string    `json:"verification_url"`
+	Issuer                 string    `json:"issuer"`
+}
+
 

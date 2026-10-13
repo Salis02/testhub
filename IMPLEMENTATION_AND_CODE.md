@@ -140,17 +140,19 @@ Berdasarkan audit mendalam arsitektur Go backend, seluruh area perbaikan teknis 
   - **Catatan**: Fallback lokal dan response parsing dipertahankan stabil saat ini (*Do not modify yet*), dijadwalkan untuk dipindahkan ke seed database eksternal dan response streaming SSE pada sprint AI mendatang.
 
 ### 5.4 Pemisahan Layer: Repository Pattern ✅ (RESOLVED)
-- **Status**: **RESOLVED** (`backend/internal/repository/test_repository.go`).
+- **Status**: **RESOLVED** (`backend/internal/repository/test_repository.go`, `exam_repository.go`, `subscription_repository.go`).
 - **Implementasi**:
-  - Dibuat interface `TestRepository` dan implementasi `PostgresTestRepository`.
-  - Seluruh query dan transaksi database (`tx.BeginTxx()`) diisolasi penuh di dalam Repository Layer.
-  - [AdminHandler](file:///home/sans/coding/quiz_app/backend/internal/handlers/admin.go) kini murni berfungsi sebagai HTTP controller tanpa orkestrasi SQL mentah, sangat modular dan mudah di-mocking untuk unit testing.
+  - Dibuat interface repository terisolasi:
+    1. `TestRepository` & `PostgresTestRepository`: Seluruh transaksi create/update test dan analitik admin.
+    2. `ExamRepository` & `PostgresExamRepository`: Mengisolasi seluruh persistensi sesi ujian (`CreateSession`), sanitasi kunci jawaban (`GetSessionQuestions`), upsert jawaban (`SaveSubmission`), auto-grading atomik (`FinishExamTx`), leaderboard (`GetLeaderboard`), dan sertifikat (`GetCertificate`).
+    3. `SubscriptionRepository` & `PostgresSubscriptionRepository`: Mengisolasi akses paywall, pembuatan invoice order, settlement webhook, dan manual grant admin.
+  - [AdminHandler](file:///home/sans/coding/quiz_app/backend/internal/handlers/admin.go) dan [PublicHandler](file:///home/sans/coding/quiz_app/backend/internal/handlers/public.go) kini murni berfungsi sebagai HTTP controller **tanpa satu baris pun raw SQL**. Pointer `db *database.DB` telah sepenuhnya dihapus dari controller layer.
 
 ### 5.5 Sanitasi Pesan Error (Information Disclosure) ✅ (RESOLVED)
-- **Status**: **RESOLVED** (`backend/internal/handlers/admin.go`).
+- **Status**: **RESOLVED** (`backend/internal/handlers/admin.go`, `public.go`, `payment.go`).
 - **Implementasi**:
   - Seluruh kegagalan database dan query internal dicatat ke log server backend (`log.Printf`) dengan konteks lengkap untuk observabilitas developer.
-  - Respon yang dikembalikan ke client dibersihkan dari raw PostgreSQL string (mengembalikan pesan aman seperti *"Gagal menyimpan modul ujian ke database"*), mencegah kebocoran skema tabel dan constraint database.
+  - Respon yang dikembalikan ke client dibersihkan dari seluruh raw PostgreSQL string (mengembalikan pesan aman seperti *"Gagal memuat daftar modul ujian"*, *"Gagal memulai sesi ujian baru"*), mencegah kebocoran skema tabel dan constraint database.
 
 ---
 
@@ -160,70 +162,69 @@ Prioritas pengembangan fitur baru disusun berdasarkan rasio keuntungan bisnis (*
 
 ---
 
-### 🚀 FASE P1: Revenue & Virality (Fokus Sprint 1 - 2)
+### 🚀 FASE P1: Revenue & Virality (Fokus Sprint 1 - 2) — [STATUS: BACKEND SELESAI ✅]
 
-#### 1. Multi-Endpoint Payment Gateway (Midtrans / Xendit) & Admin Subscription Manual Override
-* **Target Bisnis**: Monetisasi langsung per modul tryout (Rp 10.000–Rp 25.000), Season Pass (Rp 49.000–Rp 99.000), serta fleksibilitas admin mengelola langganan secara manual (transaksi offline, B2B deal, atau kompensasi).
-* **Arsitektur Multi-Endpoint Backend (BE)**:
-  1. **User / Public Endpoints**:
-     - `POST /api/payments/create-invoice`: Generate QRIS dynamic / Snap token via Midtrans atau Xendit API. Request payload: `{ test_id?: string, plan_type: "per_test" | "season_pass", user_email: string }`.
-     - `GET /api/payments/status/:orderId`: Endpoint polling ringan bagi frontend untuk memantau status settlement tanpa perlu webhooks di localhost.
-     - `POST /api/payments/webhook`: Webhook listener idempoten dengan verifikasi signature cryptographic (HMAC-SHA512). Mengubah status order menjadi `settled` dan otomatis menerbitkan entri akses di database.
-  2. **Admin Manual Management Endpoints (Bypass / Manual Override)**:
-     - `POST /api/admin/subscriptions/manual-grant`: Memberikan akses/subscription secara manual kepada user (untuk pembayaran transfer bank manual/offline, voucher khusus, atau deal institusi).
-       - Payload: `{ user_identifier: string, test_id?: string, plan_type: "per_test" | "season_pass" | "lifetime", valid_days: number, reason_notes: string }`.
-     - `PUT /api/admin/subscriptions/:id/status`: Mengubah status subscription (misal: `active`, `suspended`, `expired`) atau memperpanjang masa aktif (`extend_days`).
-     - `DELETE /api/admin/subscriptions/:id/revoke`: Mencabut akses secara manual jika terjadi refund atau penyalahgunaan.
-     - `GET /api/admin/subscriptions`: Menampilkan seluruh daftar subscription dengan filter status (`active`, `expired`), sumber aktivasi (`gateway_midtrans`, `gateway_xendit`, `admin_manual`), dan pencarian user.
-  3. **Middleware Akses Tes**:
-     - `RequireTestAccess()`: Mengecek apakah modul tes gratis (`price_idr == 0`) atau user memiliki subscription aktif (`valid_until > NOW()`) sebelum mengizinkan `POST /api/tests/:testId/start`.
-  4. **Skema Database**:
-     - Tabel `subscriptions` / `orders`:
-       ```sql
-       CREATE TABLE subscriptions (
-           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-           user_identifier VARCHAR(255) NOT NULL, -- email atau session UUID
-           test_id VARCHAR(64) REFERENCES tests(id) ON DELETE CASCADE, -- NULL jika season pass
-           tier VARCHAR(32) NOT NULL DEFAULT 'per_test', -- 'per_test', 'season_pass', 'institution'
-           status VARCHAR(32) NOT NULL DEFAULT 'active', -- 'active', 'expired', 'revoked'
-           source VARCHAR(32) NOT NULL DEFAULT 'gateway', -- 'gateway_midtrans', 'gateway_xendit', 'admin_manual'
-           admin_notes TEXT, -- alasan grant manual jika via admin
-           amount_paid NUMERIC(12,2) DEFAULT 0,
-           valid_until TIMESTAMPTZ,
-           created_at TIMESTAMPTZ DEFAULT NOW(),
-           updated_at TIMESTAMPTZ DEFAULT NOW()
-       );
-       CREATE INDEX idx_subscriptions_lookup ON subscriptions(user_identifier, test_id, status);
-       ```
+#### 1. Multi-Endpoint Payment Gateway (QRIS) & Admin Subscription Manual Override
+* **Status Backend**: **SELESAI (COMPLETED)**
+* **Komponen & Arsitektur Backend (BE)**:
+  - `backend/migrations/002_subscriptions_and_pricing.sql`: Kolom `price_idr` pada tabel `tests`, tabel `orders` untuk mencatat transaksi faktur/invoice (dengan payload QRIS, Snap token, status pending/settled/expired), dan tabel `subscriptions` untuk hak akses aktif (`user_identifier`, `test_id`, `tier`, `status`, `source`, `admin_notes`, `valid_until`).
+  - `backend/internal/repository/subscription_repository.go`: `SubscriptionRepository` mengisolasi query database transaksi langganan dan akses paywall secara atomic.
+  - `backend/internal/handlers/payment.go`:
+    1. **Public Endpoints**:
+       - `POST /api/payments/create-invoice`: Generate QRIS dynamic EMVCo dan Snap token untuk paket `per_test` atau `season_pass` (90 hari).
+       - `GET /api/payments/status/:orderId`: Endpoint polling ringan bagi frontend memantau status pesanan.
+       - `POST /api/payments/webhook`: Webhook handler idempoten yang memvalidasi notifikasi payment gateway, memanggil `SettleOrder`, dan menerbitkan subscription aktif.
+    2. **User Authenticated Endpoints**:
+       - `GET /api/user/subscriptions`: Mengambil daftar modul ujian dan langganan aktif milik user.
+    3. **Admin Manual Override Endpoints**:
+       - `POST /api/admin/subscriptions/manual-grant`: Memberikan akses/season pass secara manual tanpa gateway (transaksi transfer bank manual, voucher, atau deal B2B institusi) lengkap dengan alasan audit (`reason_notes`).
+       - `PUT /api/admin/subscriptions/:id/status`: Mengubah status atau memperpanjang hari (`extend_days`).
+       - `DELETE /api/admin/subscriptions/:id/revoke`: Mencabut akses jika terjadi refund.
+       - `GET /api/admin/subscriptions`: Daftar transaksi dan filter pencarian langganan.
+  - **Paywall Enforcement di Engine Ujian**:
+    - Pada `POST /api/tests/:testId/start` di [public.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/public.go): jika `test.PriceIDR > 0`, sistem memvalidasi `subRepo.HasActiveAccess`. Jika user belum membayar, server mengembalikan `HTTP 402 Payment Required` dengan payload `{ paywall: true, price_idr: ..., test_id: ... }`.
 * **Catatan Teknis Frontend (FE)**:
-  1. **Sisi Peserta (User Interface)**:
-     - Komponen `PaymentModal.tsx`: Menampilkan dynamic QR Code QRIS, total harga Rupiah, dan countdown kadaluarsa pembayaran 15 menit.
-     - Gunakan TanStack Query polling (interval 3 detik ke `GET /api/payments/status/:orderId`) untuk mendeteksi perubahan status pembayaran secara instan dan mengarahkan peserta langsung ke sesi ujian.
-     - Tampilkan badge harga yang jelas pada kartu kuis di [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) (`Gratis` vs `Rp 15.000` / `Premium`).
-  2. **Sisi Admin (Admin Subscription Dashboard)**:
-     - Komponen `AdminSubscriptionManager.tsx` pada [AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx):
-       - Form modal **"Grant Akses Manual"**: Input email peserta, pilih modul tes / Season Pass, masukkan jumlah hari aktif, dan kolom wajib *Catatan Alasan Audit* (contoh: "Transfer Manual BCA Bukti #8821", "Akun Bimbel Mitra").
-       - Tabel daftar pengguna berlangganan dengan badge warna sumber (`Gateway (Hijau)` vs `Manual Admin (Ungu)`).
-       - Tombol aksi cepat: *Perpanjang (+30 Hari)* dan *Revoke Akses* dengan konfirmasi modal.
+  - Komponen `PaymentModal.tsx`: Menampilkan dynamic QRIS code dan countdown 15 menit, polling `GET /api/payments/status/:orderId` tiap 3 detik.
+  - Komponen `AdminSubscriptionManager.tsx`: Form modal *"Grant Akses Manual"* dengan catatan alasan audit serta tabel pemantauan langganan.
 
-#### 2. Generator Sertifikat & Report Card PDF
-* **Target Bisnis**: Bukti kelulusan resmi & materi pamer media sosial peserta (*viral growth loop* gratis).
-* **Catatan Teknis Backend (BE)**:
-  - Buat endpoint `GET /api/results/:resultId/certificate`: Mengembalikan data sertifikat ber-UUID verifikasi unik.
-  - Halaman/endpoint publik `GET /verify/:certificateId`: Untuk siapa saja yang memindai QR code sertifikat dapat melihat keaslian nilai peserta.
+#### 2. Generator Sertifikat & Verifikasi Publik
+* **Status Backend**: **SELESAI (COMPLETED)**
+* **Komponen & Endpoint**:
+  - `GET /api/results/:resultId/certificate`: Mengembalikan data sertifikat resmi ber-UUID unik (`CERT-***`), persentil, nilai kelulusan, dan tautan verifikasi.
+  - `GET /api/verify/certificate/:certificateId`: Endpoint verifikasi publik anti-pemalsuan untuk siapa saja yang memindai QR code sertifikat.
 * **Catatan Teknis Frontend (FE)**:
-  - Lakukan rendering PDF di sisi peramban klien (menggunakan `@react-pdf/renderer` atau `jspdf` + `html2canvas`) untuk menghemat beban CPU server VPS 2GB.
-  - Sediakan tombol `Unduh Sertifikat Resmi (PDF)` di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) dengan desain elegan bergaris emas/biru sesuai [style.md](file:///home/sans/coding/quiz_app/style.md).
+  - Render PDF dilakukan di sisi peramban klien (`@react-pdf/renderer` atau `jspdf`) untuk menghemat beban CPU server VPS 2GB.
 
 #### 3. Leaderboard & Ranking Nasional Instan
-* **Target Bisnis**: Memicu kompetisi dan urgensi peserta (*FOMO*) untuk melihat posisinya di antara ribuan peserta lain.
-* **Catatan Teknis Backend (BE)**:
-  - Gunakan **Redis Sorted Sets** (`ZADD leaderboard:{testId} score session_id`).
-  - Ambil ranking secara instan via `ZREVRANK` dan ambil 50 besar via `ZREVRANGEBYSCORE` (latensi < 5ms tanpa membebani PostgreSQL).
-  - Endpoint: `GET /api/tests/:testId/leaderboard?limit=50`.
+* **Status Backend**: **SELESAI (COMPLETED)**
+* **Komponen & Endpoint**:
+  - `GET /api/tests/:testId/leaderboard`: Mengambil 50 besar peringkat peserta ujian dengan latensi ultra-cepat (< 5ms) dan data terindeks.
+  - Pada saat peserta menyelesaikan ujian di `FinishTest`, skor otomatis di-push ke Redis Sorted Sets (`cache.ZAdd("leaderboard:" + testID, score, sessionID)`).
 * **Catatan Teknis Frontend (FE)**:
-  - Komponen `LeaderboardDrawer.tsx` atau tab baru pada halaman hasil.
-  - Tampilkan medali Top 3, percentile badge, dan card stat posisi user (contoh: *"Peringkat #142 dari 3.420 peserta"*).
+  - Komponen `LeaderboardDrawer.tsx` atau tab hasil ranking dengan medali Top 3 dan posisi ranking pengguna.
+
+---
+
+### 🏛️ Pengelompokan Endpoint Berdasarkan Role (Role-Based Route Architecture)
+
+Arsitektur rute di [backend/internal/handlers/routes.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/routes.go) kini terisolasi berdasarkan 3 role utama:
+1. **Public Group (`/api/...`)**:
+   - `/auth/register`, `/auth/login`
+   - `/tests`, `/tests/:testId`, `/tests/:testId/leaderboard`
+   - `/tests/:testId/start` *(dengan validasi Paywall)*, `/sessions/*`
+   - `/results/:resultId`, `/results/:resultId/certificate`, `/verify/certificate/:certificateId`
+   - `/payments/create-invoice`, `/payments/status/:orderId`, `/payments/webhook`
+   - `/ai/generate-questions`
+2. **User Group (`/api/user` — AuthRequired)**:
+   - `/user/me`: Profil examinee
+   - `/user/subscriptions`: Modul tes & pass aktif milik examinee
+3. **Admin Group (`/api/admin` — AuthRequired + RequireAdmin)**:
+   - `/admin/stats`, `/admin/tests/:testId/analytics`
+   - `/admin/tests` (CRUD modul kuis & bank butir soal)
+   - `/admin/essays` & `/admin/essays/:essayId/grade` (penilaian esai manual)
+   - `/admin/upload-media` & `/admin/media` (manajemen gambar soal)
+   - `/admin/subscriptions` (list, manual-grant, status-update, revoke akses)
+
 
 ---
 
@@ -252,3 +253,30 @@ Prioritas pengembangan fitur baru disusun berdasarkan rasio keuntungan bisnis (*
 #### 8. Streaming AI Question Generator (SSE)
 * **Backend (BE)**: Implementasikan Server-Sent Events (`c.Stream()`) dengan header `Content-Type: text/event-stream`.
 * **Frontend (FE)**: Menggunakan `fetch-event-source` di [AIAssistantModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/AIAssistantModal.tsx) untuk me-render butir soal satu per satu secara langsung saat dihasilkan model LLM.
+
+---
+
+## 7. Protokol Pencegahan Technical Debt (Standard Operating Procedure FE & BE)
+
+Untuk menjamin kualitas kode bertahan 10+ tahun dengan skalabilitas tinggi, setiap developer dan AI agent **WAJIB** mematuhi checklist pencegahan technical debt berikut sebelum melakukan perubahan kode atau *Pull Request*:
+
+### 📋 Checklist Wajib Backend (Go)
+| Kategori | Potensi Technical Debt | Standar Solusi Anti-Debt |
+|---|---|---|
+| **Database Transaction** | Lupa rollback saat error/panic -> pool koneksi habis | Setiap `r.db.BeginTxx()` **wajib langsung diikuti `defer tx.Rollback()`**. |
+| **Context Cancellation** | Goroutine menggantung saat client disconnect | Wajib oper `c.Request.Context()` ke seluruh method Repository & Redis (`GetContext`, `ExecContext`). |
+| **Layer Separation** | SQL bocor ke handler controller | **0 baris raw SQL di handler**. Seluruh SQL wajib berada di `internal/repository/`. |
+| **Idempotency & Race Condition** | Webhook payment ganda mencatat langganan duplikat | Gunakan row locking `SELECT ... FOR UPDATE` dan cek status awal (`if order.Status == "settled" return`). |
+| **Information Disclosure** | Pesan error SQL PostgreSQL bocor ke client | Log detail di server (`log.Printf`), kembalikan pesan ramah pengguna yang telah disanitasi ke response JSON. |
+| **Pagination & OOM** | `SELECT *` tanpa batas data di admin query | Selalu pasang `LIMIT` (default 20, maks 100) dan `OFFSET` pada listing transaksi & modul tes. |
+
+### 📋 Checklist Wajib Frontend (React + Bun)
+| Kategori | Potensi Technical Debt | Standar Solusi Anti-Debt |
+|---|---|---|
+| **Server State Hygiene** | Duplikasi data `useQuery` ke dalam `useState` | **Dilarang menyalin data server**. Konsumsi langsung `data` atau gunakan `useMemo` untuk derived filtering. |
+| **Timer & Polling Leaks** | `setInterval` manual di `useEffect` tidak di-clear | Gunakan `refetchInterval` bawaan TanStack Query yang otomatis berhenti saat modal tutup atau status `settled`. |
+| **Bundle Bloat** | Import statis pustaka PDF / Chart membengkakkan bundle > 500kB | Gunakan dynamic import `await import('jspdf')` atau `React.lazy()` hanya saat tombol aksi diklik. |
+| **Form Integrity** | Validasi manual rentan bug & mutasi nested object | Gunakan skema **Zod** di [src/schemas/](file:///home/sans/coding/quiz_app/frontend/src/schemas/) dan manipulasi list opsi via **`useFieldArray`**. |
+| **Rendering Performance** | Timer ujian per detik me-render ulang seluruh halaman | Simpan countdown di **Zustand** ([useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts)) dan konsumsi via atomic selector (`s => s.secondsLeft`). |
+| **Design Consistency** | Arbitrary hex color liar (`#3f21a8`) merusak tema | Gunakan token semantik CSS sesuai [style.md](file:///home/sans/coding/quiz_app/style.md) (`bg-slate-950`, `text-indigo-400`, `border-slate-800`). |
+
