@@ -18,12 +18,11 @@ Semua dokumentasi arsitektur, panduan teknis, dan keamanan disimpan dalam file m
    Aturan prompt deterministik AI Question Generator, validasi kualitas soal, proteksi form non-auth, dan threat model keamanan.
 5. [DEPLOYMENT_AND_MAKEFILE.md](file:///home/sans/coding/quiz_app/DEPLOYMENT_AND_MAKEFILE.md)  
    Panduan orkestrasi Makefile, Docker Compose, skrip backup, health check, dan panduan scaling VPS 2GB.
-6. [FRONTEND_PROGRESS_AND_HANDOVER.md](file:///home/sans/coding/quiz_app/FRONTEND_PROGRESS_AND_HANDOVER.md)  
-   **Dokumentasi frontend terkini & panduan serah terima AI agent**: Arsitektur React 19, RBAC route protection, universal toast & modal confirmation (DRY), dan AI generator modal.
+6. [FRONTEND_ARCHITECTURE.md](file:///home/sans/coding/quiz_app/FRONTEND_ARCHITECTURE.md)  
+   **Arsitektur Frontend & State Management**: Standar React 19, TanStack Query v5, Zustand v5, Zod Runtime Validation, React Hook Form, dan modular API services.
 7. [style.md](file:///home/sans/coding/quiz_app/style.md)  
    **Sistem Desain & Panduan Visual**: Strict Tri-Color palette per mode, CSS variables, Tailwind tokens, dan checklist anti-AI-slop.
-8. [FRONTEND_TECH_DEBT_AND_REFACTORING.md](file:///home/sans/coding/quiz_app/FRONTEND_TECH_DEBT_AND_REFACTORING.md)  
-   **Audit Technical Debt & Cetak Biru Refactoring Frontend**: Solusi dekomposisi `api.ts`, penghapusan silent fallback, TanStack Query v5, React Hook Form + Zod, dan store sesi ujian Zustand.
+
 ---
 
 ## ⚡ Status Fitur Terimplementasi (Update Terkini: Okt 2026)
@@ -55,16 +54,17 @@ Semua dokumentasi arsitektur, panduan teknis, dan keamanan disimpan dalam file m
   - Test suite integrasi di `backend/tests/api_test.go` (100% PASS).
 
 ### 2. Frontend Web (React + Bun)
-- **Teknologi:** React 19, Vite 8, Bun `v1.4.2`, TypeScript, Tailwind CSS, Lucide Icons.
+- **Teknologi:** React 19, Vite 8, Bun `v1.4.2`, TypeScript, TanStack Query v5, Zustand v5, React Hook Form v7, Zod, Tailwind CSS, Lucide Icons.
 - **Tampilan Antarmuka & Fitur:**
-  - Beranda pencarian & filter kategori tes (CPNS, SBMPTN, IQ, Custom BUMN).
-  - Halaman ujian interaktif dengan timer countdown, render gambar/media soal, navigasi nomor, penanda ragu-ragu (flag), dan konfirmasi selesai modern.
+  - Beranda pencarian & filter kategori tes dengan query caching dan `AbortSignal` debounce.
+  - Halaman ujian terisolasi 60 FPS (Zustand session store) tanpa timer re-render drift.
   - Halaman hasil komprehensif: Skor total, status kelulusan, persentil, kartu breakdown kategori, dan ulasan pembahasan soal.
-  - Dashboard Pengajar Terproteksi (RBAC): Statistik ringkasan, manajemen tes (buat modul, edit soal, toggle publish, hapus), antrean penilaian esai manual.
-  - **Modal Edit Soal & Ujian (`TestEditorModal.tsx`)**: Mengubah parameter ujian, butir soal, opsi jawaban A–E, kunci jawaban, dan pembahasan.
+  - Dashboard Pengajar Terproteksi (RBAC) dengan mutasi terarah TanStack Query dan cache invalidation spesifik.
+  - **Formulir Pembuatan & Edit Ujian Terstandarisasi (`TestCreatorModal.tsx`, `TestEditorModal.tsx`, `QuestionFormField.tsx`)**: Didukung React Hook Form + Zod (`test.schema.ts`) + `useFieldArray` bebas mutasi nested array.
   - **Upload Media Gambar Soal (`MediaUploader.tsx`)**: Unggah gambar (maks 2MB) terhubung ke `POST /api/admin/upload-media` dengan preview instan.
   - **AI Question Assistant Modal (`AIAssistantModal.tsx`)**: Integrasi Gemini 2.5 Flash / Groq OSS dengan kurva progres persentase dinamis (0–100%) dan multi-card shimmer skeleton loader.
   - **Universal Toast & Confirmation Modal (DRY)**: Sistem notifikasi dan dialog konfirmasi modern dengan efek `backdrop-blur-md` dan keyboard accessibility (`Esc`/`Enter`).
+  - **Arsitektur API Modular**: Centralized `client.ts` tanpa database mock tiruan di client. Fail-fast error handling terpusat.
 
 ---
 
