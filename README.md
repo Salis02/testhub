@@ -22,6 +22,8 @@ Semua dokumentasi arsitektur, panduan teknis, dan keamanan disimpan dalam file m
    **Dokumentasi frontend terkini & panduan serah terima AI agent**: Arsitektur React 19, RBAC route protection, universal toast & modal confirmation (DRY), dan AI generator modal.
 7. [style.md](file:///home/sans/coding/quiz_app/style.md)  
    **Sistem Desain & Panduan Visual**: Strict Tri-Color palette per mode, CSS variables, Tailwind tokens, dan checklist anti-AI-slop.
+8. [FRONTEND_TECH_DEBT_AND_REFACTORING.md](file:///home/sans/coding/quiz_app/FRONTEND_TECH_DEBT_AND_REFACTORING.md)  
+   **Audit Technical Debt & Cetak Biru Refactoring Frontend**: Solusi dekomposisi `api.ts`, penghapusan silent fallback, TanStack Query v5, React Hook Form + Zod, dan store sesi ujian Zustand.
 ---
 
 ## ⚡ Status Fitur Terimplementasi (Update Terkini: Okt 2026)

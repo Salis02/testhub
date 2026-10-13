@@ -74,6 +74,7 @@ cd frontend && bun run build
 
 ## 4. Panduan Ekstensi untuk Pengembang / AI Agent Berikutnya
 
-1. **Streaming Output (SSE)**: Ganti polling/loading tunggal AI generator dengan Server-Sent Events (`text/event-stream`) agar kartu soal dapat dirender bertahap satu per satu.
-2. **Export Bank Soal**: Tambahkan generator PDF berbasis `jspdf` atau `@react-pdf/renderer` pada halaman hasil kuis untuk mencetak sertifikat tryout.
-3. **PWA / Offline Mode**: Simpan draf jawaban sementara ke `IndexedDB` peserta agar pengerjaan ujian tahan gangguan jaringan internet.
+1. **Modernisasi Arsitektur & Pelunasan Technical Debt**: Ikuti panduan komprehensif di [FRONTEND_TECH_DEBT_AND_REFACTORING.md](file:///home/sans/coding/quiz_app/FRONTEND_TECH_DEBT_AND_REFACTORING.md) untuk mendekomposisi `api.ts`, memasang TanStack Query v5, validasi Zod + React Hook Form, dan store Zustand.
+2. **Streaming Output (SSE)**: Ganti polling/loading tunggal AI generator dengan Server-Sent Events (`text/event-stream`) agar kartu soal dapat dirender bertahap satu per satu.
+3. **Export Bank Soal**: Tambahkan generator PDF berbasis `jspdf` atau `@react-pdf/renderer` pada halaman hasil kuis untuk mencetak sertifikat tryout.
+4. **PWA / Offline Mode**: Simpan draf jawaban sementara ke `IndexedDB` peserta agar pengerjaan ujian tahan gangguan jaringan internet.
