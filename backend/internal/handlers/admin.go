@@ -1,8 +1,9 @@
 package handlers
 
 import (
-	"database/sql"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -10,85 +11,62 @@ import (
 
 	"testhub/internal/database"
 	"testhub/internal/models"
+	"testhub/internal/repository"
+	"testhub/internal/validator"
 )
 
 type AdminHandler struct {
-	db *database.DB
+	db       *database.DB
+	testRepo repository.TestRepository
 }
 
-func NewAdminHandler(db *database.DB) *AdminHandler {
-	return &AdminHandler{db: db}
+func NewAdminHandler(db *database.DB, testRepo repository.TestRepository) *AdminHandler {
+	return &AdminHandler{
+		db:       db,
+		testRepo: testRepo,
+	}
 }
 
 // GetStats handles GET /api/admin/stats
 func (h *AdminHandler) GetStats(c *gin.Context) {
-	var totalTests, publishedTests, totalSessions, totalCompletions int
-	var avgScore sql.NullFloat64
-
-	_ = h.db.Get(&totalTests, "SELECT COUNT(*) FROM tests WHERE is_deleted = false")
-	_ = h.db.Get(&publishedTests, "SELECT COUNT(*) FROM tests WHERE is_deleted = false AND published = true")
-	_ = h.db.Get(&totalSessions, "SELECT COUNT(*) FROM test_sessions")
-	_ = h.db.Get(&totalCompletions, "SELECT COUNT(*) FROM test_results")
-	_ = h.db.Get(&avgScore, "SELECT AVG(percentage_score) FROM test_results")
-
-	var pendingEssays int
-	_ = h.db.Get(&pendingEssays, `
-		SELECT COUNT(*) FROM test_submissions ts
-		JOIN test_questions tq ON ts.question_id = tq.id
-		WHERE tq.question_type = 'essay' AND ts.score IS NULL
-	`)
-
-	completionRate := 0
-	if totalSessions > 0 {
-		completionRate = int(float64(totalCompletions) / float64(totalSessions) * 100.0)
+	stats, err := h.testRepo.GetStats(c.Request.Context())
+	if err != nil {
+		log.Printf("[AdminHandler.GetStats] internal error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat data statistik."})
+		return
 	}
 
-	averageScoreInt := 0
-	if avgScore.Valid {
-		averageScoreInt = int(avgScore.Float64)
-	}
-
-	c.JSON(http.StatusOK, models.AdminStats{
-		TotalTests:               totalTests,
-		PublishedTests:           publishedTests,
-		TotalSessions:            totalSessions,
-		TotalCompletions:         totalCompletions,
-		CompletionRatePercentage: completionRate,
-		AverageScorePercentage:   averageScoreInt,
-		PendingEssays:            pendingEssays,
-	})
+	c.JSON(http.StatusOK, stats)
 }
 
 // ListTests handles GET /api/admin/tests
 func (h *AdminHandler) ListTests(c *gin.Context) {
-	var tests []models.Test
-	err := h.db.Select(&tests, "SELECT * FROM tests WHERE is_deleted = false ORDER BY created_at DESC")
+	tests, err := h.testRepo.ListTests(c.Request.Context(), false)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat tes: " + err.Error()})
+		log.Printf("[AdminHandler.ListTests] internal error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar ujian."})
 		return
 	}
-	if tests == nil {
-		tests = []models.Test{}
-	}
+
 	c.JSON(http.StatusOK, tests)
 }
 
 // CreateTest handles POST /api/admin/tests
 func (h *AdminHandler) CreateTest(c *gin.Context) {
-	var req struct {
-		Title                  string                `json:"title" binding:"required"`
-		Description            string                `json:"description"`
-		Category               string                `json:"category" binding:"required"`
-		DurationMinutes        int                   `json:"duration_minutes" binding:"required"`
-		PassingScorePercentage int                   `json:"passing_score_percentage"`
-		ShuffleQuestions       bool                  `json:"shuffle_questions"`
-		ShuffleAnswers         bool                  `json:"shuffle_answers"`
-		Published              bool                  `json:"published"`
-		Questions              []models.TestQuestion `json:"questions"`
+	var req models.SaveTestDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Validasi permintaan gagal",
+			"details": validator.FormatValidationErrors(err),
+		})
+		return
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Format permintaan tidak valid: " + err.Error()})
+	if relationalErrs := req.ValidateRelational(); len(relationalErrs) > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Validasi butir soal gagal",
+			"details": relationalErrs,
+		})
 		return
 	}
 
@@ -101,13 +79,6 @@ func (h *AdminHandler) CreateTest(c *gin.Context) {
 	testID := fmt.Sprintf("test-%s-%d", req.Category, time.Now().Unix())
 	now := time.Now()
 
-	passing := req.PassingScorePercentage
-	if passing <= 0 {
-		passing = 60
-	}
-
-	totalQuestions := len(req.Questions)
-
 	test := models.Test{
 		ID:                     testID,
 		CreatorID:              creatorID,
@@ -115,8 +86,8 @@ func (h *AdminHandler) CreateTest(c *gin.Context) {
 		Description:            req.Description,
 		Category:               req.Category,
 		DurationMinutes:        req.DurationMinutes,
-		PassingScorePercentage: passing,
-		TotalQuestions:         totalQuestions,
+		PassingScorePercentage: req.PassingScorePercentage,
+		TotalQuestions:         len(req.Questions),
 		ShuffleQuestions:       req.ShuffleQuestions,
 		ShuffleAnswers:         req.ShuffleAnswers,
 		Published:              req.Published,
@@ -125,68 +96,11 @@ func (h *AdminHandler) CreateTest(c *gin.Context) {
 		UpdatedAt:              now,
 	}
 
-	tx, err := h.db.Beginx()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memulai transaksi"})
-		return
-	}
-	defer tx.Rollback()
+	questions := req.ToDomainQuestions(testID)
 
-	insertTestSQL := `
-		INSERT INTO tests (id, creator_id, title, description, category, duration_minutes, passing_score_percentage, total_questions, shuffle_questions, shuffle_answers, published, is_deleted, created_at, updated_at)
-		VALUES (:id, :creator_id, :title, :description, :category, :duration_minutes, :passing_score_percentage, :total_questions, :shuffle_questions, :shuffle_answers, :published, :is_deleted, :created_at, :updated_at)
-	`
-	_, err = tx.NamedExec(insertTestSQL, test)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan tes: " + err.Error()})
-		return
-	}
-
-	for idx, q := range req.Questions {
-		qID := fmt.Sprintf("q-%s-%d", testID, idx+1)
-		pts := q.Points
-		if pts <= 0 {
-			pts = 5
-		}
-		diff := q.DifficultyLevel
-		if diff == "" {
-			diff = "medium"
-		}
-		qType := q.QuestionType
-		if qType == "" {
-			qType = "multiple_choice"
-		}
-
-		insertQuestionSQL := `
-			INSERT INTO test_questions (id, test_id, question_number, question_text, question_type, media_url, difficulty_level, explanation, points, is_deleted, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
-		`
-		_, err = tx.Exec(insertQuestionSQL, qID, testID, idx+1, q.QuestionText, qType, q.MediaURL, diff, q.Explanation, pts, now)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan soal: " + err.Error()})
-			return
-		}
-
-		for _, opt := range q.Options {
-			optID := fmt.Sprintf("opt-%s-%s", qID, opt.OptionLetter)
-			isCorrect := false
-			if opt.IsCorrect != nil {
-				isCorrect = *opt.IsCorrect
-			}
-			insertOptSQL := `
-				INSERT INTO question_options (id, question_id, option_text, option_letter, is_correct, created_at)
-				VALUES ($1, $2, $3, $4, $5, $6)
-			`
-			_, err = tx.Exec(insertOptSQL, optID, qID, opt.OptionText, opt.OptionLetter, isCorrect, now)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan opsi: " + err.Error()})
-				return
-			}
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengonfirmasi transaksi"})
+	if err := h.testRepo.CreateTestTx(c.Request.Context(), &test, questions); err != nil {
+		log.Printf("[AdminHandler.CreateTest] internal DB error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan modul ujian ke database."})
 		return
 	}
 
@@ -197,29 +111,15 @@ func (h *AdminHandler) CreateTest(c *gin.Context) {
 func (h *AdminHandler) GetTest(c *gin.Context) {
 	testID := c.Param("testId")
 
-	var test models.Test
-	err := h.db.Get(&test, "SELECT * FROM tests WHERE id = $1 AND is_deleted = false", testID)
+	test, questions, err := h.testRepo.GetTestWithQuestions(c.Request.Context(), testID, false)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
-		return
-	}
-
-	var questions []models.TestQuestion
-	err = h.db.Select(&questions, "SELECT * FROM test_questions WHERE test_id = $1 AND is_deleted = false ORDER BY question_number ASC", testID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat soal: " + err.Error()})
-		return
-	}
-
-	for i := range questions {
-		var options []models.QuestionOption
-		// For admin edit view, is_correct is NOT stripped so the editor can show correct answers
-		err = h.db.Select(&options, "SELECT id, question_id, option_letter, option_text, is_correct FROM question_options WHERE question_id = $1 ORDER BY option_letter ASC", questions[i].ID)
-		if err == nil {
-			questions[i].Options = options
-		} else {
-			questions[i].Options = []models.QuestionOption{}
+		if errors.Is(err, repository.ErrTestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
+			return
 		}
+		log.Printf("[AdminHandler.GetTest] internal error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat detail ujian."})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -232,143 +132,71 @@ func (h *AdminHandler) GetTest(c *gin.Context) {
 func (h *AdminHandler) UpdateTest(c *gin.Context) {
 	testID := c.Param("testId")
 
-	var req struct {
-		Title                  string                `json:"title" binding:"required"`
-		Description            string                `json:"description"`
-		Category               string                `json:"category" binding:"required"`
-		DurationMinutes        int                   `json:"duration_minutes" binding:"required"`
-		PassingScorePercentage int                   `json:"passing_score_percentage"`
-		ShuffleQuestions       bool                  `json:"shuffle_questions"`
-		ShuffleAnswers         bool                  `json:"shuffle_answers"`
-		Published              bool                  `json:"published"`
-		Questions              []models.TestQuestion `json:"questions"`
-	}
-
+	var req models.SaveTestDTO
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Format permintaan tidak valid: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Validasi permintaan gagal",
+			"details": validator.FormatValidationErrors(err),
+		})
 		return
 	}
 
-	// Verify test exists
-	var existing models.Test
-	if err := h.db.Get(&existing, "SELECT * FROM tests WHERE id = $1 AND is_deleted = false", testID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
+	if relationalErrs := req.ValidateRelational(); len(relationalErrs) > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Validasi butir soal gagal",
+			"details": relationalErrs,
+		})
 		return
-	}
-
-	passing := req.PassingScorePercentage
-	if passing <= 0 {
-		passing = 60
 	}
 
 	now := time.Now()
-	totalQuestions := len(req.Questions)
-
-	tx, err := h.db.Beginx()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memulai transaksi: " + err.Error()})
-		return
-	}
-	defer tx.Rollback()
-
-	// 1. Update Test Metadata
-	updateTestSQL := `
-		UPDATE tests 
-		SET title = $1, description = $2, category = $3, duration_minutes = $4,
-		    passing_score_percentage = $5, total_questions = $6, shuffle_questions = $7,
-		    shuffle_answers = $8, published = $9, updated_at = $10
-		WHERE id = $11
-	`
-	_, err = tx.Exec(updateTestSQL,
-		req.Title, req.Description, req.Category, req.DurationMinutes,
-		passing, totalQuestions, req.ShuffleQuestions,
-		req.ShuffleAnswers, req.Published, now, testID,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui data ujian: " + err.Error()})
-		return
+	test := models.Test{
+		ID:                     testID,
+		Title:                  req.Title,
+		Description:            req.Description,
+		Category:               req.Category,
+		DurationMinutes:        req.DurationMinutes,
+		PassingScorePercentage: req.PassingScorePercentage,
+		TotalQuestions:         len(req.Questions),
+		ShuffleQuestions:       req.ShuffleQuestions,
+		ShuffleAnswers:         req.ShuffleAnswers,
+		Published:              req.Published,
+		UpdatedAt:              now,
 	}
 
-	// 2. If questions provided, atomically replace old questions and options
-	if req.Questions != nil {
-		// Due to ON DELETE CASCADE, deleting from test_questions also cleans options
-		_, err = tx.Exec("DELETE FROM test_questions WHERE test_id = $1", testID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui butir soal: " + err.Error()})
+	questions := req.ToDomainQuestions(testID)
+
+	if err := h.testRepo.UpdateTestTx(c.Request.Context(), &test, questions); err != nil {
+		if errors.Is(err, repository.ErrTestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
 			return
 		}
-
-		for idx, q := range req.Questions {
-			qID := fmt.Sprintf("q-%s-%d-%d", testID, idx+1, now.Unix())
-			pts := q.Points
-			if pts <= 0 {
-				pts = 5
-			}
-			diff := q.DifficultyLevel
-			if diff == "" {
-				diff = "medium"
-			}
-			qType := q.QuestionType
-			if qType == "" {
-				qType = "multiple_choice"
-			}
-
-			insertQuestionSQL := `
-				INSERT INTO test_questions (id, test_id, question_number, question_text, question_type, media_url, difficulty_level, explanation, points, is_deleted, created_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
-			`
-			_, err = tx.Exec(insertQuestionSQL, qID, testID, idx+1, q.QuestionText, qType, q.MediaURL, diff, q.Explanation, pts, now)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan butir soal baru: " + err.Error()})
-				return
-			}
-
-			for _, opt := range q.Options {
-				optID := fmt.Sprintf("opt-%s-%s", qID, opt.OptionLetter)
-				isCorrect := false
-				if opt.IsCorrect != nil {
-					isCorrect = *opt.IsCorrect
-				}
-				insertOptSQL := `
-					INSERT INTO question_options (id, question_id, option_text, option_letter, is_correct, created_at)
-					VALUES ($1, $2, $3, $4, $5, $6)
-				`
-				_, err = tx.Exec(insertOptSQL, optID, qID, opt.OptionText, opt.OptionLetter, isCorrect, now)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan opsi baru: " + err.Error()})
-					return
-				}
-			}
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengonfirmasi transaksi: " + err.Error()})
+		log.Printf("[AdminHandler.UpdateTest] internal DB error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui ujian."})
 		return
 	}
 
-	// Fetch updated object
-	var updatedTest models.Test
-	_ = h.db.Get(&updatedTest, "SELECT * FROM tests WHERE id = $1", testID)
+	updated, err := h.testRepo.GetTestByID(c.Request.Context(), testID)
+	if err != nil {
+		c.JSON(http.StatusOK, test)
+		return
+	}
 
-	c.JSON(http.StatusOK, updatedTest)
+	c.JSON(http.StatusOK, updated)
 }
 
 // TogglePublish handles POST/PATCH /api/admin/tests/:testId/toggle-publish and /api/admin/tests/:testId/publish
 func (h *AdminHandler) TogglePublish(c *gin.Context) {
 	testID := c.Param("testId")
 
-	var current bool
-	err := h.db.Get(&current, "SELECT published FROM tests WHERE id = $1 AND is_deleted = false", testID)
+	newStatus, err := h.testRepo.TogglePublish(c.Request.Context(), testID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
-		return
-	}
-
-	newStatus := !current
-	_, err = h.db.Exec("UPDATE tests SET published = $1, updated_at = $2 WHERE id = $3", newStatus, time.Now(), testID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengubah status publikasi: " + err.Error()})
+		if errors.Is(err, repository.ErrTestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
+			return
+		}
+		log.Printf("[AdminHandler.TogglePublish] internal error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengubah status publikasi ujian."})
 		return
 	}
 
@@ -382,9 +210,14 @@ func (h *AdminHandler) TogglePublish(c *gin.Context) {
 func (h *AdminHandler) DeleteTest(c *gin.Context) {
 	testID := c.Param("testId")
 
-	_, err := h.db.Exec("UPDATE tests SET is_deleted = true, updated_at = $1 WHERE id = $2", time.Now(), testID)
+	err := h.testRepo.DeleteTest(c.Request.Context(), testID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus ujian: " + err.Error()})
+		if errors.Is(err, repository.ErrTestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
+			return
+		}
+		log.Printf("[AdminHandler.DeleteTest] internal error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus ujian."})
 		return
 	}
 
@@ -428,9 +261,10 @@ func (h *AdminHandler) GetPendingEssays(c *gin.Context) {
 	`
 
 	var rows []EssayRow
-	err := h.db.Select(&rows, query)
+	err := h.db.SelectContext(c.Request.Context(), &rows, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat esai: " + err.Error()})
+		log.Printf("[AdminHandler.GetPendingEssays] internal query error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar jawaban esai."})
 		return
 	}
 
@@ -464,7 +298,10 @@ func (h *AdminHandler) GradeEssay(c *gin.Context) {
 
 	var req models.GradeEssayRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Format permintaan tidak valid: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Validasi permintaan gagal",
+			"details": validator.FormatValidationErrors(err),
+		})
 		return
 	}
 
@@ -476,15 +313,16 @@ func (h *AdminHandler) GradeEssay(c *gin.Context) {
 		SET score = $1, admin_review_note = $2, admin_reviewed_at = $3
 		WHERE id = $4
 	`
-	res, err := h.db.Exec(updateSQL, scoreFloat, req.Note, now, essayID)
+	res, err := h.db.ExecContext(c.Request.Context(), updateSQL, scoreFloat, req.Note, now, essayID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menilai esai: " + err.Error()})
+		log.Printf("[AdminHandler.GradeEssay] internal DB error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan penilaian esai."})
 		return
 	}
 
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Esai tidak ditemukan"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Jawaban esai tidak ditemukan"})
 		return
 	}
 
@@ -495,30 +333,16 @@ func (h *AdminHandler) GradeEssay(c *gin.Context) {
 func (h *AdminHandler) GetAnalytics(c *gin.Context) {
 	testID := c.Param("testId")
 
-	var test models.Test
-	if err := h.db.Get(&test, "SELECT * FROM tests WHERE id = $1", testID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
+	analytics, err := h.testRepo.GetAnalytics(c.Request.Context(), testID)
+	if err != nil {
+		if errors.Is(err, repository.ErrTestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
+			return
+		}
+		log.Printf("[AdminHandler.GetAnalytics] internal error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat analitik ujian."})
 		return
 	}
 
-	var totalSubmissions int
-	var avgScore sql.NullFloat64
-	var passingCount int
-
-	_ = h.db.Get(&totalSubmissions, "SELECT COUNT(*) FROM test_results WHERE test_id = $1", testID)
-	_ = h.db.Get(&avgScore, "SELECT AVG(percentage_score) FROM test_results WHERE test_id = $1", testID)
-	_ = h.db.Get(&passingCount, "SELECT COUNT(*) FROM test_results WHERE test_id = $1 AND passing = true", testID)
-
-	passingRate := 0.0
-	if totalSubmissions > 0 {
-		passingRate = float64(passingCount) / float64(totalSubmissions) * 100.0
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"test_id":           test.ID,
-		"test_title":        test.Title,
-		"total_submissions": totalSubmissions,
-		"average_score":     avgScore.Float64,
-		"passing_rate":      passingRate,
-	})
+	c.JSON(http.StatusOK, analytics)
 }

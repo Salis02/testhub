@@ -12,8 +12,22 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// Redis Lua script for atomic INCR + EXPIRE (eliminates race condition & zombie keys)
+var rateLimitLua = redis.NewScript(`
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return current
+`)
+
 type memoryItem struct {
 	value     string
+	expiresAt time.Time
+}
+
+type rateLimitEntry struct {
+	count     int64
 	expiresAt time.Time
 }
 
@@ -23,12 +37,13 @@ type Client struct {
 	useMemory   bool
 	memStore    sync.Map
 	rateLimiter sync.Map
+	stopJanitor chan struct{}
+	mu          sync.Mutex
 }
 
 func New(redisURL string, password string) *Client {
 	ctx := context.Background()
 
-	// Parse host:port if prefixed with redis://
 	addr := redisURL
 	if strings.HasPrefix(addr, "redis://") {
 		addr = strings.TrimPrefix(addr, "redis://")
@@ -41,9 +56,10 @@ func New(redisURL string, password string) *Client {
 	})
 
 	c := &Client{
-		rdb:       rdb,
-		ctx:       ctx,
-		useMemory: false,
+		rdb:         rdb,
+		ctx:         ctx,
+		useMemory:   false,
+		stopJanitor: make(chan struct{}),
 	}
 
 	// Test connection
@@ -54,7 +70,52 @@ func New(redisURL string, password string) *Client {
 		log.Printf("[Cache] Connected to Redis at %s", addr)
 	}
 
+	// Start janitor goroutine for automatic TTL eviction on in-memory store
+	c.startJanitor(30 * time.Second)
+
 	return c
+}
+
+func (c *Client) startJanitor(interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				now := time.Now()
+				// Evict expired cache items
+				c.memStore.Range(func(key, val interface{}) bool {
+					if item, ok := val.(memoryItem); ok && !item.expiresAt.IsZero() && now.After(item.expiresAt) {
+						c.memStore.Delete(key)
+					}
+					return true
+				})
+				// Evict expired rate limit windows (prevents permanent 429 lockouts)
+				c.rateLimiter.Range(func(key, val interface{}) bool {
+					if entry, ok := val.(rateLimitEntry); ok && now.After(entry.expiresAt) {
+						c.rateLimiter.Delete(key)
+					}
+					return true
+				})
+			case <-c.stopJanitor:
+				return
+			}
+		}
+	}()
+}
+
+func (c *Client) Close() error {
+	select {
+	case <-c.stopJanitor:
+	default:
+		close(c.stopJanitor)
+	}
+	if c.rdb != nil && !c.useMemory {
+		return c.rdb.Close()
+	}
+	return nil
 }
 
 func (c *Client) Set(key string, value interface{}, expiration time.Duration) error {
@@ -104,21 +165,55 @@ func (c *Client) Delete(key string) error {
 	return nil
 }
 
+// IncrAtomic increments the key and sets TTL atomically in 1 operation.
+// In Redis: Uses Lua script. In Memory: Thread-safe window expiration with auto-reset.
+func (c *Client) IncrAtomic(ctx context.Context, key string, window time.Duration) (int64, error) {
+	if !c.useMemory {
+		ttlSeconds := int(window.Seconds())
+		if ttlSeconds <= 0 {
+			ttlSeconds = 1
+		}
+		res, err := rateLimitLua.Run(ctx, c.rdb, []string{key}, ttlSeconds).Int64()
+		if err != nil {
+			return 0, fmt.Errorf("redis rate limit lua: %w", err)
+		}
+		return res, nil
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := time.Now()
+	raw, ok := c.rateLimiter.Load(key)
+	if !ok {
+		c.rateLimiter.Store(key, rateLimitEntry{count: 1, expiresAt: now.Add(window)})
+		return 1, nil
+	}
+
+	entry := raw.(rateLimitEntry)
+	if now.After(entry.expiresAt) {
+		// Window has passed, reset counter to 1 with new expiry
+		c.rateLimiter.Store(key, rateLimitEntry{count: 1, expiresAt: now.Add(window)})
+		return 1, nil
+	}
+
+	entry.count++
+	c.rateLimiter.Store(key, entry)
+	return entry.count, nil
+}
+
+// Incr is maintained for backward compatibility
 func (c *Client) Incr(key string) (int64, error) {
 	if !c.useMemory {
 		return c.rdb.Incr(c.ctx, key).Result()
 	}
-
-	raw, _ := c.rateLimiter.LoadOrStore(key, int64(0))
-	val := raw.(int64) + 1
-	c.rateLimiter.Store(key, val)
-	return val, nil
+	return c.IncrAtomic(c.ctx, key, 1*time.Minute)
 }
 
+// Expire is maintained for backward compatibility
 func (c *Client) Expire(key string, expiration time.Duration) error {
 	if !c.useMemory {
 		return c.rdb.Expire(c.ctx, key, expiration).Err()
 	}
-	// Expire for in-memory handled by item TTL
 	return nil
 }

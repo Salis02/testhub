@@ -191,3 +191,12 @@ type AIGenerateRequest struct {
 	Difficulty string `json:"difficulty" binding:"required"`
 	Count      int    `json:"count" binding:"required,min=1,max=10"`
 }
+
+type TestAnalytics struct {
+	TestID           string  `json:"test_id"`
+	TestTitle        string  `json:"test_title"`
+	TotalSubmissions int     `json:"total_submissions"`
+	AverageScore     float64 `json:"average_score"`
+	PassingRate      float64 `json:"passing_rate"`
+}
+

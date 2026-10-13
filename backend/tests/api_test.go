@@ -2,7 +2,9 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -456,4 +458,155 @@ func TestAdminEditTestFlow(t *testing.T) {
 		t.Errorf("Expected points 10, got %d", verified.Questions[0].Points)
 	}
 }
+
+func TestValidationRelationalFailures(t *testing.T) {
+	_, _, router := setupTestApp(t)
+
+	// Register admin to get token
+	adminEmail := "val-admin-" + time.Now().Format("20060102150405.000") + "@example.com"
+	regBody, _ := json.Marshal(models.RegisterRequest{
+		Email:    adminEmail,
+		Password: "Password123!",
+		FullName: "Validation Admin",
+		Role:     "admin",
+	})
+	reqReg, _ := http.NewRequest("POST", "/api/auth/register", bytes.NewBuffer(regBody))
+	reqReg.Header.Set("Content-Type", "application/json")
+	wReg := httptest.NewRecorder()
+	router.ServeHTTP(wReg, reqReg)
+
+	var authResp models.AuthResponse
+	_ = json.Unmarshal(wReg.Body.Bytes(), &authResp)
+	token := authResp.Token
+
+	isTrue := true
+	isFalse := false
+
+	// Test 1: Category invalid
+	badCatBody, _ := json.Marshal(map[string]interface{}{
+		"title":                    "Valid Title Here",
+		"category":                 "invalid_category_xyz",
+		"duration_minutes":         30,
+		"passing_score_percentage": 60,
+		"questions": []models.QuestionDTO{
+			{
+				QuestionText:    "Pertanyaan valid minimal 5 char",
+				QuestionType:    "multiple_choice",
+				DifficultyLevel: "medium",
+				Points:          5,
+				Options: []models.OptionDTO{
+					{OptionLetter: "A", OptionText: "Opt A", IsCorrect: &isTrue},
+					{OptionLetter: "B", OptionText: "Opt B", IsCorrect: &isFalse},
+				},
+			},
+		},
+	})
+	req1, _ := http.NewRequest("POST", "/api/admin/tests", bytes.NewBuffer(badCatBody))
+	req1.Header.Set("Content-Type", "application/json")
+	req1.Header.Set("Authorization", "Bearer "+token)
+	w1 := httptest.NewRecorder()
+	router.ServeHTTP(w1, req1)
+
+	if w1.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 Bad Request for invalid category, got %d", w1.Code)
+	}
+
+	// Test 2: Multiple choice without correct option (0 correct)
+	noCorrectBody, _ := json.Marshal(map[string]interface{}{
+		"title":                    "Valid Title Here",
+		"category":                 "cpns",
+		"duration_minutes":         30,
+		"passing_score_percentage": 60,
+		"questions": []models.QuestionDTO{
+			{
+				QuestionText:    "Pertanyaan valid minimal 5 char",
+				QuestionType:    "multiple_choice",
+				DifficultyLevel: "medium",
+				Points:          5,
+				Options: []models.OptionDTO{
+					{OptionLetter: "A", OptionText: "Opt A", IsCorrect: &isFalse},
+					{OptionLetter: "B", OptionText: "Opt B", IsCorrect: &isFalse},
+				},
+			},
+		},
+	})
+	req2, _ := http.NewRequest("POST", "/api/admin/tests", bytes.NewBuffer(noCorrectBody))
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("Authorization", "Bearer "+token)
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 Bad Request for question without correct answer, got %d", w2.Code)
+	}
+
+	// Test 3: Multiple choice with 2 correct options
+	twoCorrectBody, _ := json.Marshal(map[string]interface{}{
+		"title":                    "Valid Title Here",
+		"category":                 "cpns",
+		"duration_minutes":         30,
+		"passing_score_percentage": 60,
+		"questions": []models.QuestionDTO{
+			{
+				QuestionText:    "Pertanyaan valid minimal 5 char",
+				QuestionType:    "multiple_choice",
+				DifficultyLevel: "medium",
+				Points:          5,
+				Options: []models.OptionDTO{
+					{OptionLetter: "A", OptionText: "Opt A", IsCorrect: &isTrue},
+					{OptionLetter: "B", OptionText: "Opt B", IsCorrect: &isTrue},
+				},
+			},
+		},
+	})
+	req3, _ := http.NewRequest("POST", "/api/admin/tests", bytes.NewBuffer(twoCorrectBody))
+	req3.Header.Set("Content-Type", "application/json")
+	req3.Header.Set("Authorization", "Bearer "+token)
+	w3 := httptest.NewRecorder()
+	router.ServeHTTP(w3, req3)
+
+	if w3.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 Bad Request for question with 2 correct answers, got %d", w3.Code)
+	}
+}
+
+func TestRateLimiterAtomicIncr(t *testing.T) {
+	cfg := config.LoadConfig()
+	client := cache.New(cfg.RedisURL, cfg.RedisPassword)
+	defer client.Close()
+
+	ctx := context.Background()
+	testKey := fmt.Sprintf("test_rl_%d", time.Now().UnixNano())
+
+	// First hit
+	c1, err := client.IncrAtomic(ctx, testKey, 1*time.Second)
+	if err != nil {
+		t.Fatalf("IncrAtomic failed: %v", err)
+	}
+	if c1 != 1 {
+		t.Errorf("Expected count 1 on first hit, got %d", c1)
+	}
+
+	// Second hit within window
+	c2, err := client.IncrAtomic(ctx, testKey, 1*time.Second)
+	if err != nil {
+		t.Fatalf("IncrAtomic failed: %v", err)
+	}
+	if c2 != 2 {
+		t.Errorf("Expected count 2 on second hit, got %d", c2)
+	}
+
+	// Wait for window to expire
+	time.Sleep(1100 * time.Millisecond)
+
+	// Hit after window expiration should reset to 1
+	c3, err := client.IncrAtomic(ctx, testKey, 1*time.Second)
+	if err != nil {
+		t.Fatalf("IncrAtomic failed: %v", err)
+	}
+	if c3 != 1 {
+		t.Errorf("Expected count 1 after window reset, got %d", c3)
+	}
+}
+
 

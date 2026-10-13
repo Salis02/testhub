@@ -12,6 +12,7 @@ import (
 	"testhub/internal/config"
 	"testhub/internal/database"
 	"testhub/internal/middleware"
+	"testhub/internal/repository"
 	"testhub/internal/services"
 )
 
@@ -50,9 +51,11 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		log.Printf("[Server] Warning: Failed to init storage provider: %v", err)
 	}
 
+	testRepo := repository.NewPostgresTestRepository(db)
+
 	authHandler := NewAuthHandler(db, cfg)
 	publicHandler := NewPublicHandler(db, cacheClient)
-	adminHandler := NewAdminHandler(db)
+	adminHandler := NewAdminHandler(db, testRepo)
 	mediaHandler := NewMediaHandler(storage)
 	aiService := services.NewAIAgentService(cfg)
 	aiHandler := NewAIHandler(aiService)

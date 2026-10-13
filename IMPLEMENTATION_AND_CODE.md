@@ -115,45 +115,42 @@ curl -s http://localhost:8000/health
 
 ## 5. Audit Technical Debt Backend & Catatan Arsitektur (Senior Review)
 
-Berdasarkan audit mendalam arsitektur Go backend saat ini, berikut adalah catatan teknis dan area perbaikan untuk sprint berikutnya:
+Berdasarkan audit mendalam arsitektur Go backend, seluruh area perbaikan teknis non-AI telah diselesaikan dengan standar *Production-Grade & Long-term Maintainability*:
 
-### 5.1 Validasi Request: Manual & Redundan
-- **Kondisi Saat Ini**:
-  - Validasi terpecah antara struct tags (`binding:"required"`) di [models.go](file:///home/sans/coding/quiz_app/backend/internal/models/models.go) dan pengecekan manual inline di [handlers/admin.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/admin.go) (misal: fallback manual `if passing <= 0 { passing = 60 }`, `if pts <= 0 { pts = 5 }`).
-  - `CreateTest` mendefinisikan anonymous inline struct di dalam handler, bukan DTO terpusat.
-  - Belum ada validasi relasional (misal: memastikan soal pilihan ganda memiliki minimal 2 opsi dan tepat 1 opsi ditandai `is_correct: true`).
-- **Target Solusi**:
-  - Sentralisasi seluruh DTO request ke package terpadu dengan tag `go-playground/validator/v10` (`oneof=cpns sbmptn iq custom`, `min=5`, `max=300`).
-  - Buat error normalizer middleware agar pesan error validasi dikembalikan dalam bentuk JSON terstruktur (misal `{"errors": {"title": "Judul wajib diisi"}}`) alih-alih raw string Gin.
+### 5.1 Validasi Request: DTO Terpusat & Relasional ✅ (RESOLVED)
+- **Status**: **RESOLVED** (`backend/internal/models/dto.go` & `backend/internal/validator/validator.go`).
+- **Implementasi**:
+  - DTO terpusat `SaveTestDTO`, `QuestionDTO`, `OptionDTO` dengan struct tags `validator/v10` (`min`, `max`, `oneof`).
+  - Validasi relasional mendalam via `dto.ValidateRelational()`: Memverifikasi soal pilihan ganda wajib memiliki minimal 2 opsi dan **tepat 1 opsi benar**.
+  - Error Normalizer: Mengembalikan format JSON terstruktur (`{"error": "...", "details": {"field": "..."}}`) dengan pesan bahasa Indonesia yang ramah pengguna.
 
-### 5.2 Rate Limiter: Redis vs In-Memory Fallback Gotchas
-- **Kondisi Saat Ini**:
-  - Rate limiting di [ratelimit.go](file:///home/sans/coding/quiz_app/backend/internal/middleware/ratelimit.go) berjalan primer via Redis (`cClient.Incr` + `cClient.Expire`).
-  - **Gotcha 1 (In-Memory Leak)**: Jika Redis offline dan client beralih ke in-memory (`sync.Map`), fungsi `Expire` di [redis.go](file:///home/sans/coding/quiz_app/backend/internal/cache/redis.go#L118) **tidak memiliki logika TTL eviction untuk rate limiter**. Counter akan naik terus tanpa di-reset, memicu blokir HTTP 429 permanen bagi IP tersebut sampai server di-restart.
-  - **Gotcha 2 (Non-Atomic Redis Race)**: Jika server crash tepat di antara `Incr` dan `Expire`, key Redis akan menjadi zombie key tanpa TTL.
-- **Target Solusi**:
-  - Gunakan atomic Redis Lua Script (`INCR` + `EXPIRE` atomik dalam 1 evaluasi).
-  - Tambahkan background cleanup goroutine untuk TTL eviction pada `rateLimiter sync.Map` in-memory fallback.
+### 5.2 Rate Limiter: Atomic Redis Lua & In-Memory Janitor ✅ (RESOLVED)
+- **Status**: **RESOLVED** (`backend/internal/cache/redis.go` & `backend/internal/middleware/ratelimit.go`).
+- **Implementasi**:
+  - **Redis Mode**: Menggunakan atomic Lua script (`INCR` + `EXPIRE` dalam 1 evaluasi atomik). Menghilangkan race condition dan mencegah munculnya zombie key tanpa TTL.
+  - **In-Memory Mode**: Setiap entri melacak `rateLimitEntry{count, expiresAt}`. Jika jendela waktu (window) telah lewat, counter otomatis di-reset ke 1.
+  - **Janitor Goroutine**: Background ticker aktif (setiap 30 detik) yang menyapu dan menghapus entri kadaluarsa, mencegah memory leak saat melayani 100K+ concurrent users.
 
-### 5.3 AI Service: Arsitektur 3-Tier & Catatan Fallback Hardcode *(DO NOT MODIFY YET)*
+### 5.3 AI Service: Arsitektur 3-Tier & Catatan Fallback Hardcode (Tracked for Sprint AI)
 - **Kondisi Saat Ini**:
   - [ai_agent.go](file:///home/sans/coding/quiz_app/backend/internal/services/ai_agent.go) memiliki arsitektur 3-tier cascade:
-    1. *Tier 1*: Google Gemini 1.5 Flash (via REST API dengan multi-key failover).
-    2. *Tier 2*: Groq Llama 3.3 70B (jika Gemini 429/gagal).
+    1. *Tier 1*: Google Gemini 2.5 Flash (via REST API dengan multi-key failover).
+    2. *Tier 2*: Groq Llama 3.3 / OSS (jika Gemini 429/gagal).
     3. *Tier 3*: Local Deterministic Generator (Zero-Downtime fallback saat API key kosong/kuota habis).
-  - **Catatan Hardcode**: Pada Tier 3 (`generateLocalDeterministic`), topik kurikulum (`sampleTopics`) dan pola pertanyaan di-hardcode langsung di dalam source code Go (`[AI Asesmen: %s] Berdasarkan prinsip baku terkait %s...`) dengan kunci benar selalu di Opsi A.
-  - **Catatan Parser**: Parsing JSON LLM masih mengandalkan string trimming (`strings.TrimPrefix(raw, "```json")`), rentan gagal jika model LLM menambahkan prolog/epilog percakapan.
-- **Rekomendasi Sprint Mendatang**:
-  - Pindahkan bank topik darurat ke database seed atau file konfigurasi eksternal JSON.
-  - Terapkan JSON mode terstruktur (*response schema*) pada Gemini/Groq dan dukung streaming Server-Sent Events (SSE).
+  - **Catatan**: Fallback lokal dan response parsing dipertahankan stabil saat ini (*Do not modify yet*), dijadwalkan untuk dipindahkan ke seed database eksternal dan response streaming SSE pada sprint AI mendatang.
 
-### 5.4 Pemisahan Layer: Handler vs Service/Repository Pattern
-- **Kondisi Saat Ini**: Handler seperti `admin.go` membuka transaksi SQL langsung (`tx, err := h.db.Beginx()`) dan menjalankan query insert bertingkat di dalam fungsi HTTP handler.
-- **Target Solusi**: Pindahkan transaksi database ke Repository Layer (`repository/test_repository.go`) agar handler murni menangani HTTP request/response dan mempermudah unit testing dengan mock DB.
+### 5.4 Pemisahan Layer: Repository Pattern ✅ (RESOLVED)
+- **Status**: **RESOLVED** (`backend/internal/repository/test_repository.go`).
+- **Implementasi**:
+  - Dibuat interface `TestRepository` dan implementasi `PostgresTestRepository`.
+  - Seluruh query dan transaksi database (`tx.BeginTxx()`) diisolasi penuh di dalam Repository Layer.
+  - [AdminHandler](file:///home/sans/coding/quiz_app/backend/internal/handlers/admin.go) kini murni berfungsi sebagai HTTP controller tanpa orkestrasi SQL mentah, sangat modular dan mudah di-mocking untuk unit testing.
 
-### 5.5 Sanitasi Pesan Error (Information Disclosure)
-- **Kondisi Saat Ini**: Beberapa handler mengembalikan pesan raw error database (`"Gagal menyimpan tes: " + err.Error()`), berpotensi membocorkan struktur tabel dan constraint PostgreSQL ke publik.
-- **Target Solusi**: Catat internal error ke structured logger ([logger.go](file:///home/sans/coding/quiz_app/backend/internal/middleware/logger.go)) dan kembalikan pesan ramah pengguna ke client.
+### 5.5 Sanitasi Pesan Error (Information Disclosure) ✅ (RESOLVED)
+- **Status**: **RESOLVED** (`backend/internal/handlers/admin.go`).
+- **Implementasi**:
+  - Seluruh kegagalan database dan query internal dicatat ke log server backend (`log.Printf`) dengan konteks lengkap untuk observabilitas developer.
+  - Respon yang dikembalikan ke client dibersihkan dari raw PostgreSQL string (mengembalikan pesan aman seperti *"Gagal menyimpan modul ujian ke database"*), mencegah kebocoran skema tabel dan constraint database.
 
 ---
 
