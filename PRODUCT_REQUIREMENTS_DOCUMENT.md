@@ -37,8 +37,9 @@
 * **Tujuan**: Menghasilkan *cash flow* harian yang dapat diprediksi dengan rasio profit tinggi terhadap biaya operasional server.
 * **Kebutuhan Kunci**:
   - **Payment Gateway Lokal (QRIS / E-Wallet)**: Pembayaran instan tanpa kartu kredit via Midtrans / Xendit.
+  - **Admin Subscription Override & Management**: Kemampuan admin memberikan, mengubah status, memperpanjang, atau mencabut langganan user secara manual (untuk pembayaran transfer bank offline, voucher khusus, deal institusi, atau kompensasi gangguan).
   - **Dashboard Monetisasi & Payout**: Rekapitulasi omzet kotor, fee platform, dan manajemen penarikan saldo kreator.
-  - **Proteksi Akses (Paywall Enforcement)**: Penguncian otomatis modul kuis berbayar sampai pembayaran terverifikasi webhook.
+  - **Proteksi Akses (Paywall Enforcement)**: Penguncian otomatis modul kuis berbayar sampai pembayaran terverifikasi webhook atau di-override admin.
 
 ---
 
@@ -95,3 +96,4 @@
 - **AC-02 (Integritas Ujian)**: Kunci jawaban dan teks pembahasan tidak boleh bocor pada network inspector browser sebelum status ujian selesai.
 - **AC-03 (Auto-Submit Saat Waktu Habis)**: Countdown timer mencapai `00:00:00` otomatis mengunci pengerjaan dan mengirim lembar jawaban ke server.
 - **AC-04 (Keandalan Skalabilitas)**: Single VPS 2GB mampu melayani lonjakan 1.000 RPS saat Tryout Akbar serentak tanpa *service crash*.
+- **AC-05 (Admin Manual Subscription Override)**: Admin dapat secara manual mengaktifkan, memperpanjang, atau mencabut langganan pengguna dengan alasan audit yang tercatat di database, dan hak akses tes langsung aktif seketika tanpa melalui payment gateway.

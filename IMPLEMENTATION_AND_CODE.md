@@ -162,17 +162,49 @@ Prioritas pengembangan fitur baru disusun berdasarkan rasio keuntungan bisnis (*
 
 ### 🚀 FASE P1: Revenue & Virality (Fokus Sprint 1 - 2)
 
-#### 1. Payment Gateway QRIS Instan (Midtrans / Xendit Webhook)
-* **Target Bisnis**: Monetisasi langsung per modul tryout (Rp 10.000–Rp 25.000) dan Season Pass.
-* **Catatan Teknis Backend (BE)**:
-  - Buat tabel `orders` / `payments` (`id`, `user_id/session_id`, `test_id`, `amount`, `payment_method`, `status: pending/settled/expired`, `payment_url/qr_code`, `created_at`, `settled_at`).
-  - Endpoint `POST /api/payments/create-invoice`: Generate QRIS via Midtrans Snap / Xendit Invoice.
-  - Endpoint `POST /api/payments/webhook`: Webhook listener idempoten dengan verifikasi signature cryptographic HMAC-SHA512. Mengubah status order menjadi `settled` dan meng-unlock akses tes.
-  - Middleware `RequireTestAccess()`: Mengecek apakah modul tes bersifat gratis (`price_idr == 0`) atau sudah dibayar sebelum mengizinkan `POST /api/tests/:testId/start`.
+#### 1. Multi-Endpoint Payment Gateway (Midtrans / Xendit) & Admin Subscription Manual Override
+* **Target Bisnis**: Monetisasi langsung per modul tryout (Rp 10.000–Rp 25.000), Season Pass (Rp 49.000–Rp 99.000), serta fleksibilitas admin mengelola langganan secara manual (transaksi offline, B2B deal, atau kompensasi).
+* **Arsitektur Multi-Endpoint Backend (BE)**:
+  1. **User / Public Endpoints**:
+     - `POST /api/payments/create-invoice`: Generate QRIS dynamic / Snap token via Midtrans atau Xendit API. Request payload: `{ test_id?: string, plan_type: "per_test" | "season_pass", user_email: string }`.
+     - `GET /api/payments/status/:orderId`: Endpoint polling ringan bagi frontend untuk memantau status settlement tanpa perlu webhooks di localhost.
+     - `POST /api/payments/webhook`: Webhook listener idempoten dengan verifikasi signature cryptographic (HMAC-SHA512). Mengubah status order menjadi `settled` dan otomatis menerbitkan entri akses di database.
+  2. **Admin Manual Management Endpoints (Bypass / Manual Override)**:
+     - `POST /api/admin/subscriptions/manual-grant`: Memberikan akses/subscription secara manual kepada user (untuk pembayaran transfer bank manual/offline, voucher khusus, atau deal institusi).
+       - Payload: `{ user_identifier: string, test_id?: string, plan_type: "per_test" | "season_pass" | "lifetime", valid_days: number, reason_notes: string }`.
+     - `PUT /api/admin/subscriptions/:id/status`: Mengubah status subscription (misal: `active`, `suspended`, `expired`) atau memperpanjang masa aktif (`extend_days`).
+     - `DELETE /api/admin/subscriptions/:id/revoke`: Mencabut akses secara manual jika terjadi refund atau penyalahgunaan.
+     - `GET /api/admin/subscriptions`: Menampilkan seluruh daftar subscription dengan filter status (`active`, `expired`), sumber aktivasi (`gateway_midtrans`, `gateway_xendit`, `admin_manual`), dan pencarian user.
+  3. **Middleware Akses Tes**:
+     - `RequireTestAccess()`: Mengecek apakah modul tes gratis (`price_idr == 0`) atau user memiliki subscription aktif (`valid_until > NOW()`) sebelum mengizinkan `POST /api/tests/:testId/start`.
+  4. **Skema Database**:
+     - Tabel `subscriptions` / `orders`:
+       ```sql
+       CREATE TABLE subscriptions (
+           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+           user_identifier VARCHAR(255) NOT NULL, -- email atau session UUID
+           test_id VARCHAR(64) REFERENCES tests(id) ON DELETE CASCADE, -- NULL jika season pass
+           tier VARCHAR(32) NOT NULL DEFAULT 'per_test', -- 'per_test', 'season_pass', 'institution'
+           status VARCHAR(32) NOT NULL DEFAULT 'active', -- 'active', 'expired', 'revoked'
+           source VARCHAR(32) NOT NULL DEFAULT 'gateway', -- 'gateway_midtrans', 'gateway_xendit', 'admin_manual'
+           admin_notes TEXT, -- alasan grant manual jika via admin
+           amount_paid NUMERIC(12,2) DEFAULT 0,
+           valid_until TIMESTAMPTZ,
+           created_at TIMESTAMPTZ DEFAULT NOW(),
+           updated_at TIMESTAMPTZ DEFAULT NOW()
+       );
+       CREATE INDEX idx_subscriptions_lookup ON subscriptions(user_identifier, test_id, status);
+       ```
 * **Catatan Teknis Frontend (FE)**:
-  - Komponen `PaymentModal.tsx`: Menampilkan dynamic QR Code QRIS, total harga Rupiah, dan countdown kadaluarsa pembayaran 15 menit.
-  - Gunakan TanStack Query polling (interval 3s) atau Server-Sent Event untuk mendengarkan perubahan status pembayaran hingga `settled`.
-  - Tampilkan badge harga yang jelas pada kartu kuis di [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) (`Gratis` vs `Rp 15.000`).
+  1. **Sisi Peserta (User Interface)**:
+     - Komponen `PaymentModal.tsx`: Menampilkan dynamic QR Code QRIS, total harga Rupiah, dan countdown kadaluarsa pembayaran 15 menit.
+     - Gunakan TanStack Query polling (interval 3 detik ke `GET /api/payments/status/:orderId`) untuk mendeteksi perubahan status pembayaran secara instan dan mengarahkan peserta langsung ke sesi ujian.
+     - Tampilkan badge harga yang jelas pada kartu kuis di [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) (`Gratis` vs `Rp 15.000` / `Premium`).
+  2. **Sisi Admin (Admin Subscription Dashboard)**:
+     - Komponen `AdminSubscriptionManager.tsx` pada [AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx):
+       - Form modal **"Grant Akses Manual"**: Input email peserta, pilih modul tes / Season Pass, masukkan jumlah hari aktif, dan kolom wajib *Catatan Alasan Audit* (contoh: "Transfer Manual BCA Bukti #8821", "Akun Bimbel Mitra").
+       - Tabel daftar pengguna berlangganan dengan badge warna sumber (`Gateway (Hijau)` vs `Manual Admin (Ungu)`).
+       - Tombol aksi cepat: *Perpanjang (+30 Hari)* dan *Revoke Akses* dengan konfirmasi modal.
 
 #### 2. Generator Sertifikat & Report Card PDF
 * **Target Bisnis**: Bukti kelulusan resmi & materi pamer media sosial peserta (*viral growth loop* gratis).
