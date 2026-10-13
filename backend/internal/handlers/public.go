@@ -225,31 +225,16 @@ func (h *PublicHandler) SubmitAnswer(c *gin.Context) {
 	}
 
 	if questionID == "" {
-		questionID = body.QuestionID
+		questionID = body.GetQuestionID()
 	}
 	if questionID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "question_id wajib disertakan"})
 		return
 	}
 
-	var selectedOption *string
-	if body.OptionID != nil {
-		selectedOption = body.OptionID
-	} else if body.SelectedOptionID != nil {
-		selectedOption = body.SelectedOptionID
-	}
-
-	var answerText *string
-	if body.AnswerText != nil {
-		answerText = body.AnswerText
-	} else if body.AnswerTextAlt != nil {
-		answerText = body.AnswerTextAlt
-	}
-
-	isFlagged := false
-	if body.IsFlagged != nil {
-		isFlagged = *body.IsFlagged
-	}
+	selectedOption := body.GetSelectedOption()
+	answerText := body.GetAnswerText()
+	isFlagged := body.GetIsFlagged()
 
 	savedAt, err := h.examRepo.SaveSubmission(c.Request.Context(), sessionID, questionID, selectedOption, answerText, isFlagged)
 	if err != nil {

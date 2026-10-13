@@ -203,6 +203,14 @@ func TestTestTakingFlow(t *testing.T) {
 		t.Fatalf("Expected result.id")
 	}
 
+	if len(qResp.Questions) > 0 {
+		firstQ := qResp.Questions[0]
+		sub, hasSub := result.Submissions[firstQ.ID]
+		if !hasSub || sub.SelectedOptionID == nil || *sub.SelectedOptionID != firstQ.Options[0].ID {
+			t.Errorf("Expected submission to retain selected_option_id, got %+v", sub)
+		}
+	}
+
 	// 6. Get Result
 	reqRes, _ := http.NewRequest("GET", "/api/results/"+result.ID, nil)
 	wRes := httptest.NewRecorder()

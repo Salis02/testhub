@@ -196,13 +196,25 @@ func (r *PostgresExamRepository) SaveSubmission(ctx context.Context, sessionID s
 	var isCorrect *bool
 	var score *float64
 	if optionID != nil && *optionID != "" {
-		var opt models.QuestionOption
-		err := r.db.GetContext(ctx, &opt, "SELECT is_correct FROM question_options WHERE id = $1", *optionID)
+		var opt struct {
+			IsCorrect *bool `db:"is_correct"`
+			Points    int   `db:"points"`
+		}
+		query := `
+			SELECT qo.is_correct, tq.points 
+			FROM question_options qo
+			JOIN test_questions tq ON tq.id = qo.question_id
+			WHERE qo.id = $1
+		`
+		err := r.db.GetContext(ctx, &opt, query, *optionID)
 		if err == nil && opt.IsCorrect != nil {
 			isCorrect = opt.IsCorrect
+			pts := float64(opt.Points)
+			if pts <= 0 {
+				pts = 5.0
+			}
 			if *opt.IsCorrect {
-				sc := 5.0
-				score = &sc
+				score = &pts
 			} else {
 				sc := 0.0
 				score = &sc

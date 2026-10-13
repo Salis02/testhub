@@ -46,8 +46,12 @@ export const sessionsApi = {
       method: 'POST',
       body: JSON.stringify({
         question_id: questionId,
+        questionId: questionId,
+        option_id: payload.optionId,
         optionId: payload.optionId,
+        answer_text: payload.answerText,
         answerText: payload.answerText,
+        is_flagged: payload.isFlagged,
         isFlagged: payload.isFlagged,
       }),
     })

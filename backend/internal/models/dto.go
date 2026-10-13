@@ -162,11 +162,67 @@ type StartSessionDTO struct {
 
 // SubmitAnswerDTO represents sanitized payload when examinee submits an answer
 type SubmitAnswerDTO struct {
-	QuestionID       string  `json:"question_id"`
-	OptionID         *string `json:"option_id"`
-	SelectedOptionID *string `json:"selected_option_id"`
-	AnswerText       *string `json:"answer_text"`
-	AnswerTextAlt    *string `json:"answer"`
-	IsFlagged        *bool   `json:"is_flagged"`
+	QuestionID          string  `json:"question_id"`
+	QuestionIDCamel     string  `json:"questionId"`
+	OptionID            *string `json:"option_id"`
+	OptionIDCamel       *string `json:"optionId"`
+	SelectedOptionID    *string `json:"selected_option_id"`
+	SelectedOptionCamel *string `json:"selectedOptionId"`
+	AnswerText          *string `json:"answer_text"`
+	AnswerTextCamel     *string `json:"answerText"`
+	AnswerTextAlt       *string `json:"answer"`
+	IsFlagged           *bool   `json:"is_flagged"`
+	IsFlaggedCamel      *bool   `json:"isFlagged"`
 }
+
+// GetQuestionID extracts question ID regardless of naming convention
+func (dto *SubmitAnswerDTO) GetQuestionID() string {
+	if dto.QuestionID != "" {
+		return dto.QuestionID
+	}
+	return dto.QuestionIDCamel
+}
+
+// GetSelectedOption extracts option ID regardless of camelCase or snake_case
+func (dto *SubmitAnswerDTO) GetSelectedOption() *string {
+	if dto.OptionIDCamel != nil && *dto.OptionIDCamel != "" {
+		return dto.OptionIDCamel
+	}
+	if dto.OptionID != nil && *dto.OptionID != "" {
+		return dto.OptionID
+	}
+	if dto.SelectedOptionCamel != nil && *dto.SelectedOptionCamel != "" {
+		return dto.SelectedOptionCamel
+	}
+	if dto.SelectedOptionID != nil && *dto.SelectedOptionID != "" {
+		return dto.SelectedOptionID
+	}
+	return nil
+}
+
+// GetAnswerText extracts text answer regardless of naming convention
+func (dto *SubmitAnswerDTO) GetAnswerText() *string {
+	if dto.AnswerTextCamel != nil && *dto.AnswerTextCamel != "" {
+		return dto.AnswerTextCamel
+	}
+	if dto.AnswerText != nil && *dto.AnswerText != "" {
+		return dto.AnswerText
+	}
+	if dto.AnswerTextAlt != nil && *dto.AnswerTextAlt != "" {
+		return dto.AnswerTextAlt
+	}
+	return nil
+}
+
+// GetIsFlagged extracts flagged status
+func (dto *SubmitAnswerDTO) GetIsFlagged() bool {
+	if dto.IsFlagged != nil {
+		return *dto.IsFlagged
+	}
+	if dto.IsFlaggedCamel != nil {
+		return *dto.IsFlaggedCamel
+	}
+	return false
+}
+
 
