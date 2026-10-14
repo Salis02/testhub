@@ -93,6 +93,11 @@ export const TestPage: React.FC = () => {
     }
   }, [loading, session, decrementTimer, handleAutoFinish])
 
+  // Auto-scroll ke paling atas pertanyaan saat berpindah butir soal (UX optimal)
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [currentIndex])
+
   const handleFinalSubmit = async () => {
     try {
       const resultId = await finishSession()

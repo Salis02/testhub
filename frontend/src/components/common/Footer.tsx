@@ -1,8 +1,15 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { Shield, Zap, CheckCircle2, Cpu } from 'lucide-react'
 
 export const Footer: React.FC = () => {
+  const location = useLocation()
+
+  // Sembunyikan footer di halaman ujian aktif untuk eliminasi distraksi visual
+  if (location.pathname.startsWith('/test/')) {
+    return null
+  }
+
   return (
     <footer className="mt-auto border-t border-borderline bg-canvas text-ink-muted text-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

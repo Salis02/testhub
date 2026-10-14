@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle } from 'lucide-react'
 import { useTestSessionStore } from '@/stores/useTestSessionStore'
 
@@ -23,13 +24,23 @@ export const FinishConfirmModal: React.FC<FinishConfirmModalProps> = ({
 }) => {
   const secondsLeft = useTestSessionStore((s) => s.secondsLeft)
 
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (!isOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const unansweredCount = totalQuestions - answeredCount
   const hasUnanswered = unansweredCount > 0
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/50 dark:bg-black/65 backdrop-blur-md animate-in fade-in duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-surface border border-borderline rounded-lg max-w-md w-full p-6 shadow-2xl space-y-5">
         <div className="flex items-center space-x-3">
           <div
@@ -101,6 +112,7 @@ export const FinishConfirmModal: React.FC<FinishConfirmModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import QRCode from 'qrcode'
 import { paymentsApi } from '@/services/payments.api'
@@ -120,6 +121,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     return () => clearInterval(interval)
   }, [invoice, orderStatus])
 
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (!isOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const formatRupiah = (val: number) => {
@@ -189,9 +200,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
   const isSettled = orderStatus?.status === 'settled'
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/50 dark:bg-black/65 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-surface border border-borderline rounded-lg max-w-lg w-full p-6 sm:p-7 shadow-2xl space-y-6 my-8 transition-all">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-surface border border-borderline rounded-lg max-w-lg w-full p-6 sm:p-7 shadow-2xl space-y-6 my-auto transition-all">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-borderline pb-4">
           <div className="flex items-center space-x-2.5">
@@ -397,6 +408,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

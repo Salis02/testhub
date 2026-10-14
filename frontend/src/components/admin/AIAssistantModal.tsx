@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Question, TestCategory, DifficultyLevel } from '@/types'
 import { api } from '@/services/api'
 import {
@@ -57,6 +58,16 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   const progressTimerRef = useRef<number | null>(null)
   const elapsedTimerRef = useRef<number | null>(null)
 
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (!isOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [isOpen])
+
   // Cleanup on unmount or modal close
   useEffect(() => {
     return () => {
@@ -73,8 +84,6 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
     progressTimerRef.current = null
     elapsedTimerRef.current = null
   }
-
-  if (!isOpen) return null
 
   const handleGenerate = async () => {
     setErrorMsg(null)
@@ -170,9 +179,11 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
     onClose()
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/50 dark:bg-black/65 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-surface border border-borderline rounded-lg max-w-3xl w-full p-6 sm:p-7 shadow-2xl space-y-6 my-8 max-h-[90vh] overflow-y-auto">
+  if (!isOpen) return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-surface border border-borderline rounded-lg max-w-3xl w-full p-6 sm:p-7 shadow-2xl space-y-6 my-auto max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-borderline pb-4">
           <div className="flex items-center space-x-2.5">
@@ -493,6 +504,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

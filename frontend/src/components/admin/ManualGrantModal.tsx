@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ManualGrantSchema, ManualGrantFormValues } from '@/schemas/subscription.schema'
@@ -49,6 +50,16 @@ export const ManualGrantModal: React.FC<ManualGrantModalProps> = ({
     }
   }, [isOpen, reset])
 
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (!isOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const handleFormSubmit = async (values: ManualGrantFormValues) => {
@@ -56,9 +67,9 @@ export const ManualGrantModal: React.FC<ManualGrantModalProps> = ({
     onClose()
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/50 dark:bg-black/65 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-surface border border-borderline rounded-lg max-w-lg w-full p-6 shadow-2xl space-y-6 my-8">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-surface border border-borderline rounded-lg max-w-lg w-full p-6 shadow-2xl space-y-6 my-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-borderline pb-4">
           <div className="flex items-center space-x-2.5">
@@ -235,6 +246,7 @@ export const ManualGrantModal: React.FC<ManualGrantModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

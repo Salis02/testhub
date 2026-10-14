@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useForm, FormProvider, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Test, Question } from '@/types'
@@ -67,7 +68,15 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
     name: 'questions',
   })
 
-  if (!isOpen) return null
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (!isOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [isOpen])
 
   const handleAddQuestion = () => {
     append({
@@ -128,9 +137,11 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/50 dark:bg-black/65 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-surface border border-borderline rounded-lg max-w-3xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-8 max-h-[90vh] overflow-y-auto">
+  if (!isOpen) return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-surface border border-borderline rounded-lg max-w-3xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-auto max-h-[90vh] overflow-y-auto">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-borderline pb-4">
           <div>
@@ -298,6 +309,7 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
           </form>
         </FormProvider>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

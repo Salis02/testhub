@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle, HelpCircle, Info, ShieldAlert, X } from 'lucide-react'
 
 export type ConfirmVariant = 'danger' | 'warning' | 'info' | 'primary'
@@ -105,60 +106,72 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const { options } = dialogState
   const variantStyles = getVariantStyles(options.variant)
 
+  // Prevent background scrolling when confirm dialog is open
+  useEffect(() => {
+    if (!dialogState.isOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [dialogState.isOpen])
+
   return (
     <ConfirmContext.Provider value={{ confirm }}>
       {children}
 
-      {dialogState.isOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-ink/50 dark:bg-black/65 backdrop-blur-md animate-in fade-in duration-200"
-        >
+      {dialogState.isOpen &&
+        createPortal(
           <div
-            className={`w-full max-w-md rounded-xl bg-surface border ${variantStyles.borderClass} shadow-2xl p-6 space-y-4 text-ink animate-in zoom-in-95 duration-200`}
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
           >
-            <div className="flex items-start space-x-3.5">
-              <div className="p-2 rounded-lg bg-canvas border border-borderline shrink-0">
-                {variantStyles.icon}
+            <div
+              className={`w-full max-w-md rounded-xl bg-surface border ${variantStyles.borderClass} shadow-2xl p-6 space-y-4 text-ink animate-in zoom-in-95 duration-200`}
+            >
+              <div className="flex items-start space-x-3.5">
+                <div className="p-2 rounded-lg bg-canvas border border-borderline shrink-0">
+                  {variantStyles.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-semibold text-ink leading-tight">
+                    {options.title}
+                  </h3>
+                  <p className="text-xs text-ink-muted mt-2 leading-relaxed">
+                    {options.message}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleClose(false)}
+                  className="text-ink-muted hover:text-ink p-1 rounded-md hover:bg-borderline/40 transition-colors"
+                  aria-label="Tutup dialog"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-base font-semibold text-ink leading-tight">
-                  {options.title}
-                </h3>
-                <p className="text-xs text-ink-muted mt-2 leading-relaxed">
-                  {options.message}
-                </p>
-              </div>
-              <button
-                onClick={() => handleClose(false)}
-                className="text-ink-muted hover:text-ink p-1 rounded-md hover:bg-borderline/40 transition-colors"
-                aria-label="Tutup dialog"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <div className="flex items-center justify-end space-x-2.5 pt-3 border-t border-borderline">
-              <button
-                type="button"
-                onClick={() => handleClose(false)}
-                className="px-4 py-2 rounded-md border border-borderline text-xs font-medium text-ink hover:bg-canvas transition-colors"
-              >
-                {options.cancelText || 'Batal'}
-              </button>
-              <button
-                ref={confirmButtonRef}
-                type="button"
-                onClick={() => handleClose(true)}
-                className={`px-4 py-2 rounded-md text-xs font-medium transition-colors ${variantStyles.buttonClass}`}
-              >
-                {options.confirmText || 'Lanjutkan'}
-              </button>
+              <div className="flex items-center justify-end space-x-2.5 pt-3 border-t border-borderline">
+                <button
+                  type="button"
+                  onClick={() => handleClose(false)}
+                  className="px-4 py-2 rounded-md border border-borderline text-xs font-medium text-ink hover:bg-canvas transition-colors"
+                >
+                  {options.cancelText || 'Batal'}
+                </button>
+                <button
+                  ref={confirmButtonRef}
+                  type="button"
+                  onClick={() => handleClose(true)}
+                  className={`px-4 py-2 rounded-md text-xs font-medium transition-colors ${variantStyles.buttonClass}`}
+                >
+                  {options.confirmText || 'Lanjutkan'}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </ConfirmContext.Provider>
   )
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import QRCode from 'qrcode'
 import { Award, ShieldCheck, Printer, Copy, Check, X, Loader2, ExternalLink } from 'lucide-react'
@@ -44,6 +45,16 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
     }
   }, [cert])
 
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (!isOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const handlePrint = () => {
@@ -59,9 +70,9 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
     setTimeout(() => setCopied(false), 2500)
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200 print:p-0 print:bg-white">
-      <div className="bg-surface border border-borderline rounded-lg max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-6 transition-all print:border-none print:shadow-none print:m-0 print:p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200 print:p-0 print:bg-white">
+      <div className="bg-surface border border-borderline rounded-lg max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-auto transition-all print:border-none print:shadow-none print:m-0 print:p-4">
         {/* Modal Controls (Hidden during print) */}
         <div className="flex items-center justify-between border-b border-borderline pb-4 print:hidden">
           <div className="flex items-center space-x-2.5">
@@ -209,6 +220,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

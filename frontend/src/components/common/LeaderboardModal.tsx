@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Trophy, Medal, Clock, Award, X, Loader2, UserCheck, Flame } from 'lucide-react'
 import { testsApi } from '@/services/tests.api'
@@ -21,6 +22,16 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
     queryFn: ({ signal }) => testsApi.getLeaderboard(testId, signal),
     enabled: isOpen && !!testId,
   })
+
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (!isOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -75,9 +86,9 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/50 dark:bg-black/65 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-surface border border-borderline rounded-lg max-w-xl w-full p-6 shadow-2xl space-y-5 my-8 transition-all">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-surface border border-borderline rounded-lg max-w-xl w-full p-6 shadow-2xl space-y-5 my-auto transition-all">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-borderline pb-4">
           <div className="flex items-center space-x-3">
@@ -129,11 +140,10 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
               {leaderboard.map((entry) => (
                 <div
                   key={entry.session_id}
-                  className={`pt-2.5 pb-2.5 px-3 rounded-md flex items-center justify-between transition-colors ${
-                    entry.rank === 1
+                  className={`pt-2.5 pb-2.5 px-3 rounded-md flex items-center justify-between transition-colors ${entry.rank === 1
                       ? 'bg-amber-500/5 border border-amber-500/20'
                       : 'hover:bg-surface-hover'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center space-x-3 min-w-0">
                     {getRankBadge(entry.rank)}
@@ -182,6 +192,8 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
+
 }

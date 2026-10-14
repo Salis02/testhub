@@ -9,6 +9,7 @@ export interface ToastItem {
   title: string
   description?: string
   duration?: number
+  isExiting?: boolean
 }
 
 interface ToastContextValue {
@@ -27,7 +28,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
   const dismiss = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
+    setToasts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, isExiting: true } : t))
+    )
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id))
+    }, 320)
   }, [])
 
   const addToast = useCallback(
@@ -78,42 +84,54 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) {
+  const [mounted, setMounted] = useState(false)
+
+  React.useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
+
   const getIconAndStyle = () => {
     switch (item.type) {
       case 'success':
         return {
           icon: <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />,
           border: 'border-emerald-500/30',
-          indicator: 'bg-emerald-500',
         }
       case 'error':
         return {
           icon: <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />,
           border: 'border-red-500/30',
-          indicator: 'bg-red-500',
         }
       case 'warning':
         return {
           icon: <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />,
           border: 'border-amber-500/30',
-          indicator: 'bg-amber-500',
         }
       case 'info':
       default:
         return {
           icon: <Info className="w-4 h-4 text-accent shrink-0" />,
           border: 'border-accent/30',
-          indicator: 'bg-accent',
         }
     }
   }
 
-  const { icon, border, indicator } = getIconAndStyle()
+  const { icon, border } = getIconAndStyle()
+
+  // Transition state calculations
+  const isVisible = mounted && !item.isExiting
 
   return (
     <div
       role="status"
-      className={`pointer-events-auto flex items-start space-x-3 p-3.5 rounded-lg bg-surface/95 backdrop-blur-md border ${border} shadow-xl shadow-ink/5 dark:shadow-black/20 text-ink animate-in slide-in-from-top-3 fade-in duration-200 transition-all`}
+      className={`pointer-events-auto flex items-start space-x-3 p-3.5 rounded-lg bg-surface/95 backdrop-blur-md border ${border} shadow-xl shadow-ink/5 dark:shadow-black/25 text-ink transition-all duration-300 ease-out transform ${
+        isVisible
+          ? 'opacity-100 translate-y-0 translate-x-0 scale-100'
+          : item.isExiting
+            ? 'opacity-0 translate-x-10 scale-95 pointer-events-none'
+            : 'opacity-0 -translate-y-3 scale-95'
+      }`}
     >
       <div className="pt-0.5">{icon}</div>
       <div className="flex-1 min-w-0 pr-2">

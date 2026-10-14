@@ -257,58 +257,64 @@ export const AdminPage: React.FC = () => {
       )}
 
       {/* Modals */}
-      <TestCreatorModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onSubmit={handleCreateTest}
-        onOpenAIAssistant={() => {
-          setAiContext('create')
-          setIsCreateModalOpen(false)
-          setIsAIModalOpen(true)
-        }}
-      />
+      {isCreateModalOpen && (
+        <TestCreatorModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onSubmit={handleCreateTest}
+          onOpenAIAssistant={() => {
+            setAiContext('create')
+            setIsCreateModalOpen(false)
+            setIsAIModalOpen(true)
+          }}
+        />
+      )}
 
-      <TestEditorModal
-        isOpen={!!editingTestId}
-        testId={editingTestId}
-        onClose={() => setEditingTestId(null)}
-        onUpdated={handleDataRefresh}
-        onOpenAIAssistant={() => {
-          setAiContext('edit')
-          setIsAIModalOpen(true)
-        }}
-        pendingAIQuestions={pendingAIQuestions}
-        onClearPendingAIQuestions={() => setPendingAIQuestions([])}
-      />
+      {!!editingTestId && (
+        <TestEditorModal
+          isOpen={!!editingTestId}
+          testId={editingTestId}
+          onClose={() => setEditingTestId(null)}
+          onUpdated={handleDataRefresh}
+          onOpenAIAssistant={() => {
+            setAiContext('edit')
+            setIsAIModalOpen(true)
+          }}
+          pendingAIQuestions={pendingAIQuestions}
+          onClearPendingAIQuestions={() => setPendingAIQuestions([])}
+        />
+      )}
 
-      <AIAssistantModal
-        isOpen={isAIModalOpen}
-        onClose={() => setIsAIModalOpen(false)}
-        onAppendQuestions={async (newQuestions) => {
-          if (aiContext === 'edit' && editingTestId) {
-            setPendingAIQuestions(newQuestions)
-            return
-          }
+      {isAIModalOpen && (
+        <AIAssistantModal
+          isOpen={isAIModalOpen}
+          onClose={() => setIsAIModalOpen(false)}
+          onAppendQuestions={async (newQuestions) => {
+            if (aiContext === 'edit' && editingTestId) {
+              setPendingAIQuestions(newQuestions)
+              return
+            }
 
-          // Auto-create test if generated from main overview
-          if (newQuestions.length > 0) {
-            await adminApi.createTest(
-              {
-                title: `Simulasi Otomatis AI: ${newQuestions[0].question_text.substring(0, 35)}...`,
-                description: 'Modul ujian hasil kurasi otomatis AI Agent sesuai batasan AI_AGENT_AND_SECURITY.md.',
-                category: 'custom',
-                duration_minutes: 15,
-                passing_score_percentage: 60,
-                total_questions: newQuestions.length,
-                published: true,
-              },
-              newQuestions
-            )
-            handleDataRefresh()
-            toast.success('Modul AI Ditambahkan', 'Modul ujian berbasis AI berhasil disimpan ke bank soal!')
-          }
-        }}
-      />
+            // Auto-create test if generated from main overview
+            if (newQuestions.length > 0) {
+              await adminApi.createTest(
+                {
+                  title: `Simulasi Otomatis AI: ${newQuestions[0].question_text.substring(0, 35)}...`,
+                  description: 'Modul ujian hasil kurasi otomatis AI Agent sesuai batasan AI_AGENT_AND_SECURITY.md.',
+                  category: 'custom',
+                  duration_minutes: 15,
+                  passing_score_percentage: 60,
+                  total_questions: newQuestions.length,
+                  published: true,
+                },
+                newQuestions
+              )
+              handleDataRefresh()
+              toast.success('Modul AI Ditambahkan', 'Modul ujian berbasis AI berhasil disimpan ke bank soal!')
+            }
+          }}
+        />
+      )}
 
       {/* Test Performance & Submissions Analytics Modal */}
       {analyticsTest && (

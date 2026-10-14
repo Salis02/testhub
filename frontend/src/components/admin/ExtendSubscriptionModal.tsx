@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ExtendSubscriptionSchema, ExtendSubscriptionFormValues } from '@/schemas/subscription.schema'
@@ -31,6 +32,16 @@ export const ExtendSubscriptionModal: React.FC<ExtendSubscriptionModalProps> = (
     },
   })
 
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (!isOpen || !subscription) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [isOpen, subscription])
+
   if (!isOpen || !subscription) return null
 
   const handleFormSubmit = async (values: ExtendSubscriptionFormValues) => {
@@ -39,9 +50,9 @@ export const ExtendSubscriptionModal: React.FC<ExtendSubscriptionModalProps> = (
     onClose()
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/50 dark:bg-black/65 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-surface border border-borderline rounded-lg max-w-md w-full p-6 shadow-2xl space-y-5 my-8">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-surface border border-borderline rounded-lg max-w-md w-full p-6 shadow-2xl space-y-5 my-auto">
         <div className="flex items-center justify-between border-b border-borderline pb-4">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-md bg-accent/10 border border-accent/20 flex items-center justify-center text-accent">
@@ -119,6 +130,7 @@ export const ExtendSubscriptionModal: React.FC<ExtendSubscriptionModalProps> = (
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
