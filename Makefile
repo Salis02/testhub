@@ -19,6 +19,8 @@ help:
 	@echo "  $(YELLOW)make setup$(NC)          - Setup environment, migrate and seed data"
 	@echo "  $(YELLOW)make dev$(NC)            - Run backend locally on port 8000"
 	@echo "  $(YELLOW)make dev-backend$(NC)    - Alias for make dev"
+	@echo "  $(YELLOW)make kill-backend$(NC)   - Kill any process occupying port 8000"
+	@echo "  $(YELLOW)make restart-backend$(NC)- Free port 8000 and run backend"
 	@echo "  $(YELLOW)make dev-frontend$(NC)   - Run React frontend (Vite/Bun) on port 5173"
 	@echo "  $(YELLOW)make migrate$(NC)        - Run database migrations"
 	@echo "  $(YELLOW)make seed$(NC)           - Seed initial admin and quiz catalog"
@@ -75,6 +77,13 @@ dev-frontend:
 dev:
 	@echo "$(GREEN)Starting TestHub API server on :8000...$(NC)"
 	cd backend && GOTOOLCHAIN=local go run cmd/server/main.go
+
+kill-backend:
+	@echo "$(YELLOW)Stopping any running backend server on port 8000...$(NC)"
+	@fuser -k 8000/tcp 2>/dev/null || true
+	@echo "$(GREEN)✓ Port 8000 is clean!$(NC)"
+
+restart-backend: kill-backend dev
 
 docker-dev:
 	docker compose up -d

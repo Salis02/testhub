@@ -22,6 +22,7 @@ import (
 func main() {
 	// Load .env if present
 	_ = godotenv.Load()
+	_ = godotenv.Load("backend/.env")
 	_ = godotenv.Load("../.env")
 
 	cfg := config.LoadConfig()

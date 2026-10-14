@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -187,8 +189,20 @@ func (h *PaymentHandler) HandleWebhook(c *gin.Context) {
 	log.Printf("[PaymentHandler.Webhook] Notification verified for OrderID: %s, Status: %s", verif.OrderID, verif.TransactionStatus)
 
 	if verif.TransactionStatus == "settled" {
+		// Handle Midtrans Dashboard test pings / simulator order probes
+		if strings.HasPrefix(verif.OrderID, "payment_notif_test") {
+			log.Printf("[PaymentHandler.Webhook] Midtrans dashboard test notification acknowledged for %s", verif.OrderID)
+			c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Test notification acknowledged"})
+			return
+		}
+
 		sub, err := h.subRepo.SettleOrder(c.Request.Context(), verif.OrderID, verif.PaymentReference)
 		if err != nil {
+			if errors.Is(err, repository.ErrOrderNotFound) {
+				log.Printf("[PaymentHandler.Webhook] Order %s not found in DB (likely test/external order). Acknowledged with 200.", verif.OrderID)
+				c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Order not tracked, notification acknowledged"})
+				return
+			}
 			log.Printf("[PaymentHandler.Webhook] Failed to settle order %s: %v", verif.OrderID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memproses settlement order"})
 			return
