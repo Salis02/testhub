@@ -113,117 +113,33 @@ curl -s http://localhost:8000/health
 
 ---
 
-## 5. Audit Technical Debt Backend & Catatan Arsitektur (Senior Review)
+## 5. Keputusan Arsitektur & Penyelesaian Technical Debt Backend
 
-Berdasarkan audit mendalam arsitektur Go backend, seluruh area perbaikan teknis non-AI telah diselesaikan dengan standar *Production-Grade & Long-term Maintainability*:
+Berdasarkan audit arsitektur backend Go, seluruh area teknis inti telah diselesaikan dengan standar *Production-Grade Clean Architecture*:
 
-### 5.1 Validasi Request: DTO Terpusat & Relasional ✅ (RESOLVED)
-- **Status**: **RESOLVED** (`backend/internal/models/dto.go` & `backend/internal/validator/validator.go`).
-- **Implementasi**:
-  - DTO terpusat `SaveTestDTO`, `QuestionDTO`, `OptionDTO` dengan struct tags `validator/v10` (`min`, `max`, `oneof`).
-  - Validasi relasional mendalam via `dto.ValidateRelational()`: Memverifikasi soal pilihan ganda wajib memiliki minimal 2 opsi dan **tepat 1 opsi benar**.
-  - Error Normalizer: Mengembalikan format JSON terstruktur (`{"error": "...", "details": {"field": "..."}}`) dengan pesan bahasa Indonesia yang ramah pengguna.
-
-### 5.2 Rate Limiter: Atomic Redis Lua & In-Memory Janitor ✅ (RESOLVED)
-- **Status**: **RESOLVED** (`backend/internal/cache/redis.go` & `backend/internal/middleware/ratelimit.go`).
-- **Implementasi**:
-  - **Redis Mode**: Menggunakan atomic Lua script (`INCR` + `EXPIRE` dalam 1 evaluasi atomik). Menghilangkan race condition dan mencegah munculnya zombie key tanpa TTL.
-  - **In-Memory Mode**: Setiap entri melacak `rateLimitEntry{count, expiresAt}`. Jika jendela waktu (window) telah lewat, counter otomatis di-reset ke 1.
-  - **Janitor Goroutine**: Background ticker aktif (setiap 30 detik) yang menyapu dan menghapus entri kadaluarsa, mencegah memory leak saat melayani 100K+ concurrent users.
-
-### 5.3 AI Service: Arsitektur 3-Tier & Catatan Fallback Hardcode (Tracked for Sprint AI)
-- **Kondisi Saat Ini**:
-  - [ai_agent.go](file:///home/sans/coding/quiz_app/backend/internal/services/ai_agent.go) memiliki arsitektur 3-tier cascade:
-    1. *Tier 1*: Google Gemini 2.5 Flash (via REST API dengan multi-key failover).
-    2. *Tier 2*: Groq Llama 3.3 / OSS (jika Gemini 429/gagal).
-    3. *Tier 3*: Local Deterministic Generator (Zero-Downtime fallback saat API key kosong/kuota habis).
-  - **Catatan**: Fallback lokal dan response parsing dipertahankan stabil saat ini (*Do not modify yet*), dijadwalkan untuk dipindahkan ke seed database eksternal dan response streaming SSE pada sprint AI mendatang.
-
-### 5.4 Pemisahan Layer: Repository Pattern ✅ (RESOLVED)
-- **Status**: **RESOLVED** (`backend/internal/repository/test_repository.go`, `exam_repository.go`, `subscription_repository.go`).
-- **Implementasi**:
-  - Dibuat interface repository terisolasi:
-    1. `TestRepository` & `PostgresTestRepository`: Seluruh transaksi create/update test dan analitik admin.
-    2. `ExamRepository` & `PostgresExamRepository`: Mengisolasi seluruh persistensi sesi ujian (`CreateSession`), sanitasi kunci jawaban (`GetSessionQuestions`), upsert jawaban (`SaveSubmission`), auto-grading atomik (`FinishExamTx`), leaderboard (`GetLeaderboard`), dan sertifikat (`GetCertificate`).
-    3. `SubscriptionRepository` & `PostgresSubscriptionRepository`: Mengisolasi akses paywall, pembuatan invoice order, settlement webhook, dan manual grant admin.
-  - [AdminHandler](file:///home/sans/coding/quiz_app/backend/internal/handlers/admin.go) dan [PublicHandler](file:///home/sans/coding/quiz_app/backend/internal/handlers/public.go) kini murni berfungsi sebagai HTTP controller **tanpa satu baris pun raw SQL**. Pointer `db *database.DB` telah sepenuhnya dihapus dari controller layer.
-
-### 5.5 Sanitasi Pesan Error (Information Disclosure) ✅ (RESOLVED)
-- **Status**: **RESOLVED** (`backend/internal/handlers/admin.go`, `public.go`, `payment.go`).
-- **Implementasi**:
-  - Seluruh kegagalan database dan query internal dicatat ke log server backend (`log.Printf`) dengan konteks lengkap untuk observabilitas developer.
-  - Respon yang dikembalikan ke client dibersihkan dari seluruh raw PostgreSQL string (mengembalikan pesan aman seperti *"Gagal memuat daftar modul ujian"*, *"Gagal memulai sesi ujian baru"*), mencegah kebocoran skema tabel dan constraint database.
+1. **Validasi Request Terpusat & Relasional** (`internal/models/dto.go`, `internal/validator/validator.go`): Validasi DTO struct tags `validator/v10` dan relasional (memverifikasi soal pilihan ganda wajib memiliki minimal 2 opsi dan tepat 1 kunci jawaban benar).
+2. **Rate Limiting Resilien** (`internal/cache/redis.go`, `internal/middleware/ratelimit.go`): Script Lua atomik (`INCR` + `EXPIRE`) di Redis dan in-memory fallback dengan janitor goroutine (30s) untuk mencegah memory leak.
+3. **AI Service 3-Tier Cascade** (`internal/services/ai_agent.go`): Gemini 2.5 Flash -> Groq Llama 3.3 -> Local Deterministic Fallback. Diisolasi dengan `context.Context` abort timeout.
+4. **Isolasi Repository Pattern** (`internal/repository/`): Seluruh query database terisolasi di `TestRepository`, `ExamRepository`, dan `SubscriptionRepository`. Handler controller (`admin.go`, `public.go`, `payment.go`) bersih dari raw SQL string.
+5. **Sanitasi Error (Anti Information Disclosure)**: Raw error database dicatat di log server backend (`log.Printf`), respon ke user JSON selalu menggunakan pesan ramah pengguna.
 
 ---
 
-## 6. Roadmap Fitur Berbasis ROI & Catatan Teknis untuk Tim FE & BE
+## 6. Real Progress Fitur Backend & Panduan Implementasi Frontend (Sprint P1–P3)
 
-Prioritas pengembangan fitur baru disusun berdasarkan rasio keuntungan bisnis (*high profit*) terhadap kompleksitas teknis (lihat [PRODUCT_REQUIREMENTS_DOCUMENT.md](file:///home/sans/coding/quiz_app/PRODUCT_REQUIREMENTS_DOCUMENT.md)):
+### 🚀 FASE P1: Revenue & Virality [STATUS BACKEND: 100% SELESAI ✅]
 
----
+| Fitur | Status Backend (`routes.go`) | Kebutuhan Implementasi Frontend (FE) |
+|---|---|---|
+| **Multi-Endpoint Payment (QRIS)** | `POST /api/payments/create-invoice`<br>`GET /api/payments/status/:orderId`<br>`POST /api/payments/webhook` | Komponen `PaymentModal.tsx` dengan QRIS dynamic, countdown 15m, polling TanStack Query (`refetchInterval: 3000`), dan badge harga di [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx). |
+| **Paywall Enforcement** | `POST /api/tests/:testId/start` (Return `HTTP 402 Payment Required` jika tes berbayar) | Interceptor di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) untuk membuka modal pembayaran saat menerima respon `402`. |
+| **Admin Manual Subscription Override** | `GET /api/admin/subscriptions`<br>`POST /api/admin/subscriptions/manual-grant`<br>`PUT /api/admin/subscriptions/:id/status`<br>`DELETE /api/admin/subscriptions/:id/revoke` | Komponen `SubscriptionManagement.tsx` di [AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx): modal manual grant (email, paket, masa aktif, catatan audit) dan tabel langganan ber-badge warna sumber. |
+| **User Subscriptions** | `GET /api/user/subscriptions` | Tampilan riwayat tes berbayar & status Season Pass di profil user. |
+| **Sertifikat & Verifikasi Publik** | `GET /api/results/:resultId/certificate`<br>`GET /api/verify/certificate/:certificateId` | Render PDF di peramban klien (`jspdf` dynamic import) di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) dan halaman publik verifikasi sertifikat. |
+| **Instant Redis Leaderboard** | `GET /api/tests/:testId/leaderboard` | Komponen `LeaderboardDrawer.tsx` dengan medali Top 3 dan posisi ranking user (< 5ms). |
 
-### 🚀 FASE P1: Revenue & Virality (Fokus Sprint 1 - 2) — [STATUS: BACKEND SELESAI ✅]
+> 📖 **Spesifikasi Rute & Kontrak Lengkap:** Lihat [ARCHITECTURE_AND_SCHEMA.md](file:///home/sans/coding/quiz_app/ARCHITECTURE_AND_SCHEMA.md).
 
-#### 1. Multi-Endpoint Payment Gateway (QRIS) & Admin Subscription Manual Override
-* **Status Backend**: **SELESAI (COMPLETED)**
-* **Komponen & Arsitektur Backend (BE)**:
-  - `backend/migrations/002_subscriptions_and_pricing.sql`: Kolom `price_idr` pada tabel `tests`, tabel `orders` untuk mencatat transaksi faktur/invoice (dengan payload QRIS, Snap token, status pending/settled/expired), dan tabel `subscriptions` untuk hak akses aktif (`user_identifier`, `test_id`, `tier`, `status`, `source`, `admin_notes`, `valid_until`).
-  - `backend/internal/repository/subscription_repository.go`: `SubscriptionRepository` mengisolasi query database transaksi langganan dan akses paywall secara atomic.
-  - `backend/internal/handlers/payment.go`:
-    1. **Public Endpoints**:
-       - `POST /api/payments/create-invoice`: Generate QRIS dynamic EMVCo dan Snap token untuk paket `per_test` atau `season_pass` (90 hari).
-       - `GET /api/payments/status/:orderId`: Endpoint polling ringan bagi frontend memantau status pesanan.
-       - `POST /api/payments/webhook`: Webhook handler idempoten yang memvalidasi notifikasi payment gateway, memanggil `SettleOrder`, dan menerbitkan subscription aktif.
-    2. **User Authenticated Endpoints**:
-       - `GET /api/user/subscriptions`: Mengambil daftar modul ujian dan langganan aktif milik user.
-    3. **Admin Manual Override Endpoints**:
-       - `POST /api/admin/subscriptions/manual-grant`: Memberikan akses/season pass secara manual tanpa gateway (transaksi transfer bank manual, voucher, atau deal B2B institusi) lengkap dengan alasan audit (`reason_notes`).
-       - `PUT /api/admin/subscriptions/:id/status`: Mengubah status atau memperpanjang hari (`extend_days`).
-       - `DELETE /api/admin/subscriptions/:id/revoke`: Mencabut akses jika terjadi refund.
-       - `GET /api/admin/subscriptions`: Daftar transaksi dan filter pencarian langganan.
-  - **Paywall Enforcement di Engine Ujian**:
-    - Pada `POST /api/tests/:testId/start` di [public.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/public.go): jika `test.PriceIDR > 0`, sistem memvalidasi `subRepo.HasActiveAccess`. Jika user belum membayar, server mengembalikan `HTTP 402 Payment Required` dengan payload `{ paywall: true, price_idr: ..., test_id: ... }`.
-* **Catatan Teknis Frontend (FE)**:
-  - Komponen `PaymentModal.tsx`: Menampilkan dynamic QRIS code dan countdown 15 menit, polling `GET /api/payments/status/:orderId` tiap 3 detik.
-  - Komponen `AdminSubscriptionManager.tsx`: Form modal *"Grant Akses Manual"* dengan catatan alasan audit serta tabel pemantauan langganan.
-
-#### 2. Generator Sertifikat & Verifikasi Publik
-* **Status Backend**: **SELESAI (COMPLETED)**
-* **Komponen & Endpoint**:
-  - `GET /api/results/:resultId/certificate`: Mengembalikan data sertifikat resmi ber-UUID unik (`CERT-***`), persentil, nilai kelulusan, dan tautan verifikasi.
-  - `GET /api/verify/certificate/:certificateId`: Endpoint verifikasi publik anti-pemalsuan untuk siapa saja yang memindai QR code sertifikat.
-* **Catatan Teknis Frontend (FE)**:
-  - Render PDF dilakukan di sisi peramban klien (`@react-pdf/renderer` atau `jspdf`) untuk menghemat beban CPU server VPS 2GB.
-
-#### 3. Leaderboard & Ranking Nasional Instan
-* **Status Backend**: **SELESAI (COMPLETED)**
-* **Komponen & Endpoint**:
-  - `GET /api/tests/:testId/leaderboard`: Mengambil 50 besar peringkat peserta ujian dengan latensi ultra-cepat (< 5ms) dan data terindeks.
-  - Pada saat peserta menyelesaikan ujian di `FinishTest`, skor otomatis di-push ke Redis Sorted Sets (`cache.ZAdd("leaderboard:" + testID, score, sessionID)`).
-* **Catatan Teknis Frontend (FE)**:
-  - Komponen `LeaderboardDrawer.tsx` atau tab hasil ranking dengan medali Top 3 dan posisi ranking pengguna.
-
----
-
-### 🏛️ Pengelompokan Endpoint Berdasarkan Role (Role-Based Route Architecture)
-
-Arsitektur rute di [backend/internal/handlers/routes.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/routes.go) kini terisolasi berdasarkan 3 role utama:
-1. **Public Group (`/api/...`)**:
-   - `/auth/register`, `/auth/login`
-   - `/tests`, `/tests/:testId`, `/tests/:testId/leaderboard`
-   - `/tests/:testId/start` *(dengan validasi Paywall)*, `/sessions/*`
-   - `/results/:resultId`, `/results/:resultId/certificate`, `/verify/certificate/:certificateId`
-   - `/payments/create-invoice`, `/payments/status/:orderId`, `/payments/webhook`
-   - `/ai/generate-questions`
-2. **User Group (`/api/user` — AuthRequired)**:
-   - `/user/me`: Profil examinee
-   - `/user/subscriptions`: Modul tes & pass aktif milik examinee
-3. **Admin Group (`/api/admin` — AuthRequired + RequireAdmin)**:
-   - `/admin/stats`, `/admin/tests/:testId/analytics`
-   - `/admin/tests` (CRUD modul kuis & bank butir soal)
-   - `/admin/essays` & `/admin/essays/:essayId/grade` (penilaian esai manual)
-   - `/admin/upload-media` & `/admin/media` (manajemen gambar soal)
-   - `/admin/subscriptions` (list, manual-grant, status-update, revoke akses)
 
 
 ---
