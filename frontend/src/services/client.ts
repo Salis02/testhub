@@ -3,6 +3,21 @@
 const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api'
 export const AUTH_STORAGE_KEY = 'testhub_auth_token'
 export const LEGACY_AUTH_STORAGE_KEY = 'testhub_admin_token'
+export const USER_EMAIL_KEY = 'testhub_user_email'
+
+export function getStoredUserEmail(): string | null {
+  return localStorage.getItem(USER_EMAIL_KEY)
+}
+
+export function setStoredUserEmail(email: string): void {
+  if (email) {
+    localStorage.setItem(USER_EMAIL_KEY, email.trim())
+  }
+}
+
+export function clearStoredUserEmail(): void {
+  localStorage.removeItem(USER_EMAIL_KEY)
+}
 
 export function getStoredToken(): string | null {
   return localStorage.getItem(AUTH_STORAGE_KEY) || localStorage.getItem(LEGACY_AUTH_STORAGE_KEY)
@@ -36,6 +51,7 @@ export async function apiClient<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = getStoredToken()
+  const userEmail = getStoredUserEmail()
   const isFormData = options.body instanceof FormData
 
   const headers = new Headers(options.headers || {})
@@ -44,6 +60,9 @@ export async function apiClient<T>(
   }
   if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`)
+  }
+  if (userEmail && !headers.has('X-User-Email')) {
+    headers.set('X-User-Email', userEmail)
   }
 
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`

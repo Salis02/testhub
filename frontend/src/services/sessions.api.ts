@@ -1,4 +1,4 @@
-import { apiClient } from './client'
+import { apiClient, getStoredUserEmail } from './client'
 import { Question, TestSession, TestResult, UserSubmission } from '@/types'
 
 export interface SessionQuestionsResponse {
@@ -14,9 +14,11 @@ export interface TestResultResponse {
 }
 
 export const sessionsApi = {
-  async startTest(testId: string): Promise<TestSession> {
+  async startTest(testId: string, email?: string): Promise<TestSession> {
+    const activeEmail = email || getStoredUserEmail()
     return apiClient<TestSession>(`/tests/${testId}/start`, {
       method: 'POST',
+      body: activeEmail ? JSON.stringify({ email: activeEmail }) : undefined,
     })
   },
 

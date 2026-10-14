@@ -274,4 +274,38 @@ Untuk menjamin kualitas kode bertahan 10+ tahun dengan skalabilitas tinggi, seti
 | **Design Consistency** | Arbitrary hex color liar (`#3f21a8`) merusak tema | Gunakan token semantik CSS sesuai [style.md](file:///home/sans/coding/quiz_app/style.md) (`bg-slate-950`, `text-indigo-400`, `border-slate-800`). |
 | **Client Payment Security** | Server Key atau data rahasia dipanggil dari Frontend | Frontend hanya boleh menerima `snap_token` / `client_key` publik untuk Midtrans Snap Popup `window.snap.pay(snapToken)` dan tidak boleh memverifikasi signature pembayaran secara lokal. |
 
+---
+
+## 8. Catatan Tugas & Bug Baru Backend (Action Items Developer Backend)
+
+> [!WARNING]
+> **Bug / Debt ID: BE-AUTH-001 — Rute Mulai Tes Publik Kehilangan Context Email User Terautentikasi**
+
+### Deskripsi Masalah:
+Pada [backend/internal/handlers/routes.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/routes.go#L91):
+```go
+tests.POST("/:testId/start", middleware.RateLimit(cacheClient, 10, time.Minute, "start_test"), publicHandler.StartTest)
+```
+Rute ini didaftarkan tanpa middleware ekstraksi token JWT (karena ditujukan agar tamu/peserta publik non-login bisa langsung mengerjakan ujian). Namun, di dalam [backend/internal/handlers/public.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/public.go#L89-L93):
+```go
+if emailVal, exists := c.Get("email"); exists {
+    if s, ok := emailVal.(string); ok && s != "" {
+        userIdentifier = s
+    }
+}
+```
+Handler mencoba membaca `c.Get("email")`. Karena tidak ada middleware JWT yang dipasang pada rute tersebut, `c.Get("email")` **tidak akan pernah terisi** meskipun client telah mengirimkan header `Authorization: Bearer <token>`. Akibatnya, pemeriksaan hak akses langganan `h.subRepo.HasActiveAccess` menganggap user tidak dikenal (`userIdentifier == ""`) dan langsung melempar respon `402 Payment Required`.
+
+### Solusi yang Diperlukan di Backend (Tugas Baru):
+1. **Buat Middleware `OptionalAuth`**:
+   Buat fungsi `middleware.OptionalAuth(jwtSecret string) gin.HandlerFunc` di `backend/internal/middleware/auth.go`.
+   - Jika header `Authorization: Bearer <token>` ada dan valid: set `c.Set("email", claims.Email)` dan `c.Set("user_id", claims.UserID)`.
+   - Jika header tidak ada atau token invalid: **jangan batalkan request** (`c.Next()`), biarkan tetap jalan sebagai guest.
+2. **Pasang `OptionalAuth` pada rute publik**:
+   Pasang middleware tersebut pada:
+   - `tests.POST("/:testId/start", middleware.OptionalAuth(cfg.JWTSecret), ...)`
+   - `sessions.POST("/:sessionId/finish", middleware.OptionalAuth(cfg.JWTSecret), ...)`
+3. **Mitigasi Sementara di Frontend (Sudah Diterapkan)**:
+   Frontend saat ini telah dikonfigurasi untuk menyertakan identitas email melalui header `X-User-Email` dan body JSON `{ "email": "..." }` pada setiap pemanggilan `startTest`, serta menyimpan email transaksi yang sukses di `localStorage ('testhub_user_email')`.
+
 

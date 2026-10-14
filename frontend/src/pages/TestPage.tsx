@@ -115,10 +115,10 @@ export const TestPage: React.FC = () => {
           testId={paywallModalData.testId}
           testTitle={paywallModalData.title}
           priceIdr={paywallModalData.priceIdr}
-          onPaymentSuccess={() => {
+          onPaymentSuccess={(paidEmail) => {
             const id = paywallModalData.testId
             setPaywallModalData(null)
-            initSession(id, null)
+            initSession(id, null, paidEmail)
           }}
         />
       </>

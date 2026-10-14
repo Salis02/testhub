@@ -5,6 +5,7 @@ import { paymentsApi } from '@/services/payments.api'
 import { PaymentInvoiceResponse, SubscriptionTier } from '@/types'
 import { useToast } from '@/context/ToastContext'
 import { useAuth } from '@/context/AuthContext'
+import { setStoredUserEmail } from '@/services/client'
 import {
   X,
   CreditCard,
@@ -24,7 +25,7 @@ interface PaymentModalProps {
   testId: string
   testTitle: string
   priceIdr: number
-  onPaymentSuccess: () => void
+  onPaymentSuccess: (email?: string) => void
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({
@@ -89,17 +90,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   useEffect(() => {
     if (orderStatus?.status === 'settled' && !hasHandledSettlementRef.current) {
       hasHandledSettlementRef.current = true
+      const cleanEmail = email.trim()
+      setStoredUserEmail(cleanEmail)
       toast.success(
         'Pembayaran Berhasil Diverifikasi',
         'Hak akses ujian Anda telah aktif. Mengalihkan ke ruang tes...'
       )
       const timer = setTimeout(() => {
-        onPaymentSuccess()
-        onClose()
+        onPaymentSuccess(cleanEmail)
       }, 1500)
       return () => clearTimeout(timer)
     }
-  }, [orderStatus?.status, onPaymentSuccess, onClose, toast])
+  }, [orderStatus?.status, onPaymentSuccess, toast, email])
 
   // Countdown timer for invoice expiration (15 minutes)
   useEffect(() => {
@@ -143,10 +145,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
     try {
       setIsCreatingInvoice(true)
+      const cleanEmail = email.trim()
+      setStoredUserEmail(cleanEmail)
       const inv = await paymentsApi.createInvoice({
         plan_type: selectedPlan,
         test_id: selectedPlan === 'per_test' ? testId : null,
-        user_email: email.trim(),
+        user_email: cleanEmail,
       })
       setInvoice(inv)
       setSecondsLeft(inv.countdown_second || 900)

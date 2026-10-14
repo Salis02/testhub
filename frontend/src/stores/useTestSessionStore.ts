@@ -17,7 +17,7 @@ interface TestSessionState {
   error: string | null
 
   // Actions
-  initSession: (testId: string, searchSessionId?: string | null) => Promise<void>
+  initSession: (testId: string, searchSessionId?: string | null, email?: string) => Promise<void>
   decrementTimer: () => boolean // returns true if timer reached 0
   setCurrentIndex: (index: number) => void
   selectOption: (optionId: string) => Promise<void>
@@ -39,14 +39,14 @@ export const useTestSessionStore = create<TestSessionState>((set, get) => ({
   isSubmitting: false,
   error: null,
 
-  initSession: async (testId: string, searchSessionId?: string | null) => {
+  initSession: async (testId: string, searchSessionId?: string | null, email?: string) => {
     try {
       set({ loading: true, error: null })
       let activeSessionId = searchSessionId
       let createdTestMeta: TestSession['test'] | undefined = undefined
 
       if (!activeSessionId && testId) {
-        const createdSession = await sessionsApi.startTest(testId)
+        const createdSession = await sessionsApi.startTest(testId, email)
         activeSessionId = createdSession.session_id
         createdTestMeta = createdSession.test
       }

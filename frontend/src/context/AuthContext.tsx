@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { api } from '@/services/api'
 import { User } from '@/types'
+import { setStoredUserEmail, clearStoredUserEmail } from '@/services/client'
 
 interface AuthContextType {
   user: User | null
@@ -36,13 +37,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const verifiedUser = await api.getCurrentUser()
       if (verifiedUser) {
         setUser(verifiedUser)
+        setStoredUserEmail(verifiedUser.email)
       } else {
         localStorage.removeItem('testhub_admin_token')
+        clearStoredUserEmail()
         setUser(null)
       }
     } catch (err) {
       console.warn('Session verification error:', err)
       localStorage.removeItem('testhub_admin_token')
+      clearStoredUserEmail()
       setUser(null)
     } finally {
       setIsCheckingAuth(false)
@@ -58,6 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await api.adminLogin(email, pass)
       if (res && res.token && res.user) {
         setUser(res.user)
+        setStoredUserEmail(res.user.email)
         return true
       }
     } catch (err) {
@@ -69,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     localStorage.removeItem('testhub_admin_token')
+    clearStoredUserEmail()
     setUser(null)
   }
 

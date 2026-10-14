@@ -37,9 +37,9 @@ export const HomePage: React.FC = () => {
     setSubmittedQuery(searchQuery.trim())
   }
 
-  const handleStartTest = async (testId: string) => {
+  const handleStartTest = async (testId: string, email?: string) => {
     try {
-      const session = await sessionsApi.startTest(testId)
+      const session = await sessionsApi.startTest(testId, email)
       navigate(`/test/${session.test.id}?session=${session.session_id}`)
     } catch (err) {
       if (err instanceof ApiError && err.status === 402) {
@@ -239,10 +239,10 @@ export const HomePage: React.FC = () => {
           testId={paywallModalData.testId}
           testTitle={paywallModalData.title}
           priceIdr={paywallModalData.priceIdr}
-          onPaymentSuccess={() => {
+          onPaymentSuccess={(paidEmail) => {
             const id = paywallModalData.testId
             setPaywallModalData(null)
-            handleStartTest(id)
+            handleStartTest(id, paidEmail)
           }}
         />
       )}
