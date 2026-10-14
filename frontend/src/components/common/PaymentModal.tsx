@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import QRCode from 'qrcode'
 import { paymentsApi } from '@/services/payments.api'
@@ -44,6 +44,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState<number>(900)
+  const hasHandledSettlementRef = useRef(false)
 
   // Reset state on open
   useEffect(() => {
@@ -52,6 +53,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       setInvoice(null)
       setQrDataUrl('')
       setSecondsLeft(900)
+      hasHandledSettlementRef.current = false
     }
   }, [isOpen, user])
 
@@ -83,9 +85,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     },
   })
 
-  // Handle successful settlement
+  // Handle successful settlement (guaranteed exactly once per transaction)
   useEffect(() => {
-    if (orderStatus?.status === 'settled') {
+    if (orderStatus?.status === 'settled' && !hasHandledSettlementRef.current) {
+      hasHandledSettlementRef.current = true
       toast.success(
         'Pembayaran Berhasil Diverifikasi',
         'Hak akses ujian Anda telah aktif. Mengalihkan ke ruang tes...'
@@ -96,7 +99,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       }, 1500)
       return () => clearTimeout(timer)
     }
-  }, [orderStatus, onPaymentSuccess, onClose, toast])
+  }, [orderStatus?.status, onPaymentSuccess, onClose, toast])
 
   // Countdown timer for invoice expiration (15 minutes)
   useEffect(() => {

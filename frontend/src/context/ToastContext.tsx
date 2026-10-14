@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useId } from 'react'
+import React, { createContext, useContext, useState, useCallback, useMemo, useId } from 'react'
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react'
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
@@ -46,17 +46,20 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [dismiss]
   )
 
-  const toastMethods = {
-    success: (title: string, description?: string, duration?: number) =>
-      addToast('success', title, description, duration),
-    error: (title: string, description?: string, duration?: number) =>
-      addToast('error', title, description, duration),
-    warning: (title: string, description?: string, duration?: number) =>
-      addToast('warning', title, description, duration),
-    info: (title: string, description?: string, duration?: number) =>
-      addToast('info', title, description, duration),
-    dismiss,
-  }
+  const toastMethods = useMemo(
+    () => ({
+      success: (title: string, description?: string, duration?: number) =>
+        addToast('success', title, description, duration),
+      error: (title: string, description?: string, duration?: number) =>
+        addToast('error', title, description, duration),
+      warning: (title: string, description?: string, duration?: number) =>
+        addToast('warning', title, description, duration),
+      info: (title: string, description?: string, duration?: number) =>
+        addToast('info', title, description, duration),
+      dismiss,
+    }),
+    [addToast, dismiss]
+  )
 
   return (
     <ToastContext.Provider value={{ toast: toastMethods }}>
