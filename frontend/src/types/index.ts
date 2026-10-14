@@ -173,3 +173,28 @@ export interface UpdateSubscriptionStatusDTO {
   admin_notes?: string
 }
 
+export interface PaymentInvoiceResponse {
+  order_id: string
+  plan_type: SubscriptionTier
+  title: string
+  amount: number
+  status: 'pending' | 'settled' | 'expired'
+  payment_method: string
+  qr_payload: string
+  snap_token: string
+  redirect_url: string
+  provider: string
+  expires_at: string
+  countdown_second: number
+}
+
+export interface OrderStatusResponse {
+  order_id: string
+  status: 'pending' | 'settled' | 'expired'
+  plan_type: SubscriptionTier
+  amount: number
+  user_email: string
+  settled_at?: string | null
+}
+
+

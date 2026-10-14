@@ -42,33 +42,43 @@ type Config struct {
 	GeminiModel   string
 	GroqAPIKeys   []string
 	GroqModel     string
+
+	// Payment Gateway Multi-Provider
+	PaymentProvider      string
+	MidtransServerKey    string
+	MidtransClientKey    string
+	MidtransIsProduction bool
 }
 
 func LoadConfig() *Config {
 	return &Config{
-		DBHost:             getEnv("DB_HOST", "localhost"),
-		DBPort:             getEnvInt("DB_PORT", 5432),
-		DBUser:             getEnv("DB_USER", "postgres"),
-		DBPassword:         getEnv("DB_PASSWORD", ""),
-		DBName:             getEnv("DB_NAME", "testhub"),
-		DBPoolSize:         getEnvInt("DB_POOL_SIZE", 20),
-		DBMaxIdle:          getEnvInt("DB_MAX_IDLE_CONNS", 5),
-		DBSSLMode:          getEnv("DB_SSL_MODE", "disable"),
-		RedisURL:           getEnv("REDIS_URL", "localhost:6379"),
-		RedisPassword:      getEnv("REDIS_PASSWORD", ""),
-		JWTSecret:          getEnv("JWT_SECRET", "testhub-super-secret-jwt-key-production-ready-min-32-chars"),
-		JWTExpiry:          getEnvDuration("JWT_EXPIRY", 24*time.Hour),
-		RefreshTokenExpiry: getEnvDuration("REFRESH_TOKEN_EXPIRY", 7*24*time.Hour),
-		Port:               getEnv("PORT", "8000"),
-		Environment:        getEnv("ENVIRONMENT", "development"),
-		LogLevel:           getEnv("LOG_LEVEL", "debug"),
-		Domain:             getEnv("DOMAIN", "localhost"),
-		RateLimitRequests:  getEnvInt("RATE_LIMIT_REQUESTS", 100),
-		RateLimitWindow:    time.Minute,
-		GeminiAPIKeys:      getEnvSlice("GEMINI_API_KEYS", nil),
-		GeminiModel:        getEnv("GEMINI_MODEL", "gemini-1.5-flash"),
-		GroqAPIKeys:        getEnvSlice("GROQ_API_KEYS", nil),
-		GroqModel:          getEnv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+		DBHost:               getEnv("DB_HOST", "localhost"),
+		DBPort:               getEnvInt("DB_PORT", 5432),
+		DBUser:               getEnv("DB_USER", "postgres"),
+		DBPassword:           getEnv("DB_PASSWORD", ""),
+		DBName:               getEnv("DB_NAME", "testhub"),
+		DBPoolSize:           getEnvInt("DB_POOL_SIZE", 20),
+		DBMaxIdle:            getEnvInt("DB_MAX_IDLE_CONNS", 5),
+		DBSSLMode:            getEnv("DB_SSL_MODE", "disable"),
+		RedisURL:             getEnv("REDIS_URL", "localhost:6379"),
+		RedisPassword:        getEnv("REDIS_PASSWORD", ""),
+		JWTSecret:            getEnv("JWT_SECRET", "testhub-super-secret-jwt-key-production-ready-min-32-chars"),
+		JWTExpiry:            getEnvDuration("JWT_EXPIRY", 24*time.Hour),
+		RefreshTokenExpiry:   getEnvDuration("REFRESH_TOKEN_EXPIRY", 7*24*time.Hour),
+		Port:                 getEnv("PORT", "8000"),
+		Environment:          getEnv("ENVIRONMENT", "development"),
+		LogLevel:             getEnv("LOG_LEVEL", "debug"),
+		Domain:               getEnv("DOMAIN", "localhost"),
+		RateLimitRequests:    getEnvInt("RATE_LIMIT_REQUESTS", 100),
+		RateLimitWindow:      time.Minute,
+		GeminiAPIKeys:        getEnvSlice("GEMINI_API_KEYS", nil),
+		GeminiModel:          getEnv("GEMINI_MODEL", "gemini-1.5-flash"),
+		GroqAPIKeys:          getEnvSlice("GROQ_API_KEYS", nil),
+		GroqModel:            getEnv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+		PaymentProvider:      getEnv("PAYMENT_PROVIDER", "midtrans"),
+		MidtransServerKey:    getEnv("MIDTRANS_SERVER_KEY", ""),
+		MidtransClientKey:    getEnv("MIDTRANS_CLIENT_KEY", ""),
+		MidtransIsProduction: getEnvBool("MIDTRANS_IS_PRODUCTION", false),
 	}
 }
 
@@ -115,3 +125,13 @@ func getEnvSlice(key string, defaultVal []string) []string {
 	}
 	return result
 }
+
+func getEnvBool(key string, defaultVal bool) bool {
+	if val := os.Getenv(key); val != "" {
+		if b, err := strconv.ParseBool(val); err == nil {
+			return b
+		}
+	}
+	return defaultVal
+}
+

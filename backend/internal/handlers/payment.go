@@ -12,18 +12,21 @@ import (
 
 	"testhub/internal/models"
 	"testhub/internal/repository"
+	"testhub/internal/services"
 	"testhub/internal/validator"
 )
 
 type PaymentHandler struct {
 	subRepo  repository.SubscriptionRepository
 	testRepo repository.TestRepository
+	gateway  services.PaymentGatewayProvider
 }
 
-func NewPaymentHandler(subRepo repository.SubscriptionRepository, testRepo repository.TestRepository) *PaymentHandler {
+func NewPaymentHandler(subRepo repository.SubscriptionRepository, testRepo repository.TestRepository, gateway services.PaymentGatewayProvider) *PaymentHandler {
 	return &PaymentHandler{
 		subRepo:  subRepo,
 		testRepo: testRepo,
+		gateway:  gateway,
 	}
 }
 
@@ -66,9 +69,19 @@ func (h *PaymentHandler) CreateInvoice(c *gin.Context) {
 	now := time.Now()
 	expiresAt := now.Add(15 * time.Minute)
 
-	// QRIS simulation string (Standard EMVCo format simulator)
-	qrPayload := fmt.Sprintf("00020101021226580016ID.TESTHUB.WWW0118936009180000000000520458125303360540%d5802ID5911TESTHUB_SaaS6007JAKARTA62190115%s6304ABCD", int(amount), orderID)
-	snapToken := fmt.Sprintf("snap_%s_%s", orderID, uuid.New().String()[:8])
+	// Delegate payment transaction creation to the active PaymentGatewayProvider (Midtrans / Simulator)
+	gwResp, err := h.gateway.CreateTransaction(c.Request.Context(), services.PaymentInvoiceRequest{
+		OrderID:   orderID,
+		Amount:    amount,
+		UserEmail: req.UserEmail,
+		ItemName:  testTitle,
+		ItemID:    req.PlanType,
+	})
+	if err != nil {
+		log.Printf("[PaymentHandler.CreateInvoice] gateway error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghubungkan ke gateway pembayaran."})
+		return
+	}
 
 	order := models.Order{
 		ID:               orderID,
@@ -77,10 +90,10 @@ func (h *PaymentHandler) CreateInvoice(c *gin.Context) {
 		PlanType:         req.PlanType,
 		Amount:           amount,
 		Status:           "pending",
-		PaymentMethod:    "qris",
+		PaymentMethod:    gwResp.Provider,
 		PaymentReference: "",
-		SnapToken:        snapToken,
-		QRPayload:        qrPayload,
+		SnapToken:        gwResp.SnapToken,
+		QRPayload:        gwResp.QRPayload,
 		ExpiresAt:        &expiresAt,
 		CreatedAt:        now,
 		UpdatedAt:        now,
@@ -88,7 +101,7 @@ func (h *PaymentHandler) CreateInvoice(c *gin.Context) {
 
 	if err := h.subRepo.CreateOrder(c.Request.Context(), &order); err != nil {
 		log.Printf("[PaymentHandler.CreateInvoice] internal error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat invoice pembayaran."})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan faktur pembayaran."})
 		return
 	}
 
@@ -101,6 +114,8 @@ func (h *PaymentHandler) CreateInvoice(c *gin.Context) {
 		"payment_method":   order.PaymentMethod,
 		"qr_payload":       order.QRPayload,
 		"snap_token":       order.SnapToken,
+		"redirect_url":     gwResp.RedirectURL,
+		"provider":         gwResp.Provider,
 		"expires_at":       order.ExpiresAt.Format(time.RFC3339),
 		"countdown_second": 900,
 	})
@@ -150,28 +165,35 @@ func (h *PaymentHandler) GetUserSubscriptions(c *gin.Context) {
 
 // HandleWebhook handles POST /api/payments/webhook
 func (h *PaymentHandler) HandleWebhook(c *gin.Context) {
-	var req models.PaymentWebhookDTO
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Format webhook tidak valid"})
+	rawBytes, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Gagal membaca data webhook"})
 		return
 	}
 
-	log.Printf("[PaymentHandler.Webhook] Received notification for OrderID: %s, Status: %s", req.OrderID, req.TransactionStatus)
+	verif, err := h.gateway.VerifyWebhook(c.Request.Context(), rawBytes)
+	if err != nil {
+		log.Printf("[PaymentHandler.Webhook] parsing error: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payload notifikasi webhook tidak valid"})
+		return
+	}
 
-	if req.TransactionStatus == "settlement" || req.TransactionStatus == "capture" || req.TransactionStatus == "success" {
-		ref := req.SignatureKey
-		if ref == "" {
-			ref = "SIMULATED_GATEWAY_SETTLEMENT"
-		}
+	if !verif.SignatureValid {
+		log.Printf("[PaymentHandler.Webhook] Warning: Signature verifikasi gateway tidak valid untuk OrderID %s", verif.OrderID)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Signature verifikasi gateway tidak valid"})
+		return
+	}
 
-		sub, err := h.subRepo.SettleOrder(c.Request.Context(), req.OrderID, ref)
+	log.Printf("[PaymentHandler.Webhook] Notification verified for OrderID: %s, Status: %s", verif.OrderID, verif.TransactionStatus)
+
+	if verif.TransactionStatus == "settled" {
+		sub, err := h.subRepo.SettleOrder(c.Request.Context(), verif.OrderID, verif.PaymentReference)
 		if err != nil {
-			log.Printf("[PaymentHandler.Webhook] Failed to settle order %s: %v", req.OrderID, err)
+			log.Printf("[PaymentHandler.Webhook] Failed to settle order %s: %v", verif.OrderID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memproses settlement order"})
 			return
 		}
-
-		log.Printf("[PaymentHandler.Webhook] Order %s successfully settled! Activated Subscription ID: %s", req.OrderID, sub.ID)
+		log.Printf("[PaymentHandler.Webhook] Order %s successfully settled! Active Subscription ID: %s", verif.OrderID, sub.ID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})

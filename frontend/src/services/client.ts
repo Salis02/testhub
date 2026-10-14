@@ -19,6 +19,7 @@ export function clearStoredToken(): void {
 }
 
 export class ApiError extends Error {
+  public details?: unknown
   constructor(
     public status: number,
     message: string,
@@ -26,6 +27,7 @@ export class ApiError extends Error {
   ) {
     super(message)
     this.name = 'ApiError'
+    this.details = data
   }
 }
 

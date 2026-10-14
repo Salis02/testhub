@@ -8,6 +8,8 @@ import { CategoryBadge } from '@/components/common/Badge'
 import { Search, Play, Clock, Award, CheckCircle2, Shield, Zap, ArrowRight } from 'lucide-react'
 
 import { TestCardSkeleton } from '@/components/common/Skeleton'
+import { PaymentModal } from '@/components/common/PaymentModal'
+import { ApiError } from '@/services/client'
 import { useToast } from '@/context/ToastContext'
 
 export const HomePage: React.FC = () => {
@@ -15,6 +17,11 @@ export const HomePage: React.FC = () => {
   const activeCategory = searchParams.get('category') || 'all'
   const [searchQuery, setSearchQuery] = useState('')
   const [submittedQuery, setSubmittedQuery] = useState('')
+  const [paywallModalData, setPaywallModalData] = useState<{
+    testId: string
+    title: string
+    priceIdr: number
+  } | null>(null)
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -35,6 +42,16 @@ export const HomePage: React.FC = () => {
       const session = await sessionsApi.startTest(testId)
       navigate(`/test/${session.test.id}?session=${session.session_id}`)
     } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        const targetTest = tests.find((t) => t.id === testId)
+        const details = (err.details as Record<string, unknown>) || {}
+        setPaywallModalData({
+          testId,
+          title: (details.title as string) || targetTest?.title || 'Modul Ujian Premium',
+          priceIdr: (details.price_idr as number) || 15000,
+        })
+        return
+      }
       toast.error('Gagal Memulai Ujian', (err as Error).message)
     }
   }
@@ -213,6 +230,22 @@ export const HomePage: React.FC = () => {
           </Link>
         </div>
       </section>
+
+      {/* Paywall QRIS / Midtrans Payment Modal */}
+      {paywallModalData && (
+        <PaymentModal
+          isOpen={!!paywallModalData}
+          onClose={() => setPaywallModalData(null)}
+          testId={paywallModalData.testId}
+          testTitle={paywallModalData.title}
+          priceIdr={paywallModalData.priceIdr}
+          onPaymentSuccess={() => {
+            const id = paywallModalData.testId
+            setPaywallModalData(null)
+            handleStartTest(id)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -260,6 +260,9 @@ Untuk menjamin kualitas kode bertahan 10+ tahun dengan skalabilitas tinggi, seti
 | **Information Disclosure** | Pesan error SQL PostgreSQL bocor ke client | Log detail di server (`log.Printf`), kembalikan pesan ramah pengguna yang telah disanitasi ke response JSON. |
 | **Pagination & OOM** | `SELECT *` tanpa batas data di admin query | Selalu pasang `LIMIT` (default 20, maks 100) dan `OFFSET` pada listing transaksi & modul tes. |
 
+| **Secret & Key Security** | Server Key (Midtrans/Xendit/AI) bocor ke logs / frontend | **Dilarang keras mengekspos Server Key**. Server Key hanya disimpan di `.env` (di-ignore oleh git), disuntikkan secara aman via memory struct, dan tidak pernah dicetak di `log.Printf` atau respon JSON. |
+| **Payment Gateway Extensibility** | Vendor lock-in & tight coupling ke satu payment provider | Wajib mengimplementasikan `PaymentGatewayProvider` interface (`CreateTransaction`, `VerifyWebhook`, `GetProviderName`). Handler hanya bergantung pada abstraksi interface, bukan implementasi konkrit Midtrans/Xendit langsung. |
+
 ### 📋 Checklist Wajib Frontend (React + Bun)
 | Kategori | Potensi Technical Debt | Standar Solusi Anti-Debt |
 |---|---|---|
@@ -269,4 +272,6 @@ Untuk menjamin kualitas kode bertahan 10+ tahun dengan skalabilitas tinggi, seti
 | **Form Integrity** | Validasi manual rentan bug & mutasi nested object | Gunakan skema **Zod** di [src/schemas/](file:///home/sans/coding/quiz_app/frontend/src/schemas/) dan manipulasi list opsi via **`useFieldArray`**. |
 | **Rendering Performance** | Timer ujian per detik me-render ulang seluruh halaman | Simpan countdown di **Zustand** ([useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts)) dan konsumsi via atomic selector (`s => s.secondsLeft`). |
 | **Design Consistency** | Arbitrary hex color liar (`#3f21a8`) merusak tema | Gunakan token semantik CSS sesuai [style.md](file:///home/sans/coding/quiz_app/style.md) (`bg-slate-950`, `text-indigo-400`, `border-slate-800`). |
+| **Client Payment Security** | Server Key atau data rahasia dipanggil dari Frontend | Frontend hanya boleh menerima `snap_token` / `client_key` publik untuk Midtrans Snap Popup `window.snap.pay(snapToken)` dan tidak boleh memverifikasi signature pembayaran secara lokal. |
+
 

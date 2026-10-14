@@ -5,6 +5,8 @@ import { TestHeader } from '@/components/test/TestHeader'
 import { QuestionCard } from '@/components/test/QuestionCard'
 import { QuestionNav } from '@/components/test/QuestionNav'
 import { FinishConfirmModal } from '@/components/test/FinishConfirmModal'
+import { PaymentModal } from '@/components/common/PaymentModal'
+import { ApiError } from '@/services/client'
 import { TestPageSkeleton } from '@/components/common/Skeleton'
 import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
@@ -17,6 +19,11 @@ export const TestPage: React.FC = () => {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [paywallModalData, setPaywallModalData] = useState<{
+    testId: string
+    title: string
+    priceIdr: number
+  } | null>(null)
 
   // Atomic selectors from Zustand store
   const session = useTestSessionStore((s) => s.session)
@@ -51,6 +58,15 @@ export const TestPage: React.FC = () => {
     const activeSessionId = searchParams.get('session')
 
     initSession(testId, activeSessionId).catch((err) => {
+      if (err instanceof ApiError && err.status === 402) {
+        const details = (err.details as Record<string, unknown>) || {}
+        setPaywallModalData({
+          testId,
+          title: (details.title as string) || 'Modul Ujian Premium',
+          priceIdr: (details.price_idr as number) || 15000,
+        })
+        return
+      }
       toast.error('Gagal Memuat Ujian', (err as Error).message)
       navigate('/')
     })
@@ -84,6 +100,29 @@ export const TestPage: React.FC = () => {
     } catch (err) {
       toast.error('Gagal Mengirim Ujian', (err as Error).message)
     }
+  }
+
+  if (paywallModalData) {
+    return (
+      <>
+        <TestPageSkeleton />
+        <PaymentModal
+          isOpen={!!paywallModalData}
+          onClose={() => {
+            setPaywallModalData(null)
+            navigate('/')
+          }}
+          testId={paywallModalData.testId}
+          testTitle={paywallModalData.title}
+          priceIdr={paywallModalData.priceIdr}
+          onPaymentSuccess={() => {
+            const id = paywallModalData.testId
+            setPaywallModalData(null)
+            initSession(id, null)
+          }}
+        />
+      </>
+    )
   }
 
   if (loading) {
