@@ -197,4 +197,44 @@ export interface OrderStatusResponse {
   settled_at?: string | null
 }
 
+export interface LeaderboardEntry {
+  rank: number
+  session_id: string
+  user_identifier: string
+  score: number
+  percentage_score: number
+  time_spent_seconds: number
+  submitted_at: string
+}
+
+export interface LeaderboardResponse {
+  test_id: string
+  leaderboard: LeaderboardEntry[]
+  total: number
+}
+
+export interface CertificateData {
+  certificate_id: string
+  result_id: string
+  test_id?: string
+  test_title: string
+  category: string
+  percentage_score: number
+  passing: boolean
+  passing_score_percentage: number
+  issued_at: string
+  verification_url?: string
+  issuer: string
+  status?: string
+  valid?: boolean
+}
+
+export interface TestAnalytics {
+  test_id: string
+  test_title: string
+  total_submissions: number
+  average_score: number
+  passing_rate: number
+}
+
 

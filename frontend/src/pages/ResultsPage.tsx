@@ -6,13 +6,17 @@ import { ScoreSummary } from '@/components/results/ScoreSummary'
 import { CategoryBreakdown } from '@/components/results/CategoryBreakdown'
 import { QuestionReviewList } from '@/components/results/QuestionReviewList'
 import { ResultsPageSkeleton } from '@/components/common/Skeleton'
-import { ArrowLeft, RotateCcw, Share2, Printer, Check } from 'lucide-react'
+import { CertificateModal } from '@/components/common/CertificateModal'
+import { LeaderboardModal } from '@/components/common/LeaderboardModal'
+import { ArrowLeft, RotateCcw, Share2, Printer, Check, Award, Trophy } from 'lucide-react'
 
 export const ResultsPage: React.FC = () => {
   const { resultId } = useParams<{ resultId: string }>()
   const [data, setData] = useState<{ result: TestResult; questions: Question[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [isCertModalOpen, setIsCertModalOpen] = useState(false)
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false)
 
   useEffect(() => {
     loadResult()
@@ -77,7 +81,23 @@ export const ResultsPage: React.FC = () => {
           <span>Katalog Ujian Lainnya</span>
         </Link>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+          {result.passing && (
+            <button
+              onClick={() => setIsCertModalOpen(true)}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-accent/30 bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors shadow-xs"
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>Sertifikat Kelulusan</span>
+            </button>
+          )}
+          <button
+            onClick={() => setIsLeaderboardOpen(true)}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-borderline bg-surface text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
+          >
+            <Trophy className="w-3.5 h-3.5 text-amber-500" />
+            <span>Papan Peringkat</span>
+          </button>
           <button
             onClick={handleShare}
             className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-md border border-borderline bg-surface text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
@@ -110,6 +130,24 @@ export const ResultsPage: React.FC = () => {
 
       {/* Review Mode (All questions + answers + explanations) */}
       <QuestionReviewList questions={questions} submissions={result.submissions} />
+
+      {/* Official Certificate Modal */}
+      {resultId && (
+        <CertificateModal
+          isOpen={isCertModalOpen}
+          onClose={() => setIsCertModalOpen(false)}
+          resultId={resultId}
+        />
+      )}
+
+      {/* Test Leaderboard Modal */}
+      {result.test_id && (
+        <LeaderboardModal
+          isOpen={isLeaderboardOpen}
+          onClose={() => setIsLeaderboardOpen(false)}
+          testId={result.test_id}
+        />
+      )}
     </div>
   )
 }

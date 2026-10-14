@@ -1,7 +1,7 @@
 import React from 'react'
 import { Test } from '@/types'
 import { CategoryBadge } from '@/components/common/Badge'
-import { Plus, Trash2, Globe, Lock, Play, Pencil } from 'lucide-react'
+import { Plus, Trash2, Globe, Lock, Play, Pencil, BarChart3 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useConfirm } from '@/context/ConfirmContext'
 import { useToast } from '@/context/ToastContext'
@@ -12,6 +12,7 @@ interface TestManagementProps {
   onDeleteTest: (testId: string) => void
   onOpenCreateModal: () => void
   onEditTest: (testId: string) => void
+  onViewAnalytics?: (test: Test) => void
 }
 
 export const TestManagement: React.FC<TestManagementProps> = ({
@@ -20,6 +21,7 @@ export const TestManagement: React.FC<TestManagementProps> = ({
   onDeleteTest,
   onOpenCreateModal,
   onEditTest,
+  onViewAnalytics,
 }) => {
   const { confirm } = useConfirm()
   const toast = useToast()
@@ -108,6 +110,19 @@ export const TestManagement: React.FC<TestManagementProps> = ({
                     <Pencil className="w-3 h-3" />
                     <span>Edit Soal</span>
                   </button>
+
+                  {/* View Analytics */}
+                  {onViewAnalytics && (
+                    <button
+                      type="button"
+                      onClick={() => onViewAnalytics(test)}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1 rounded text-[11px] font-medium border border-borderline bg-canvas text-ink hover:bg-surface-hover transition-colors"
+                      title="Lihat performa & analitik pengerjaan"
+                    >
+                      <BarChart3 className="w-3 h-3 text-accent" />
+                      <span>Analitik</span>
+                    </button>
+                  )}
 
                   {/* Start / Preview Test */}
                   <Link

@@ -14,6 +14,7 @@ import { ResultsPage } from '@/pages/ResultsPage'
 import { PricingPage } from '@/pages/PricingPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { AdminPage } from '@/pages/AdminPage'
+import { VerifyCertificatePage } from '@/pages/VerifyCertificatePage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +43,8 @@ export function App() {
                 <Route path="/pricing" element={<PricingPage />} />
                 <Route path="/test/:testId" element={<TestPage />} />
                 <Route path="/results/:resultId" element={<ResultsPage />} />
+                <Route path="/verify/:certificateId" element={<VerifyCertificatePage />} />
+                <Route path="/verify/certificate/:certificateId" element={<VerifyCertificatePage />} />
                 <Route path="/login" element={<LoginPage />} />
 
                 {/* Protected Routes (Restricted: Administrator and Creator only) */}

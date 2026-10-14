@@ -29,8 +29,17 @@
 
 ### ✅ Frontend Application (React + Bun)
 - [x] **State & Networking Modern**: TanStack Query v5 (server cache & deduplication), Zustand v5 ([useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts)), runtime validation Zod ([test.schema.ts](file:///home/sans/coding/quiz_app/frontend/src/schemas/test.schema.ts)), dan modular API services ([client.ts](file:///home/sans/coding/quiz_app/frontend/src/services/client.ts)).
-- [x] **Halaman Publik**: Beranda katalog kuis ([HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx)), antarmuka ujian berwaktu 60 FPS ([TestPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/TestPage.tsx)), hasil & review pembahasan ([ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx)).
-- [x] **Halaman Terproteksi**: Portal login admin ([LoginPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/LoginPage.tsx)), dashboard admin ([AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx)) terlindungi `ProtectedRoute`.
+- [x] **Halaman & Fitur Publik**:
+  - Beranda katalog kuis ([HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx)) terintegrasi modal papan peringkat ([LeaderboardModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/LeaderboardModal.tsx)).
+  - Antarmuka ujian berwaktu 60 FPS tabular-nums ([TestPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/TestPage.tsx)).
+  - Hasil, pembahasan, dan penerbitan sertifikat kelulusan ([ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx), [CertificateModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/CertificateModal.tsx)).
+  - Halaman verifikasi publik keaslian sertifikat ([VerifyCertificatePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/VerifyCertificatePage.tsx)).
+  - Modal pembayaran instan QRIS / Midtrans Snap terproteksi auto-polling & exactly-once ([PaymentModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/PaymentModal.tsx)).
+- [x] **Halaman & Fitur Terproteksi**:
+  - Portal login admin & user ([LoginPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/LoginPage.tsx)).
+  - Dashboard admin ([AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx)) terlindungi `ProtectedRoute`.
+  - Analitik performa modul ujian ([TestAnalyticsModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestAnalyticsModal.tsx)).
+  - Manajemen langganan & manual bypass ([SubscriptionManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/SubscriptionManagement.tsx)).
 - [x] **Fitur Admin Terintegrasi**: Modal editor soal ([TestEditorModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestEditorModal.tsx)), formulir pembuat soal ([TestCreatorModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestCreatorModal.tsx), [QuestionFormField.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/QuestionFormField.tsx)), upload gambar soal ([MediaUploader.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/MediaUploader.tsx)), AI generator modal berprogres dinamis ([AIAssistantModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/AIAssistantModal.tsx)).
 - [x] **UX Universal**: Toast & dialog konfirmasi non-blocking berbasis Promise ([ToastContext.tsx](file:///home/sans/coding/quiz_app/frontend/src/context/ToastContext.tsx), [ConfirmContext.tsx](file:///home/sans/coding/quiz_app/frontend/src/context/ConfirmContext.tsx)).
 - [x] **Dokumentasi Frontend Khusus**: Lihat [FRONTEND_ARCHITECTURE.md](file:///home/sans/coding/quiz_app/FRONTEND_ARCHITECTURE.md).
@@ -273,31 +282,3 @@ Untuk menjamin kualitas kode bertahan 10+ tahun dengan skalabilitas tinggi, seti
 | **Rendering Performance** | Timer ujian per detik me-render ulang seluruh halaman | Simpan countdown di **Zustand** ([useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts)) dan konsumsi via atomic selector (`s => s.secondsLeft`). |
 | **Design Consistency** | Arbitrary hex color liar (`#3f21a8`) merusak tema | Gunakan token semantik CSS sesuai [style.md](file:///home/sans/coding/quiz_app/style.md) (`bg-slate-950`, `text-indigo-400`, `border-slate-800`). |
 | **Client Payment Security** | Server Key atau data rahasia dipanggil dari Frontend | Frontend hanya boleh menerima `snap_token` / `client_key` publik untuk Midtrans Snap Popup `window.snap.pay(snapToken)` dan tidak boleh memverifikasi signature pembayaran secara lokal. |
-
----
-
-## 8. Catatan Tugas & Bug Baru Backend (Action Items Developer Backend)
-
-> [!NOTE]
-> **Bug / Debt ID: BE-AUTH-001 — Rute Mulai Tes Publik Kehilangan Context Email User Terautentikasi [STATUS: SOLVED / SELESAI]**
-
-### Deskripsi Masalah:
-Sebelumnya pada [backend/internal/handlers/routes.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/routes.go#L91), rute `POST /api/tests/:testId/start` dan `POST /api/sessions/:sessionId/finish` tidak dilengkapi middleware ekstraksi token JWT (karena ditujukan agar tamu anonim tetap bisa ujian tanpa login). Akibatnya, saat user yang sudah login mengirim header `Authorization: Bearer <token>`, backend tidak mengekstrak claims JWT ke context Gin (`c.Get("email")` bernilai kosong). Pada tes berbayar (`price_idr > 0`), pemeriksaan hak akses langganan `HasActiveAccess` gagal mendeteksi identitas user dan langsung melempar `402 Payment Required`.
-
-### Solusi yang Telah Diimplementasikan & Lulus Verifikasi:
-1. **Middleware `OptionalAuth`**:
-   Dibuat fungsi `middleware.OptionalAuth(jwtSecret string) gin.HandlerFunc` di [backend/internal/middleware/auth.go](file:///home/sans/coding/quiz_app/backend/internal/middleware/auth.go#L89-L121).
-   - Membaca header `Authorization: Bearer <token>`. Jika valid, otomatis set `user_id`, `email`, dan `role` di context Gin (`c.Set`).
-   - Jika header kosong atau token tidak valid: **tidak meng-abort request** (`c.Next()`), sehingga peserta tamu/anonim tetap dapat mengerjakan ujian gratis tanpa hambatan.
-2. **Pemasangan Middleware**:
-   Dipasang pada:
-   - `tests.POST("/:testId/start", middleware.OptionalAuth(cfg.JWTSecret), ...)`
-   - `sessions.POST("/:sessionId/finish", middleware.OptionalAuth(cfg.JWTSecret), ...)`
-   - `payments.POST("/create-invoice", middleware.OptionalAuth(cfg.JWTSecret), ...)`
-3. **Role-Based Paywall Bypass**:
-   Pada [backend/internal/handlers/public.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/public.go#L85-L125), role `admin` dan `creator` otomatis mendapatkan akses preview/pengerjaan ujian (*bypass paywall*) tanpa harus membuat faktur pembayaran terlebih dahulu.
-4. **Verifikasi**:
-   Semua automated test di `backend/tests` lulus 100%, dan pengujian langsung via curl dengan Bearer token admin/subscriber berhasil mendapatkan sesi ujian (`200 OK`) dan memuat daftar butir soal tanpa kendala.
-
-
-

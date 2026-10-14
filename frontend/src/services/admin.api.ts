@@ -1,5 +1,5 @@
 import { apiClient, AUTH_STORAGE_KEY } from './client'
-import { Test, Question, AdminStats, EssaySubmission } from '@/types'
+import { Test, Question, AdminStats, EssaySubmission, TestAnalytics } from '@/types'
 
 export const adminApi = {
   async getStats(signal?: AbortSignal): Promise<AdminStats> {
@@ -162,6 +162,10 @@ export const adminApi = {
       method: 'DELETE',
     })
     return true
+  },
+
+  async getTestAnalytics(testId: string, signal?: AbortSignal): Promise<TestAnalytics> {
+    return apiClient<TestAnalytics>(`/admin/tests/${testId}/analytics`, { signal })
   },
 }
 

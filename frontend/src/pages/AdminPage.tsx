@@ -11,6 +11,7 @@ import { SubscriptionManagement } from '@/components/admin/SubscriptionManagemen
 import { TestCreatorModal } from '@/components/admin/TestCreatorModal'
 import { TestEditorModal } from '@/components/admin/TestEditorModal'
 import { AIAssistantModal } from '@/components/admin/AIAssistantModal'
+import { TestAnalyticsModal } from '@/components/admin/TestAnalyticsModal'
 import { AdminOverviewSkeleton } from '@/components/common/Skeleton'
 import { LayoutDashboard, FileSpreadsheet, FileEdit, Sparkles, Plus, CreditCard } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
@@ -30,6 +31,7 @@ export const AdminPage: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isAIModalOpen, setIsAIModalOpen] = useState(false)
   const [editingTestId, setEditingTestId] = useState<string | null>(null)
+  const [analyticsTest, setAnalyticsTest] = useState<Test | null>(null)
   const [pendingAIQuestions, setPendingAIQuestions] = useState<Question[]>([])
   const [aiContext, setAiContext] = useState<'create' | 'edit' | 'auto'>('auto')
 
@@ -240,6 +242,9 @@ export const AdminPage: React.FC = () => {
           onEditTest={(testId) => {
             setEditingTestId(testId)
           }}
+          onViewAnalytics={(test) => {
+            setAnalyticsTest(test)
+          }}
         />
       )}
 
@@ -304,6 +309,16 @@ export const AdminPage: React.FC = () => {
           }
         }}
       />
+
+      {/* Test Performance & Submissions Analytics Modal */}
+      {analyticsTest && (
+        <TestAnalyticsModal
+          isOpen={!!analyticsTest}
+          onClose={() => setAnalyticsTest(null)}
+          testId={analyticsTest.id}
+          testTitle={analyticsTest.title}
+        />
+      )}
     </div>
   )
 }

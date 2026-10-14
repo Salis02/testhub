@@ -1,5 +1,5 @@
 import { apiClient, getStoredUserEmail } from './client'
-import { Question, TestSession, TestResult, UserSubmission } from '@/types'
+import { Question, TestSession, TestResult, UserSubmission, CertificateData } from '@/types'
 
 export interface SessionQuestionsResponse {
   session_id?: string
@@ -16,7 +16,8 @@ export interface TestResultResponse {
 export const sessionsApi = {
   async startTest(testId: string, email?: string): Promise<TestSession> {
     const activeEmail = email || getStoredUserEmail()
-    return apiClient<TestSession>(`/tests/${testId}/start`, {
+    const query = activeEmail ? `?email=${encodeURIComponent(activeEmail)}` : ''
+    return apiClient<TestSession>(`/tests/${testId}/start${query}`, {
       method: 'POST',
       body: activeEmail ? JSON.stringify({ email: activeEmail }) : undefined,
     })
@@ -70,5 +71,13 @@ export const sessionsApi = {
 
   async getResult(resultId: string, signal?: AbortSignal): Promise<TestResultResponse> {
     return apiClient<TestResultResponse>(`/results/${resultId}`, { signal })
+  },
+
+  async getCertificate(resultId: string, signal?: AbortSignal): Promise<CertificateData> {
+    return apiClient<CertificateData>(`/results/${resultId}/certificate`, { signal })
+  },
+
+  async verifyCertificate(certificateId: string, signal?: AbortSignal): Promise<CertificateData> {
+    return apiClient<CertificateData>(`/verify/certificate/${certificateId}`, { signal })
   },
 }

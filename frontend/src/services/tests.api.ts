@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import { Test } from '@/types'
+import { Test, LeaderboardResponse } from '@/types'
 
 export const testsApi = {
   async listTests(category?: string, query?: string, signal?: AbortSignal): Promise<Test[]> {
@@ -13,5 +13,9 @@ export const testsApi = {
 
   async getTestById(testId: string, signal?: AbortSignal): Promise<Test> {
     return apiClient<Test>(`/tests/${testId}`, { signal })
+  },
+
+  async getLeaderboard(testId: string, signal?: AbortSignal): Promise<LeaderboardResponse> {
+    return apiClient<LeaderboardResponse>(`/tests/${testId}/leaderboard`, { signal })
   },
 }

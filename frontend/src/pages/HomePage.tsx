@@ -5,10 +5,11 @@ import { Test } from '@/types'
 import { testsApi } from '@/services/tests.api'
 import { sessionsApi } from '@/services/sessions.api'
 import { CategoryBadge } from '@/components/common/Badge'
-import { Search, Play, Clock, Award, CheckCircle2, Shield, Zap, ArrowRight } from 'lucide-react'
+import { Search, Play, Clock, Award, CheckCircle2, Shield, Zap, ArrowRight, Trophy } from 'lucide-react'
 
 import { TestCardSkeleton } from '@/components/common/Skeleton'
 import { PaymentModal } from '@/components/common/PaymentModal'
+import { LeaderboardModal } from '@/components/common/LeaderboardModal'
 import { ApiError } from '@/services/client'
 import { useToast } from '@/context/ToastContext'
 
@@ -22,6 +23,7 @@ export const HomePage: React.FC = () => {
     title: string
     priceIdr: number
   } | null>(null)
+  const [leaderboardTest, setLeaderboardTest] = useState<{ id: string; title: string } | null>(null)
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -192,13 +194,25 @@ export const HomePage: React.FC = () => {
                     <span>Lulus: {test.passing_score_percentage}%</span>
                   </div>
 
-                  <button
-                    onClick={() => handleStartTest(test.id)}
-                    className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity"
-                  >
-                    <Play className="w-3.5 h-3.5" />
-                    <span>Mulai Ujian</span>
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setLeaderboardTest({ id: test.id, title: test.title })}
+                      className="inline-flex items-center space-x-1.5 px-2.5 py-2 rounded-md bg-surface hover:bg-surface-hover border border-borderline text-ink text-xs font-medium transition-colors"
+                      title="Lihat Papan Peringkat"
+                    >
+                      <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="hidden sm:inline">Peringkat</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleStartTest(test.id)}
+                      className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      <span>Mulai Ujian</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -244,6 +258,16 @@ export const HomePage: React.FC = () => {
             setPaywallModalData(null)
             handleStartTest(id, paidEmail)
           }}
+        />
+      )}
+
+      {/* Public Leaderboard Modal */}
+      {leaderboardTest && (
+        <LeaderboardModal
+          isOpen={!!leaderboardTest}
+          onClose={() => setLeaderboardTest(null)}
+          testId={leaderboardTest.id}
+          testTitle={leaderboardTest.title}
         />
       )}
     </div>
