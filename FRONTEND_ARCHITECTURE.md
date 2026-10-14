@@ -20,8 +20,9 @@ frontend/src/
 │   └── subscription.schema.ts  # Zod schema untuk ManualGrant dan ExtendSubscription
 ├── services/                   # Modular API Layer (Bebas Dual-Backend / localStorage Mock)
 │   ├── client.ts               # Core HTTP Client, ApiError, synchronized token management
-│   ├── tests.api.ts            # Public test catalog & detail endpoint
-│   ├── sessions.api.ts         # Exam session lifecycle, submissions, result evaluation
+│   ├── tests.api.ts            # Public test catalog, detail, & leaderboard endpoint
+│   ├── sessions.api.ts         # Exam session lifecycle, submissions, results, & certificates
+│   ├── payments.api.ts         # Payment invoice creation & QRIS status polling (P1)
 │   ├── admin.api.ts            # Admin dashboard metrics, test & question CRUD, subscriptions CRUD
 │   ├── ai.api.ts               # AI Agent question generation proxy
 │   ├── auth.api.ts             # Auth service & profile fetching
@@ -34,13 +35,14 @@ frontend/src/
 │   ├── ToastContext.tsx        # Universal global notification toasts (DRY)
 │   └── ConfirmContext.tsx      # Universal Promise-based confirmation dialogs (DRY)
 ├── components/
-│   ├── common/                 # Header, Footer, ProtectedRoute, MediaUploader, Badge, Skeleton
+│   ├── common/                 # Header, Footer, ProtectedRoute, MediaUploader, Badge, Skeleton, PaymentModal
 │   ├── admin/                  # AIAssistantModal, TestEditorModal, TestCreatorModal, QuestionFormField, TestManagement, SubscriptionManagement, ManualGrantModal, ExtendSubscriptionModal
-│   └── test/                   # TestCountdownTimer, TestHeader, QuestionCard, QuestionNav, FinishConfirmModal
+│   └── test/                   # TestCountdownTimer, TestHeader, QuestionCard, QuestionNav, FinishConfirmModal, LeaderboardDrawer
 └── pages/
-    ├── HomePage.tsx            # Katalog tryout publik (TanStack Query + AbortSignal)
+    ├── HomePage.tsx            # Katalog tryout publik (TanStack Query + AbortSignal + Paywall handling)
     ├── TestPage.tsx            # Antarmuka ujian berwaktu (Zustand 60 FPS isolation)
-    ├── ResultsPage.tsx         # Hasil nilai, persentil, dan pembahasan soal
+    ├── ResultsPage.tsx         # Hasil nilai, persentil, review pembahasan, & unduh sertifikat PDF
+    ├── VerifyCertificatePage.tsx # Verifikasi publik keaslian sertifikat nilai (QR Scan)
     ├── LoginPage.tsx           # Form masuk admin (dengan Quick Fill)
     └── AdminPage.tsx           # Dashboard pengajar, bank soal, & langganan (TanStack Query mutations)
 ```

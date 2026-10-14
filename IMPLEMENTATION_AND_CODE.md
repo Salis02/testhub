@@ -125,20 +125,94 @@ Berdasarkan audit arsitektur backend Go, seluruh area teknis inti telah diselesa
 
 ---
 
-## 6. Real Progress Fitur Backend & Panduan Implementasi Frontend (Sprint P1–P3)
+## 6. Real Progress Fitur Backend & Audit Konektivitas FE ↔ BE
 
-### 🚀 FASE P1: Revenue & Virality [STATUS BACKEND: 100% SELESAI ✅]
+### 6.1 Matriks Konektivitas Endpoint Backend (`routes.go`) vs Frontend (`src/services/`)
 
-| Fitur | Status Backend (`routes.go`) | Kebutuhan Implementasi Frontend (FE) |
-|---|---|---|
-| **Multi-Endpoint Payment (QRIS)** | `POST /api/payments/create-invoice`<br>`GET /api/payments/status/:orderId`<br>`POST /api/payments/webhook` | Komponen `PaymentModal.tsx` dengan QRIS dynamic, countdown 15m, polling TanStack Query (`refetchInterval: 3000`), dan badge harga di [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx). |
-| **Paywall Enforcement** | `POST /api/tests/:testId/start` (Return `HTTP 402 Payment Required` jika tes berbayar) | Interceptor di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) untuk membuka modal pembayaran saat menerima respon `402`. |
-| **Admin Manual Subscription Override** | `GET /api/admin/subscriptions`<br>`POST /api/admin/subscriptions/manual-grant`<br>`PUT /api/admin/subscriptions/:id/status`<br>`DELETE /api/admin/subscriptions/:id/revoke` | Komponen `SubscriptionManagement.tsx` di [AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx): modal manual grant (email, paket, masa aktif, catatan audit) dan tabel langganan ber-badge warna sumber. |
-| **User Subscriptions** | `GET /api/user/subscriptions` | Tampilan riwayat tes berbayar & status Season Pass di profil user. |
-| **Sertifikat & Verifikasi Publik** | `GET /api/results/:resultId/certificate`<br>`GET /api/verify/certificate/:certificateId` | Render PDF di peramban klien (`jspdf` dynamic import) di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) dan halaman publik verifikasi sertifikat. |
-| **Instant Redis Leaderboard** | `GET /api/tests/:testId/leaderboard` | Komponen `LeaderboardDrawer.tsx` dengan medali Top 3 dan posisi ranking user (< 5ms). |
+Audit mendalam terhadap seluruh endpoint yang terdaftar di [backend/internal/handlers/routes.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/routes.go) terhadap pemanggilan di sisi Frontend:
 
-> 📖 **Spesifikasi Rute & Kontrak Lengkap:** Lihat [ARCHITECTURE_AND_SCHEMA.md](file:///home/sans/coding/quiz_app/ARCHITECTURE_AND_SCHEMA.md).
+| Grup Role | Endpoint Backend (`routes.go`) | Status BE | Terkoneksi di FE? | Service & Komponen FE Pemanggil |
+|---|---|:---:|:---:|---|
+| **🌐 Public** | `POST /api/auth/register` | ✅ 100% | ✅ Ya | `authApi.register()` di [LoginPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/LoginPage.tsx) |
+| **🌐 Public** | `POST /api/auth/login` | ✅ 100% | ✅ Ya | `authApi.login()` di [LoginPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/LoginPage.tsx) |
+| **🌐 Public** | `GET /api/auth/me` | ✅ 100% | ✅ Ya | `authApi.me()` di [AuthContext.tsx](file:///home/sans/coding/quiz_app/frontend/src/context/AuthContext.tsx) |
+| **🌐 Public** | `GET /api/tests` | ✅ 100% | ✅ Ya | `testsApi.listTests()` di [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) |
+| **🌐 Public** | `GET /api/tests/:testId` | ✅ 100% | ✅ Ya | `testsApi.getTestById()` di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) |
+| **🌐 Public** | `POST /api/tests/:testId/start` | ✅ 100% | ⚠️ Parsial | `sessionsApi.startTest()` aktif. **GAP:** Respon `HTTP 402 Paywall` belum ditangkap untuk membuka `PaymentModal`. |
+| **🌐 Public** | `GET /api/sessions/:id/questions` | ✅ 100% | ✅ Ya | `sessionsApi.getSessionQuestions()` di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) |
+| **🌐 Public** | `GET /api/sessions/:id/submissions`| ✅ 100% | ✅ Ya | `sessionsApi.getSessionSubmissions()` di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) |
+| **🌐 Public** | `POST /api/sessions/:id/submit-answer`| ✅ 100% | ✅ Ya | `sessionsApi.submitAnswer()` di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) |
+| **🌐 Public** | `POST /api/sessions/:id/finish` | ✅ 100% | ✅ Ya | `sessionsApi.finishTest()` di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) |
+| **🌐 Public** | `GET /api/results/:resultId` | ✅ 100% | ✅ Ya | `sessionsApi.getResult()` di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) |
+| **🌐 Public** | `GET /api/tests/:testId/leaderboard` | ✅ 100% | ❌ **Belum** | **GAP:** Belum ada method di `tests.api.ts` & belum ada drawer ranking di UI. |
+| **🌐 Public** | `GET /api/results/:id/certificate` | ✅ 100% | ❌ **Belum** | **GAP:** `ResultsPage.tsx` masih memakai print browser biasa, belum mengambil UUID sertifikat resmi. |
+| **🌐 Public** | `GET /api/verify/certificate/:id` | ✅ 100% | ❌ **Belum** | **GAP:** Belum ada rute halaman publik `VerifyCertificatePage.tsx` di React Router. |
+| **🌐 Public** | `POST /api/payments/create-invoice` | ✅ 100% | ❌ **Belum** | **GAP:** Belum ada service `payments.api.ts` dan belum ada komponen `PaymentModal.tsx`. |
+| **🌐 Public** | `GET /api/payments/status/:orderId` | ✅ 100% | ❌ **Belum** | **GAP:** Belum ada polling status QRIS di frontend. |
+| **🌐 Public** | `POST /api/payments/webhook` | ✅ 100% | Server | Jalur server-to-server gateway (Midtrans/Xendit) ke Go Backend (Idempoten). |
+| **🌐 Public** | `POST /api/ai/generate-questions` | ✅ 100% | ✅ Ya | `aiApi.generateQuestions()` di [AIAssistantModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/AIAssistantModal.tsx) |
+| **👤 User** | `GET /api/user/me` | ✅ 100% | ✅ Ya | Kompatibel via alias `authApi.me()`. |
+| **👤 User** | `GET /api/user/subscriptions` | ✅ 100% | ❌ **Belum** | **GAP:** Belum ada panel riwayat modul berbayar di sisi peserta (siswa). |
+| **👑 Admin** | `GET /api/admin/stats` | ✅ 100% | ✅ Ya | `adminApi.getStats()` di [AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx) |
+| **👑 Admin** | `GET /api/admin/tests/:id/analytics`| ✅ 100% | ⚠️ Parsial | Endpoint BE siap, UI baru menampilkan agregat total di overview dashboard. |
+| **👑 Admin** | `GET /api/admin/tests` (CRUD) | ✅ 100% | ✅ Ya | `adminApi.listTests()`, `createTest()`, `updateTest()`, `deleteTest()`, `togglePublish()`. |
+| **👑 Admin** | `GET /api/admin/essays` (Grading) | ✅ 100% | ✅ Ya | `adminApi.getPendingEssays()` & `adminApi.gradeEssay()` di [EssayGradingView.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/EssayGradingView.tsx). |
+| **👑 Admin** | `POST /api/admin/upload-media` | ✅ 100% | ✅ Ya | `adminApi.uploadMedia()` & `deleteMedia()` di [MediaUploader.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/MediaUploader.tsx). |
+| **👑 Admin** | `GET /api/admin/subscriptions` | ✅ 100% | ✅ Ya | `adminApi.listSubscriptions()` di [SubscriptionManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/SubscriptionManagement.tsx). |
+| **👑 Admin** | `POST /api/admin/subscriptions/manual-grant` | ✅ 100% | ✅ Ya | `adminApi.manualGrantSubscription()` di [ManualGrantModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/ManualGrantModal.tsx). |
+| **👑 Admin** | `PUT /api/admin/subscriptions/:id/status` | ✅ 100% | ✅ Ya | `adminApi.updateSubscriptionStatus()` di [ExtendSubscriptionModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/ExtendSubscriptionModal.tsx). |
+| **👑 Admin** | `DELETE /api/admin/subscriptions/:id/revoke` | ✅ 100% | ✅ Ya | `adminApi.revokeSubscription()` di [SubscriptionManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/SubscriptionManagement.tsx). |
+
+---
+
+### 6.2 Tiga Alur Interaksi Kritis yang Perlu Disambungkan Tim Frontend (Action Items)
+
+#### 1. Alur Paywall & Pembayaran Instan (User-Facing Flow)
+```
+[ Peserta Klik "Mulai Ujian" ] ──► POST /api/tests/:testId/start
+                                          │
+                                          ├─► (Jika Gratis / Sudah Bayar): Status 200 -> Masuk Sesi Ujian
+                                          │
+                                          └─► (Jika Berbayar & Belum Bayar): Status 402 Payment Required
+                                                    │
+                                                    ▼ (FE Tangkap Error 402)
+                                      [ Buka PaymentModal.tsx ]
+                                                    │
+                                                    ▼ POST /api/payments/create-invoice
+                                      [ Tampilkan Dynamic QRIS & Timer 15 Menit ]
+                                                    │
+                                                    ▼ Polling GET /api/payments/status/:orderId (tiap 3s)
+                                      [ Status Berubah ke "settled" ]
+                                                    │
+                                                    ▼ Otomatis Re-trigger Start Test -> Masuk Ujian!
+```
+* **Kebutuhan FE:**
+  - Buat `frontend/src/services/payments.api.ts` (`createInvoice`, `getOrderStatus`, `getUserSubscriptions`).
+  - Tambahkan state `paywallTest: { testId: string; priceIdr: number } | null` di [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) dan [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts).
+  - Buat komponen `frontend/src/components/common/PaymentModal.tsx`.
+
+#### 2. Alur Leaderboard Real-Time
+* **Kebutuhan FE:**
+  - Tambahkan `getLeaderboard(testId: string)` di `tests.api.ts`.
+  - Buat komponen `LeaderboardDrawer.tsx` di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) dengan tombol *"Lihat Ranking Nasional"* untuk benchmark posisi user terhadap ribuan peserta lain.
+
+#### 3. Alur Sertifikat Resmi & Verifikasi Publik
+* **Kebutuhan FE:**
+  - Tambahkan `getCertificate(resultId: string)` di `sessions.api.ts`.
+  - Ganti `window.print()` di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) dengan tombol *"Unduh Sertifikat Resmi (PDF)"* berdesain emas/biru menggunakan dynamic import `jspdf`.
+  - Daftarkan rute publik `/verify/certificate/:certificateId` di [App.tsx](file:///home/sans/coding/quiz_app/frontend/src/App.tsx) untuk menampilkan halaman keaslian nilai saat QR sertifikat di-scan.
+
+---
+
+### 6.3 Catatan Penting Keselarasan Backend & Frontend
+
+1. **Konsistensi Payload (Snake_case vs CamelCase):**
+   - Respon JSON dari backend Go menggunakan `snake_case` (`price_idr`, `time_spent_seconds`, `question_id`, `option_id`, `is_correct`).
+   - Seluruh DTO Frontend di `src/types/` dan `src/services/` wajib memetakan atau mempertahankan field `snake_case` saat payload dikirim ke backend agar tidak ditolak validasi DTO `ShouldBindJSON`.
+2. **Penanganan Token & Autentikasi:**
+   - Klien HTTP `apiClient` di [client.ts](file:///home/sans/coding/quiz_app/frontend/src/services/client.ts) secara otomatis menginjeksi header `Authorization: Bearer <token>` jika token tersedia di `localStorage`.
+   - Untuk alur ujian publik anonim, server backend **tidak mewajibkan token sama sekali**. Token hanya divalidasi pada rute grup `/api/user/*` dan `/api/admin/*`.
+
 
 
 
