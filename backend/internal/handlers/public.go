@@ -84,7 +84,14 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 		return
 	}
 
-	// Resolve user identifier from JWT context, headers, query, or body DTO
+	// Resolve user role and identifier from JWT context, headers, query, or body DTO
+	userRole := ""
+	if rVal, exists := c.Get("role"); exists {
+		if r, ok := rVal.(string); ok {
+			userRole = r
+		}
+	}
+
 	userIdentifier := ""
 	if emailVal, exists := c.Get("email"); exists {
 		if s, ok := emailVal.(string); ok && s != "" {
@@ -106,7 +113,11 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 	// Paywall Enforcement: Cek akses langganan jika modul ujian berbayar
 	if test.PriceIDR > 0 {
 		hasAccess := false
-		if userIdentifier != "" && h.subRepo != nil {
+
+		// Admin & Creator role automatically bypass paywall for preview, testing, and grading
+		if userRole == "admin" || userRole == "creator" {
+			hasAccess = true
+		} else if userIdentifier != "" && h.subRepo != nil {
 			var errAccess error
 			hasAccess, errAccess = h.subRepo.HasActiveAccess(c.Request.Context(), userIdentifier, test.ID)
 			if errAccess != nil {

@@ -83,3 +83,40 @@ func RequireAdmin() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// OptionalAuth extracts JWT claims if the Authorization header is present and valid.
+// If the token is absent or invalid, it does not abort, allowing guests to proceed.
+func OptionalAuth(secret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.Next()
+			return
+		}
+
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			c.Next()
+			return
+		}
+
+		tokenStr := parts[1]
+		claims := &Claims{}
+
+		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, errors.New("unexpected signing method")
+			}
+			return []byte(secret), nil
+		})
+
+		if err == nil && token.Valid {
+			c.Set("user_id", claims.UserID)
+			c.Set("email", claims.Email)
+			c.Set("role", claims.Role)
+		}
+
+		c.Next()
+	}
+}
+

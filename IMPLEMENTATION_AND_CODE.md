@@ -278,34 +278,26 @@ Untuk menjamin kualitas kode bertahan 10+ tahun dengan skalabilitas tinggi, seti
 
 ## 8. Catatan Tugas & Bug Baru Backend (Action Items Developer Backend)
 
-> [!WARNING]
-> **Bug / Debt ID: BE-AUTH-001 — Rute Mulai Tes Publik Kehilangan Context Email User Terautentikasi**
+> [!NOTE]
+> **Bug / Debt ID: BE-AUTH-001 — Rute Mulai Tes Publik Kehilangan Context Email User Terautentikasi [STATUS: SOLVED / SELESAI]**
 
 ### Deskripsi Masalah:
-Pada [backend/internal/handlers/routes.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/routes.go#L91):
-```go
-tests.POST("/:testId/start", middleware.RateLimit(cacheClient, 10, time.Minute, "start_test"), publicHandler.StartTest)
-```
-Rute ini didaftarkan tanpa middleware ekstraksi token JWT (karena ditujukan agar tamu/peserta publik non-login bisa langsung mengerjakan ujian). Namun, di dalam [backend/internal/handlers/public.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/public.go#L89-L93):
-```go
-if emailVal, exists := c.Get("email"); exists {
-    if s, ok := emailVal.(string); ok && s != "" {
-        userIdentifier = s
-    }
-}
-```
-Handler mencoba membaca `c.Get("email")`. Karena tidak ada middleware JWT yang dipasang pada rute tersebut, `c.Get("email")` **tidak akan pernah terisi** meskipun client telah mengirimkan header `Authorization: Bearer <token>`. Akibatnya, pemeriksaan hak akses langganan `h.subRepo.HasActiveAccess` menganggap user tidak dikenal (`userIdentifier == ""`) dan langsung melempar respon `402 Payment Required`.
+Sebelumnya pada [backend/internal/handlers/routes.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/routes.go#L91), rute `POST /api/tests/:testId/start` dan `POST /api/sessions/:sessionId/finish` tidak dilengkapi middleware ekstraksi token JWT (karena ditujukan agar tamu anonim tetap bisa ujian tanpa login). Akibatnya, saat user yang sudah login mengirim header `Authorization: Bearer <token>`, backend tidak mengekstrak claims JWT ke context Gin (`c.Get("email")` bernilai kosong). Pada tes berbayar (`price_idr > 0`), pemeriksaan hak akses langganan `HasActiveAccess` gagal mendeteksi identitas user dan langsung melempar `402 Payment Required`.
 
-### Solusi yang Diperlukan di Backend (Tugas Baru):
-1. **Buat Middleware `OptionalAuth`**:
-   Buat fungsi `middleware.OptionalAuth(jwtSecret string) gin.HandlerFunc` di `backend/internal/middleware/auth.go`.
-   - Jika header `Authorization: Bearer <token>` ada dan valid: set `c.Set("email", claims.Email)` dan `c.Set("user_id", claims.UserID)`.
-   - Jika header tidak ada atau token invalid: **jangan batalkan request** (`c.Next()`), biarkan tetap jalan sebagai guest.
-2. **Pasang `OptionalAuth` pada rute publik**:
-   Pasang middleware tersebut pada:
+### Solusi yang Telah Diimplementasikan & Lulus Verifikasi:
+1. **Middleware `OptionalAuth`**:
+   Dibuat fungsi `middleware.OptionalAuth(jwtSecret string) gin.HandlerFunc` di [backend/internal/middleware/auth.go](file:///home/sans/coding/quiz_app/backend/internal/middleware/auth.go#L89-L121).
+   - Membaca header `Authorization: Bearer <token>`. Jika valid, otomatis set `user_id`, `email`, dan `role` di context Gin (`c.Set`).
+   - Jika header kosong atau token tidak valid: **tidak meng-abort request** (`c.Next()`), sehingga peserta tamu/anonim tetap dapat mengerjakan ujian gratis tanpa hambatan.
+2. **Pemasangan Middleware**:
+   Dipasang pada:
    - `tests.POST("/:testId/start", middleware.OptionalAuth(cfg.JWTSecret), ...)`
    - `sessions.POST("/:sessionId/finish", middleware.OptionalAuth(cfg.JWTSecret), ...)`
-3. **Mitigasi Sementara di Frontend (Sudah Diterapkan)**:
-   Frontend saat ini telah dikonfigurasi untuk menyertakan identitas email melalui header `X-User-Email` dan body JSON `{ "email": "..." }` pada setiap pemanggilan `startTest`, serta menyimpan email transaksi yang sukses di `localStorage ('testhub_user_email')`.
+   - `payments.POST("/create-invoice", middleware.OptionalAuth(cfg.JWTSecret), ...)`
+3. **Role-Based Paywall Bypass**:
+   Pada [backend/internal/handlers/public.go](file:///home/sans/coding/quiz_app/backend/internal/handlers/public.go#L85-L125), role `admin` dan `creator` otomatis mendapatkan akses preview/pengerjaan ujian (*bypass paywall*) tanpa harus membuat faktur pembayaran terlebih dahulu.
+4. **Verifikasi**:
+   Semua automated test di `backend/tests` lulus 100%, dan pengujian langsung via curl dengan Bearer token admin/subscriber berhasil mendapatkan sesi ujian (`200 OK`) dan memuat daftar butir soal tanpa kendala.
+
 
 

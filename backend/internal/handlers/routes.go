@@ -88,7 +88,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			tests.GET("", publicHandler.ListTests)
 			tests.GET("/:testId", publicHandler.GetTest)
 			tests.GET("/:testId/leaderboard", publicHandler.GetLeaderboard)
-			tests.POST("/:testId/start", middleware.RateLimit(cacheClient, 10, time.Minute, "start_test"), publicHandler.StartTest)
+			tests.POST("/:testId/start", middleware.OptionalAuth(cfg.JWTSecret), middleware.RateLimit(cacheClient, 10, time.Minute, "start_test"), publicHandler.StartTest)
 		}
 
 		// Public Test Session Engine (Frictionless Exam Taking)
@@ -98,7 +98,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			sessions.GET("/:sessionId/submissions", publicHandler.GetSubmissions)
 			sessions.POST("/:sessionId/submit-answer", publicHandler.SubmitAnswer)
 			sessions.POST("/:sessionId/questions/:questionId/submit", publicHandler.SubmitAnswer)
-			sessions.POST("/:sessionId/finish", publicHandler.FinishTest)
+			sessions.POST("/:sessionId/finish", middleware.OptionalAuth(cfg.JWTSecret), publicHandler.FinishTest)
 		}
 
 		// Public Test Results & Verification Certificates
@@ -116,7 +116,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		// Public Payment Gateway (Invoicing, Polling, & Webhooks)
 		payments := api.Group("/payments")
 		{
-			payments.POST("/create-invoice", middleware.RateLimit(cacheClient, 15, time.Minute, "create_invoice"), paymentHandler.CreateInvoice)
+			payments.POST("/create-invoice", middleware.OptionalAuth(cfg.JWTSecret), middleware.RateLimit(cacheClient, 15, time.Minute, "create_invoice"), paymentHandler.CreateInvoice)
 			payments.GET("/status/:orderId", paymentHandler.GetOrderStatus)
 			payments.POST("/webhook", paymentHandler.HandleWebhook)
 		}
