@@ -223,36 +223,61 @@ Seluruh 8 temuan arsitektural dan technical debt frontend telah selesai diekseku
    - Klien HTTP `apiClient` di [client.ts](file:///home/sans/coding/quiz_app/frontend/src/services/client.ts) secara otomatis menginjeksi header `Authorization: Bearer <token>` jika token tersedia di `localStorage`.
    - Untuk alur ujian publik anonim, server backend **tidak mewajibkan token sama sekali**. Token hanya divalidasi pada rute grup `/api/user/*` dan `/api/admin/*`.
 
+---
 
 
+### 📈 FASE P2: Diagnostik, Monetisasi Kreator, & Onboarding Cepat (Fokus Sprint 3 - 4)
+
+#### 1. Weakness Diagnostic Radar & Rekomendasi Remedial
+* **Backend (BE)**:
+  - Ekstensi kueri agregasi per-subtopik: `SELECT q.sub_topic, COUNT(*) AS total, SUM(CASE WHEN s.is_correct THEN 1 ELSE 0 END) AS correct FROM test_questions q JOIN test_submissions s ON s.question_id = q.id WHERE s.session_id = $1 GROUP BY q.sub_topic`.
+  - Simpan metrik rasio kompetensi ke kolom JSONB `results.category_breakdown`.
+  - Endpoint `GET /api/results/:id/remedial` merekomendasikan modul latihan spesifik berdasarkan subtopik dengan akurasi terendah (< 60%).
+* **Frontend (FE)**:
+  - Komponen spider/radar chart SVG murni (zero-dependency per [style.md](file:///home/sans/coding/quiz_app/style.md)) di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx).
+  - Kartu rekomendasi *"Fokus Belajar Anda"* dengan tombol direct link ke modul tryout terkait.
+
+#### 2. Creator Monetization, Bagi Hasil, & Payout Dashboard
+* **Backend (BE)**:
+  - Tambah tabel `creator_wallets` (`user_id`, `balance_idr`, `pending_idr`) dan `payout_requests` (`id`, `user_id`, `amount`, `bank_account`, `status`).
+  - Saat webhook invoice settled: potong otomatis fee platform (contoh: 25%), kreditkan 75% ke saldo `creator_wallets`.
+  - Endpoint `POST /api/creator/payout` untuk pengajuan penarikan dana ke rekening bank/e-wallet.
+* **Frontend (FE)**:
+  - Toggle *"Modul Berbayar"* & input harga IDR pada [TestCreatorModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestCreatorModal.tsx).
+  - Tab *"Dompet & Penghasilan"* di [AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx) dengan grafik pendapatan bulanan dan formulir penarikan dana.
+
+#### 3. Bulk Import Soal Massal Drag-and-Drop (CSV / Excel)
+* **Backend (BE)**:
+  - Endpoint `POST /api/admin/tests/:testId/import-questions` mem-parsing berkas multipart `.csv` / `.xlsx`.
+  - Validasi baris atomik via `dto.ValidateRelational()` (kunci jawaban, bobot, tipe soal), eksekusi batch insert `question_options` dalam 1 transaksi DB.
+* **Frontend (FE)**:
+  - Komponen modal `BulkImportModal.tsx` dengan fitur drag-and-drop file, tombol unduh *"Download Template CSV"*, dan live preview tabel data sebelum komit ke server.
 
 ---
 
-### 📈 FASE P2: Engagement & Marketplace (Fokus Sprint 3 - 4)
+### 🛡️ FASE P3: Integritas Ujian, Real-Time Interaksi, & Fitur B2B (Fokus Sprint 5)
 
-#### 4. Diagnostic Weakness Heatmap
-* **Backend (BE)**: Analisis per-subtopik butir soal yang salah (`SELECT sub_topic, COUNT(*) ...`) dan simpan di kolom JSONB `results.category_breakdown`.
-* **Frontend (FE)**: Komponen radar chart atau bar chart interaktif di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) yang menunjukkan kekuatan dan kelemahan sub-materi peserta beserta rekomendasi belajar.
+#### 4. Anti-Cheat Focus Mode & Proctoring Logs
+* **Backend (BE)**:
+  - Endpoint `POST /api/sessions/:id/telemetry` untuk logging insiden kecurangan: `tab_blur_count`, `fullscreen_exit_count`, `paste_attempts`.
+  - Jika `tab_blur_count >= 3`, tandai `disqualified: true` pada sesi ujian dan kunci kalkulasi sertifikat kelulusan.
+* **Frontend (FE)**:
+  - Fullscreen enforcement di [TestPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/TestPage.tsx).
+  - Pasang listener `window.onblur` dan `document.addEventListener('visibilitychange')` dengan dialog peringatan modal *"Peringatan Kecurangan (#X/3)"*.
+  - Matikan shortcut inspect (`Ctrl+Shift+I`), copy (`Ctrl+C`), dan klik kanan (`contextmenu`).
 
-#### 5. Creator Monetization & Marketplace Listing
-* **Backend (BE)**: Tambahkan kolom `price_idr` di tabel `tests` dan tabel `creator_balances`. Otomatis potong fee platform 20%–30% saat pembayaran berhasil.
-* **Frontend (FE)**: Tambahkan toggle *"Modul Berbayar"* dan input harga di [TestCreatorModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestCreatorModal.tsx), serta panel dompet penarikan dana (*Payout Dashboard*) di [AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx).
+#### 5. Streaming AI Question Synthesis via Server-Sent Events (SSE)
+* **Backend (BE)**:
+  - Endpoint streaming `GET /api/ai/stream-questions?topic=...&count=5` menggunakan protokol SSE (`Content-Type: text/event-stream`).
+  - Mengalirkan butir soal satu per satu dari Gemini / Groq secara langsung saat di-generate tanpa menunggu seluruh batch selesai.
+* **Frontend (FE)**:
+  - Integrasi EventSource di [AIAssistantModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/AIAssistantModal.tsx) dengan kartu soal yang muncul bertahap (*staggered appearance*), memangkas waktu tunggu dari 15 detik menjadi instan (< 1 detik).
 
-#### 6. Bulk Import Soal Massal (Excel / Word / CSV)
-* **Backend (BE)**: Endpoint `POST /api/admin/tests/import-csv` yang mem-parsing multipart file CSV/Excel dan memvalidasinya menggunakan `dto.ValidateRelational()`.
-* **Frontend (FE)**: Komponen `BulkImportModal.tsx` dengan fitur unduh template file `.csv` / `.xlsx` contoh dan live preview tabel sebelum disimpan.
-
----
-
-### 🛡️ FASE P3: Keamanan Ujian & Fitur Institusi (Fokus Sprint 5)
-
-#### 7. Anti-Cheat Focus Mode
-* **Backend (BE)**: Simpan log pelanggaran `blur_count` dan `copy_attempts` di database `test_submissions`.
-* **Frontend (FE)**: Pasang event listener `window.onblur` pada [TestPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/TestPage.tsx) dengan batas toleransi 3 kali peringatan, kunci mode fullscreen, dan disable fungsi `contextmenu` serta shortcut `Ctrl+C`.
-
-#### 8. Streaming AI Question Generator (SSE)
-* **Backend (BE)**: Implementasikan Server-Sent Events (`c.Stream()`) dengan header `Content-Type: text/event-stream`.
-* **Frontend (FE)**: Menggunakan `fetch-event-source` di [AIAssistantModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/AIAssistantModal.tsx) untuk me-render butir soal satu per satu secara langsung saat dihasilkan model LLM.
+#### 6. Live Concurrent Examinee Counter (Redis HyperLogLog)
+* **Backend (BE)**:
+  - Perintah atomik hemat memori: `PFADD examinees:live:{testId} {sessionId}` (TTL 5 menit) dan `PFCOUNT examinees:live:{testId}`.
+* **Frontend (FE)**:
+  - Badge social proof di kartu ujian [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx): *"🔥 312 peserta sedang mengerjakan ujian ini"* untuk memicu konversi dan *FOMO*.
 
 ---
 

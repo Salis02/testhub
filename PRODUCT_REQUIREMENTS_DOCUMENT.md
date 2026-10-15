@@ -79,10 +79,10 @@
 |:---:|---|---|---|:---:|
 | **P0** | Core Engine: Start Sesi Non-Auth, Auto-Grading, Admin CRUD, AI Modal | Siswa, Guru | Fondasi platform ujian berkinerja tinggi | ✅ Selesai |
 | **P0** | Refactored Architecture: TanStack Query v5, Zustand, Zod, Repository Pattern | Developer, AI | Stabilitas 10 tahun & pencegahan technical debt | ✅ Selesai |
-| **P1** | **Payment Gateway QRIS & Paywall Enforcement** | Siswa, Admin | **Monetisasi Langsung**: Membuka gembok tes berbayar seketika | ✅ Selesai (Backend) |
-| **P1** | **Admin Manual Subscription Override** | Admin | **Fleksibilitas B2B / Offline**: Grant, extend, revoke akses | ✅ Selesai (Backend) |
-| **P1** | **Sertifikat Kelulusan & Verifikasi Publik** | Siswa, Publik | **Pemicu Viralitas**: UUID verifikasi resmi & anti-pemalsuan | ✅ Selesai (Backend) |
-| **P1** | **Leaderboard & Ranking Nasional Instan** | Siswa | **Meningkatkan Retensi**: Benchmarking kompetitif peserta | ✅ Selesai (Backend) |
+| **P1** | **Payment Gateway QRIS & Paywall Enforcement** | Siswa, Admin | **Monetisasi Langsung**: Membuka gembok tes berbayar seketika | ✅ Selesai (FE + BE) |
+| **P1** | **Admin Manual Subscription Override** | Admin | **Fleksibilitas B2B / Offline**: Grant, extend, revoke akses | ✅ Selesai (FE + BE) |
+| **P1** | **Sertifikat Kelulusan & Verifikasi Publik** | Siswa, Publik | **Pemicu Viralitas**: UUID verifikasi resmi & anti-pemalsuan | ✅ Selesai (FE + BE) |
+| **P1** | **Leaderboard & Ranking Nasional Instan** | Siswa | **Meningkatkan Retensi**: Benchmarking kompetitif peserta | ✅ Selesai (FE + BE) |
 | **P2** | **Weakness Diagnostic Report (Heatmap Topik)** | Siswa, Guru | **Alasan Upgrade**: Memberi nilai tambah dibanding tryout gratis | 📋 Terjadwal |
 | **P2** | **Creator Monetization & Payout Dashboard** | Guru, Admin | **Marketplace Expansion**: Komisi pasif dari konten kreator | 📋 Terjadwal |
 | **P2** | **Bulk Import Soal (Excel / Word / CSV)** | Guru | **Efisiensi Onboarding**: Memperbanyak bank soal dalam hitungan menit | 📋 Terjadwal |

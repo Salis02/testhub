@@ -142,7 +142,7 @@ Implementasi di [backend/internal/cache/redis.go](file:///home/sans/coding/quiz_
 
 | Key Pattern | Tipe Data | TTL | Tujuan & Invalidation |
 |---|---|---|---|
-| `tests:published` | JSON String | 10 Menit | Cache katalog beranda kuis. Di-invalidate saat ada create/update/delete tes. |
+| `tests:catalog:{category}` | JSON String | 5 Menit | Cache katalog publik per kategori. Di-invalidate saat modul dibuat/diupdate/dihapus (`tests:catalog:*`). |
 | `test:detail:{testId}` | JSON String | 30 Menit | Cache metadata modul tes publik. |
 | `test:questions:{testId}` | JSON String | 30 Menit | Cache daftar soal bersih tanpa jawaban untuk kecepatan akses bersamaan. |
 | `leaderboard:{testId}` | Sorted Set (ZSET)| 24 Jam | Skor peserta real-time (`ZADD`, `ZREVRANGE`). Latensi < 5ms. |

@@ -43,6 +43,11 @@ func (h *PaymentHandler) CreateInvoice(c *gin.Context) {
 		return
 	}
 
+	idempotencyKey := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
+	if idempotencyKey != "" {
+		c.Header("Idempotency-Key", idempotencyKey)
+	}
+
 	var amount float64
 	var testTitle string
 
