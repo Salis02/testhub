@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Question, UserSubmission } from '@/types'
 import { DifficultyBadge } from '@/components/common/Badge'
 import { Bookmark, CheckCircle2 } from 'lucide-react'
@@ -20,7 +20,36 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 }) => {
   const isFlagged = !!submission?.is_flagged
   const selectedOptionId = submission?.selected_option_id
-  const essayText = submission?.answer_text || ''
+  const currentAnswerText = submission?.answer_text || ''
+  const [localEssayText, setLocalEssayText] = useState(currentAnswerText)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sync local text when switching questions
+  useEffect(() => {
+    setLocalEssayText(submission?.answer_text || '')
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+  }, [question.id, submission?.answer_text])
+
+  const handleEssayChange = (val: string) => {
+    setLocalEssayText(val)
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      onChangeEssay(val)
+    }, 600)
+  }
+
+  const handleEssayBlur = () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    if (localEssayText !== currentAnswerText) {
+      onChangeEssay(localEssayText)
+    }
+  }
 
   return (
     <div className="bg-surface border border-borderline rounded-lg shadow-sm p-6 sm:p-8 transition-colors">
@@ -123,14 +152,15 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
           </label>
           <textarea
             rows={7}
-            value={essayText}
-            onChange={(e) => onChangeEssay(e.target.value)}
+            value={localEssayText}
+            onChange={(e) => handleEssayChange(e.target.value)}
+            onBlur={handleEssayBlur}
             placeholder="Tuliskan elaborasi jawaban Saudara secara sistematis, komprehensif, dan berbasis bukti..."
             className="w-full p-4 rounded-md border border-borderline bg-canvas text-ink text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors resize-y"
           />
           <div className="flex justify-between items-center text-xs text-ink-muted pt-1">
             <span>Disimpan otomatis ke cloud storage.</span>
-            <span className="font-mono">{essayText.length} karakter</span>
+            <span className="font-mono">{localEssayText.length} karakter</span>
           </div>
         </div>
       )}

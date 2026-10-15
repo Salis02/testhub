@@ -165,6 +165,27 @@ func (c *Client) Delete(key string) error {
 	return nil
 }
 
+// DeletePattern deletes all keys matching a prefix or wildcard pattern
+func (c *Client) DeletePattern(pattern string) error {
+	if !c.useMemory {
+		iter := c.rdb.Scan(c.ctx, 0, pattern, 0).Iterator()
+		for iter.Next(c.ctx) {
+			_ = c.rdb.Del(c.ctx, iter.Val()).Err()
+		}
+		return iter.Err()
+	}
+	prefix := strings.TrimSuffix(pattern, "*")
+	c.memStore.Range(func(key, value interface{}) bool {
+		if k, ok := key.(string); ok {
+			if strings.HasPrefix(k, prefix) {
+				c.memStore.Delete(k)
+			}
+		}
+		return true
+	})
+	return nil
+}
+
 // IncrAtomic increments the key and sets TTL atomically in 1 operation.
 // In Redis: Uses Lua script. In Memory: Thread-safe window expiration with auto-reset.
 func (c *Client) IncrAtomic(ctx context.Context, key string, window time.Duration) (int64, error) {

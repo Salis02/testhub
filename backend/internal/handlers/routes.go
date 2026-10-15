@@ -57,7 +57,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 
 	authHandler := NewAuthHandler(db, cfg)
 	publicHandler := NewPublicHandler(examRepo, subRepo, testRepo, cacheClient)
-	adminHandler := NewAdminHandler(db, testRepo)
+	adminHandler := NewAdminHandler(db, testRepo, cacheClient)
 	paymentGateway := services.NewPaymentGatewayProvider(cfg)
 	paymentHandler := NewPaymentHandler(subRepo, testRepo, paymentGateway)
 	adminSubHandler := NewAdminSubscriptionHandler(subRepo, testRepo)

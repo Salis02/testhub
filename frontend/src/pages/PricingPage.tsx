@@ -1,8 +1,19 @@
-import React from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Check, ArrowRight } from 'lucide-react'
+import { PaymentModal } from '@/components/common/PaymentModal'
+import { SubscriptionTier } from '@/types'
 
 export const PricingPage: React.FC = () => {
+  const navigate = useNavigate()
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+  const [checkoutPlan, setCheckoutPlan] = useState<SubscriptionTier>('season_pass')
+
+  const openCheckout = (plan: SubscriptionTier) => {
+    setCheckoutPlan(plan)
+    setIsCheckoutOpen(true)
+  }
+
   const tiers = [
     {
       name: 'Free / Uji Coba',
@@ -20,6 +31,7 @@ export const PricingPage: React.FC = () => {
       ],
       cta: 'Mulai Gratis',
       href: '/',
+      isCheckout: false,
     },
     {
       name: 'Basic Individu',
@@ -37,7 +49,9 @@ export const PricingPage: React.FC = () => {
         'Bebas gangguan banner promosi',
       ],
       cta: 'Pilih Paket Basic',
-      href: '/login',
+      href: '',
+      isCheckout: true,
+      plan: 'season_pass' as SubscriptionTier,
     },
     {
       name: 'Pro Creator',
@@ -57,6 +71,7 @@ export const PricingPage: React.FC = () => {
       ],
       cta: 'Daftar Sebagai Pengajar',
       href: '/admin',
+      isCheckout: false,
     },
     {
       name: 'Institusi / B2B',
@@ -148,21 +163,51 @@ export const PricingPage: React.FC = () => {
             </div>
 
             <div className="pt-6 mt-6 border-t border-borderline">
-              <Link
-                to={tier.href}
-                className={`w-full py-2.5 px-4 rounded-md text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors ${
-                  tier.featured
-                    ? 'bg-accent text-white hover:opacity-95 shadow-xs'
-                    : 'border border-borderline bg-canvas text-ink hover:bg-surface-hover'
-                }`}
-              >
-                <span>{tier.cta}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+              {tier.isCheckout ? (
+                <button
+                  type="button"
+                  onClick={() => openCheckout(tier.plan || 'season_pass')}
+                  className={`w-full py-2.5 px-4 rounded-md text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors ${
+                    tier.featured
+                      ? 'bg-accent text-white hover:opacity-95 shadow-xs'
+                      : 'border border-borderline bg-canvas text-ink hover:bg-surface-hover'
+                  }`}
+                >
+                  <span>{tier.cta}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <Link
+                  to={tier.href}
+                  className={`w-full py-2.5 px-4 rounded-md text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors ${
+                    tier.featured
+                      ? 'bg-accent text-white hover:opacity-95 shadow-xs'
+                      : 'border border-borderline bg-canvas text-ink hover:bg-surface-hover'
+                  }`}
+                >
+                  <span>{tier.cta}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
             </div>
           </div>
         ))}
       </div>
+
+      {/* Payment Checkout Modal for direct subscription */}
+      {isCheckoutOpen && (
+        <PaymentModal
+          isOpen={isCheckoutOpen}
+          onClose={() => setIsCheckoutOpen(false)}
+          initialPlan={checkoutPlan}
+          testTitle="Paket Langganan TestHub"
+          priceIdr={75000}
+          onPaymentSuccess={() => {
+            setIsCheckoutOpen(false)
+            navigate('/')
+          }}
+        />
+      )}
 
       {/* FAQ Snippet */}
       <div className="max-w-3xl mx-auto pt-8 border-t border-borderline space-y-6">

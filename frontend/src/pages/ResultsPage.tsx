@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { TestResult, Question } from '@/types'
+import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { ScoreSummary } from '@/components/results/ScoreSummary'
 import { CategoryBreakdown } from '@/components/results/CategoryBreakdown'
@@ -12,28 +12,16 @@ import { ArrowLeft, RotateCcw, Share2, Printer, Check, Award, Trophy } from 'luc
 
 export const ResultsPage: React.FC = () => {
   const { resultId } = useParams<{ resultId: string }>()
-  const [data, setData] = useState<{ result: TestResult; questions: Question[] } | null>(null)
-  const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const [isCertModalOpen, setIsCertModalOpen] = useState(false)
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false)
 
-  useEffect(() => {
-    loadResult()
-  }, [resultId])
-
-  const loadResult = async () => {
-    if (!resultId) return
-    try {
-      setLoading(true)
-      const res = await api.getResult(resultId)
-      setData(res)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['result', resultId],
+    queryFn: () => (resultId ? api.getResult(resultId) : Promise.reject('ID hasil ujian tidak valid')),
+    enabled: !!resultId,
+    staleTime: 5 * 60 * 1000,
+  })
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href)

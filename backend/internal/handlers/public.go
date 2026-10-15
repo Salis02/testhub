@@ -46,11 +46,24 @@ func (h *PublicHandler) ListTests(c *gin.Context) {
 		query = c.Query("search")
 	}
 
+	cacheKey := fmt.Sprintf("tests:catalog:%s", category)
+	if query == "" && h.cache != nil {
+		var cachedTests []models.Test
+		if err := h.cache.Get(cacheKey, &cachedTests); err == nil && len(cachedTests) > 0 {
+			c.JSON(http.StatusOK, cachedTests)
+			return
+		}
+	}
+
 	tests, err := h.examRepo.ListPublicTests(c.Request.Context(), category, query)
 	if err != nil {
 		log.Printf("[PublicHandler.ListTests] internal error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar modul ujian."})
 		return
+	}
+
+	if query == "" && h.cache != nil && len(tests) > 0 {
+		_ = h.cache.Set(cacheKey, tests, 5*time.Minute)
 	}
 
 	c.JSON(http.StatusOK, tests)

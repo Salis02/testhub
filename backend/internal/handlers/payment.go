@@ -67,6 +67,47 @@ func (h *PaymentHandler) CreateInvoice(c *gin.Context) {
 		testTitle = "Season Pass All-Access (90 Hari)"
 	}
 
+	// 1. Pre-Payment Ownership Check: Cegah pembelian ulang jika user sudah punya akses aktif
+	testIDStr := ""
+	if req.TestID != nil {
+		testIDStr = *req.TestID
+	}
+	hasAccess, errAccess := h.subRepo.HasActiveAccess(c.Request.Context(), req.UserEmail, testIDStr)
+	if errAccess == nil && hasAccess {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":              "Anda sudah memiliki akses aktif. Silakan langsung mulai ujian.",
+			"already_subscribed": true,
+		})
+		return
+	}
+
+	// 2. Pending Invoice Reuse & Idempotency: Jika ada order pending yang belum expired, gunakan kembali
+	if existingOrder, err := h.subRepo.GetActivePendingOrder(c.Request.Context(), req.UserEmail, req.TestID, req.PlanType); err == nil && existingOrder != nil {
+		countdown := 900
+		if existingOrder.ExpiresAt != nil {
+			countdown = int(time.Until(*existingOrder.ExpiresAt).Seconds())
+			if countdown < 0 {
+				countdown = 0
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"order_id":         existingOrder.ID,
+			"plan_type":        existingOrder.PlanType,
+			"title":            testTitle,
+			"amount":           existingOrder.Amount,
+			"status":           existingOrder.Status,
+			"payment_method":   existingOrder.PaymentMethod,
+			"qr_payload":       existingOrder.QRPayload,
+			"snap_token":       existingOrder.SnapToken,
+			"redirect_url":     "",
+			"provider":         existingOrder.PaymentMethod,
+			"expires_at":       existingOrder.ExpiresAt.Format(time.RFC3339),
+			"countdown_second": countdown,
+			"is_reused":        true,
+		})
+		return
+	}
+
 	orderID := fmt.Sprintf("INV-%d-%s", time.Now().Unix(), uuid.New().String()[:6])
 	now := time.Now()
 	expiresAt := now.Add(15 * time.Minute)

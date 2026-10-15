@@ -122,15 +122,32 @@ curl -s http://localhost:8000/health
 
 ---
 
-## 5. Keputusan Arsitektur & Penyelesaian Technical Debt Backend
+## 5. Audit Backend: Status Penyelesaian Bug Fatal, Idempotensi, & Skalabilitas
 
-Berdasarkan audit arsitektur backend Go, seluruh area teknis inti telah diselesaikan dengan standar *Production-Grade Clean Architecture*:
+Seluruh temuan teknis kritis dan optimasi basis kode backend Go telah dieksekusi dan diverifikasi (`go test ./tests -v` PASS):
 
-1. **Validasi Request Terpusat & Relasional** (`internal/models/dto.go`, `internal/validator/validator.go`): Validasi DTO struct tags `validator/v10` dan relasional (memverifikasi soal pilihan ganda wajib memiliki minimal 2 opsi dan tepat 1 kunci jawaban benar).
-2. **Rate Limiting Resilien** (`internal/cache/redis.go`, `internal/middleware/ratelimit.go`): Script Lua atomik (`INCR` + `EXPIRE`) di Redis dan in-memory fallback dengan janitor goroutine (30s) untuk mencegah memory leak.
-3. **AI Service 3-Tier Cascade** (`internal/services/ai_agent.go`): Gemini 2.5 Flash -> Groq Llama 3.3 -> Local Deterministic Fallback. Diisolasi dengan `context.Context` abort timeout.
-4. **Isolasi Repository Pattern** (`internal/repository/`): Seluruh query database terisolasi di `TestRepository`, `ExamRepository`, dan `SubscriptionRepository`. Handler controller (`admin.go`, `public.go`, `payment.go`) bersih dari raw SQL string.
-5. **Sanitasi Error (Anti Information Disclosure)**: Raw error database dicatat di log server backend (`log.Printf`), respon ke user JSON selalu menggunakan pesan ramah pengguna.
+### 5.1 Idempotensi Pembayaran & Akses Ganda
+* **Inbound Webhook (`POST /api/payments/webhook`)**:
+  - ✅ **Idempoten Teruji**: `SettleOrder` menggunakan transaksi database dengan row-level lock `SELECT * FROM orders WHERE id = $1 FOR UPDATE` dan fast-return status settled.
+* **Outbound Create Invoice (`POST /api/payments/create-invoice`)**:
+  - ✅ **Client Idempotency Key**: Mendukung HTTP Header `Idempotency-Key` dari frontend untuk menjamin exactly-once creation.
+  - ✅ **Pre-Payment Ownership Check**: Menolak pembuatan tagihan dengan `HTTP 409 Conflict` (`already_subscribed: true`) jika user sudah memiliki modul tersebut atau memiliki Season Pass aktif.
+  - ✅ **Pending Invoice Reuse**: Jika terdapat invoice pending yang belum kadaluarsa (`expires_at > NOW()`), backend mengembalikan order yang ada alih-alih membuat tagihan ganda di gateway.
+
+### 5.2 Bug Fatal & Celah Integritas Sistem (Selesai Diperbaiki)
+1. **✅ Bug Fatal Double Submit `FinishTest` (Resolved)**:
+   - `PostgresExamRepository.FinishExamTx` kini dilengkapi pengecekan awal status sesi (`if session.SubmittedAt != nil || !session.IsActive`).
+   - Jika peserta mengklik submit dua kali atau jaringan lag, backend mengambil hasil dari `test_results` dan mengembalikan `HTTP 200 OK` tanpa duplicate key error.
+2. **✅ Eliminasi N+1 Query pada Database (Anti N+1 Batching)**:
+   - `attachBatchOptions` mengeksekusi 1 kueri batch `WHERE question_id IN (?)` menggunakan `sqlx.In`.
+   - Diterapkan pada `FinishExamTx`, `GetSessionQuestions`, dan `GetResultByID`, memangkas ratusan query SQL menjadi tepat 1 query batch.
+
+### 5.3 Optimasi Caching Redis
+1. **✅ Read-Through Cache Katalog Ujian**:
+   - `PublicHandler.ListTests` membaca cache Redis `tests:catalog:{category}` (TTL 5m) untuk request katalog publik.
+2. **✅ Automatic Cache Invalidation**:
+   - `AdminHandler` memanggil `DeletePattern("tests:catalog:*")` saat modul dibuat, diperbarui, dihapus, atau diubah status publikasinya.
+
 
 ---
 
@@ -147,23 +164,23 @@ Audit mendalam terhadap seluruh endpoint yang terdaftar di [backend/internal/han
 | **🌐 Public** | `GET /api/auth/me` | ✅ 100% | ✅ Ya | `authApi.me()` di [AuthContext.tsx](file:///home/sans/coding/quiz_app/frontend/src/context/AuthContext.tsx) |
 | **🌐 Public** | `GET /api/tests` | ✅ 100% | ✅ Ya | `testsApi.listTests()` di [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) |
 | **🌐 Public** | `GET /api/tests/:testId` | ✅ 100% | ✅ Ya | `testsApi.getTestById()` di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) |
-| **🌐 Public** | `POST /api/tests/:testId/start` | ✅ 100% | ⚠️ Parsial | `sessionsApi.startTest()` aktif. **GAP:** Respon `HTTP 402 Paywall` belum ditangkap untuk membuka `PaymentModal`. |
+| **🌐 Public** | `POST /api/tests/:testId/start` | ✅ 100% | ✅ Ya | `sessionsApi.startTest()` aktif terintegrasi tangkapan `ApiError` 402 dan `PaymentModal` di [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) & [TestPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/TestPage.tsx). |
 | **🌐 Public** | `GET /api/sessions/:id/questions` | ✅ 100% | ✅ Ya | `sessionsApi.getSessionQuestions()` di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) |
 | **🌐 Public** | `GET /api/sessions/:id/submissions`| ✅ 100% | ✅ Ya | `sessionsApi.getSessionSubmissions()` di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) |
 | **🌐 Public** | `POST /api/sessions/:id/submit-answer`| ✅ 100% | ✅ Ya | `sessionsApi.submitAnswer()` di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) |
 | **🌐 Public** | `POST /api/sessions/:id/finish` | ✅ 100% | ✅ Ya | `sessionsApi.finishTest()` di [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts) |
 | **🌐 Public** | `GET /api/results/:resultId` | ✅ 100% | ✅ Ya | `sessionsApi.getResult()` di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) |
-| **🌐 Public** | `GET /api/tests/:testId/leaderboard` | ✅ 100% | ❌ **Belum** | **GAP:** Belum ada method di `tests.api.ts` & belum ada drawer ranking di UI. |
-| **🌐 Public** | `GET /api/results/:id/certificate` | ✅ 100% | ❌ **Belum** | **GAP:** `ResultsPage.tsx` masih memakai print browser biasa, belum mengambil UUID sertifikat resmi. |
-| **🌐 Public** | `GET /api/verify/certificate/:id` | ✅ 100% | ❌ **Belum** | **GAP:** Belum ada rute halaman publik `VerifyCertificatePage.tsx` di React Router. |
-| **🌐 Public** | `POST /api/payments/create-invoice` | ✅ 100% | ❌ **Belum** | **GAP:** Belum ada service `payments.api.ts` dan belum ada komponen `PaymentModal.tsx`. |
-| **🌐 Public** | `GET /api/payments/status/:orderId` | ✅ 100% | ❌ **Belum** | **GAP:** Belum ada polling status QRIS di frontend. |
-| **🌐 Public** | `POST /api/payments/webhook` | ✅ 100% | Server | Jalur server-to-server gateway (Midtrans/Xendit) ke Go Backend (Idempoten). |
+| **🌐 Public** | `GET /api/tests/:testId/leaderboard` | ✅ 100% | ✅ Ya | `testsApi.getLeaderboard()` terhubung ke [LeaderboardModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/LeaderboardModal.tsx) di HomePage & ResultsPage. |
+| **🌐 Public** | `GET /api/results/:id/certificate` | ✅ 100% | ✅ Ya | `sessionsApi.getCertificate()` terhubung ke [CertificateModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/CertificateModal.tsx). |
+| **🌐 Public** | `GET /api/verify/certificate/:id` | ✅ 100% | ✅ Ya | `sessionsApi.verifyCertificate()` terhubung ke [VerifyCertificatePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/VerifyCertificatePage.tsx). |
+| **🌐 Public** | `POST /api/payments/create-invoice` | ✅ 100% | ✅ Ya | `paymentsApi.createInvoice()` terhubung di [PaymentModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/PaymentModal.tsx). |
+| **🌐 Public** | `GET /api/payments/status/:orderId` | ✅ 100% | ✅ Ya | `paymentsApi.getOrderStatus()` dengan TanStack Query auto-polling di [PaymentModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/PaymentModal.tsx). |
+| **🌐 Public** | `POST /api/payments/webhook` | ✅ 100% | Server | Jalur server-to-server gateway (Midtrans/Xendit) ke Go Backend (Idempoten via row-locking `SELECT FOR UPDATE`). |
 | **🌐 Public** | `POST /api/ai/generate-questions` | ✅ 100% | ✅ Ya | `aiApi.generateQuestions()` di [AIAssistantModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/AIAssistantModal.tsx) |
 | **👤 User** | `GET /api/user/me` | ✅ 100% | ✅ Ya | Kompatibel via alias `authApi.me()`. |
-| **👤 User** | `GET /api/user/subscriptions` | ✅ 100% | ❌ **Belum** | **GAP:** Belum ada panel riwayat modul berbayar di sisi peserta (siswa). |
+| **👤 User** | `GET /api/user/subscriptions` | ✅ 100% | ✅ Ya | `paymentsApi.getUserSubscriptions()` terhubung di [SubscriptionManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/SubscriptionManagement.tsx). |
 | **👑 Admin** | `GET /api/admin/stats` | ✅ 100% | ✅ Ya | `adminApi.getStats()` di [AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx) |
-| **👑 Admin** | `GET /api/admin/tests/:id/analytics`| ✅ 100% | ⚠️ Parsial | Endpoint BE siap, UI baru menampilkan agregat total di overview dashboard. |
+| **👑 Admin** | `GET /api/admin/tests/:id/analytics`| ✅ 100% | ⚠️ Parsial | Endpoint BE siap, UI menampilkan modal [TestAnalyticsModal.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestAnalyticsModal.tsx). |
 | **👑 Admin** | `GET /api/admin/tests` (CRUD) | ✅ 100% | ✅ Ya | `adminApi.listTests()`, `createTest()`, `updateTest()`, `deleteTest()`, `togglePublish()`. |
 | **👑 Admin** | `GET /api/admin/essays` (Grading) | ✅ 100% | ✅ Ya | `adminApi.getPendingEssays()` & `adminApi.gradeEssay()` di [EssayGradingView.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/EssayGradingView.tsx). |
 | **👑 Admin** | `POST /api/admin/upload-media` | ✅ 100% | ✅ Ya | `adminApi.uploadMedia()` & `deleteMedia()` di [MediaUploader.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/MediaUploader.tsx). |
@@ -174,42 +191,26 @@ Audit mendalam terhadap seluruh endpoint yang terdaftar di [backend/internal/han
 
 ---
 
-### 6.2 Tiga Alur Interaksi Kritis yang Perlu Disambungkan Tim Frontend (Action Items)
+### 6.2 Status Penyelesaian Technical Debt & Audit Frontend (100% Selesai)
 
-#### 1. Alur Paywall & Pembayaran Instan (User-Facing Flow)
-```
-[ Peserta Klik "Mulai Ujian" ] ──► POST /api/tests/:testId/start
-                                          │
-                                          ├─► (Jika Gratis / Sudah Bayar): Status 200 -> Masuk Sesi Ujian
-                                          │
-                                          └─► (Jika Berbayar & Belum Bayar): Status 402 Payment Required
-                                                    │
-                                                    ▼ (FE Tangkap Error 402)
-                                      [ Buka PaymentModal.tsx ]
-                                                    │
-                                                    ▼ POST /api/payments/create-invoice
-                                      [ Tampilkan Dynamic QRIS & Timer 15 Menit ]
-                                                    │
-                                                    ▼ Polling GET /api/payments/status/:orderId (tiap 3s)
-                                      [ Status Berubah ke "settled" ]
-                                                    │
-                                                    ▼ Otomatis Re-trigger Start Test -> Masuk Ujian!
-```
-* **Kebutuhan FE:**
-  - Buat `frontend/src/services/payments.api.ts` (`createInvoice`, `getOrderStatus`, `getUserSubscriptions`).
-  - Tambahkan state `paywallTest: { testId: string; priceIdr: number } | null` di [HomePage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) dan [useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts).
-  - Buat komponen `frontend/src/components/common/PaymentModal.tsx`.
+Seluruh 8 temuan arsitektural dan technical debt frontend telah selesai dieksekusi dan diverifikasi (`bun run build` bersih):
 
-#### 2. Alur Leaderboard Real-Time
-* **Kebutuhan FE:**
-  - Tambahkan `getLeaderboard(testId: string)` di `tests.api.ts`.
-  - Buat komponen `LeaderboardDrawer.tsx` di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) dengan tombol *"Lihat Ranking Nasional"* untuk benchmark posisi user terhadap ribuan peserta lain.
-
-#### 3. Alur Sertifikat Resmi & Verifikasi Publik
-* **Kebutuhan FE:**
-  - Tambahkan `getCertificate(resultId: string)` di `sessions.api.ts`.
-  - Ganti `window.print()` di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) dengan tombol *"Unduh Sertifikat Resmi (PDF)"* berdesain emas/biru menggunakan dynamic import `jspdf`.
-  - Daftarkan rute publik `/verify/certificate/:certificateId` di [App.tsx](file:///home/sans/coding/quiz_app/frontend/src/App.tsx) untuk menampilkan halaman keaslian nilai saat QR sertifikat di-scan.
+1. **✅ Auth Token Desync & Logout Leak ([AuthContext.tsx](file:///home/sans/coding/quiz_app/frontend/src/context/AuthContext.tsx)):**
+   - Menggunakan helper `getStoredToken()`, `setStoredToken()`, dan `clearStoredToken()` dari [client.ts](file:///home/sans/coding/quiz_app/frontend/src/services/client.ts).
+2. **✅ Keystroke Spam pada Input Esai ([QuestionCard.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/test/QuestionCard.tsx)):**
+   - Menerapkan input debounce 600ms dengan auto-flush saat event `onBlur` atau perpindahan soal.
+3. **✅ Server State Anti-Pattern di [ResultsPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx):**
+   - Direfaktorkan ke TanStack Query `useQuery(['result', resultId])` dengan auto-caching 5 menit.
+4. **✅ Resiliensi Offline Saat Jaringan Terputus ([useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts)):**
+   - Antrean jawaban pending disimpan di `localStorage` dan otomatis di-sync saat event `window.ononline` serta di-flush sebelum `finishSession()`.
+5. **✅ Code Splitting Bundle ([App.tsx](file:///home/sans/coding/quiz_app/frontend/src/App.tsx)):**
+   - Rute halaman di-split menggunakan `React.lazy()` dan `<Suspense>`. Warning bundle > 500 kB hilang dan beban load awal terpangkas drastis.
+6. **✅ Alur Berlangganan di [PricingPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/PricingPage.tsx):**
+   - Tombol paket terhubung langsung ke `PaymentModal` untuk checkout instan tanpa hambatan login.
+7. **✅ Dead Code Asset ([mockData.ts](file:///home/sans/coding/quiz_app/frontend/src/services/mockData.ts)):**
+   - Berkas data tiruan 26.3 KB telah dihapus dari repository.
+8. **✅ Client Idempotency-Key ([payments.api.ts](file:///home/sans/coding/quiz_app/frontend/src/services/payments.api.ts)):**
+   - Request invoice kini menyertakan header `Idempotency-Key` (UUIDv4) untuk menjamin exactly-once transaction.
 
 ---
 
@@ -282,3 +283,7 @@ Untuk menjamin kualitas kode bertahan 10+ tahun dengan skalabilitas tinggi, seti
 | **Rendering Performance** | Timer ujian per detik me-render ulang seluruh halaman | Simpan countdown di **Zustand** ([useTestSessionStore.ts](file:///home/sans/coding/quiz_app/frontend/src/stores/useTestSessionStore.ts)) dan konsumsi via atomic selector (`s => s.secondsLeft`). |
 | **Design Consistency** | Arbitrary hex color liar (`#3f21a8`) merusak tema | Gunakan token semantik CSS sesuai [style.md](file:///home/sans/coding/quiz_app/style.md) (`bg-slate-950`, `text-indigo-400`, `border-slate-800`). |
 | **Client Payment Security** | Server Key atau data rahasia dipanggil dari Frontend | Frontend hanya boleh menerima `snap_token` / `client_key` publik untuk Midtrans Snap Popup `window.snap.pay(snapToken)` dan tidak boleh memverifikasi signature pembayaran secara lokal. |
+| **Auth Token Lifecycle** | Logout leak token lama di header `Authorization` | Selalu gunakan `clearStoredToken()` dan `getStoredToken()` dari [client.ts](file:///home/sans/coding/quiz_app/frontend/src/services/client.ts). Dilarang manipulasi parsial `localStorage.removeItem('testhub_admin_token')`. |
+| **Input Auto-Save Debounce**| Keystroke spamming memicu HTTP 429 Too Many Requests | Input esai wajib menggunakan debounce 500–1000ms atau di-flush ke server saat event `onBlur` / perpindahan butir soal. |
+| **Offline Sync Queue** | Kehilangan jawaban peserta saat internet putus | Simpan antrean jawaban pending di `localStorage` saat status `Gagal simpan` dan trigger auto-sync saat event `window.ononline`. |
+

@@ -23,24 +23,26 @@ import {
 interface PaymentModalProps {
   isOpen: boolean
   onClose: () => void
-  testId: string
-  testTitle: string
-  priceIdr: number
+  testId?: string
+  testTitle?: string
+  priceIdr?: number
+  initialPlan?: SubscriptionTier
   onPaymentSuccess: (email?: string) => void
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
   onClose,
-  testId,
-  testTitle,
-  priceIdr,
+  testId = '',
+  testTitle = 'Modul Ujian',
+  priceIdr = 15000,
+  initialPlan = 'per_test',
   onPaymentSuccess,
 }) => {
   const { user } = useAuth()
   const toast = useToast()
 
-  const [selectedPlan, setSelectedPlan] = useState<SubscriptionTier>('per_test')
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionTier>(initialPlan)
   const [email, setEmail] = useState<string>(user?.email || '')
   const [invoice, setInvoice] = useState<PaymentInvoiceResponse | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
@@ -52,12 +54,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (user?.email) setEmail(user.email)
+      setSelectedPlan(initialPlan)
       setInvoice(null)
       setQrDataUrl('')
       setSecondsLeft(900)
       hasHandledSettlementRef.current = false
     }
-  }, [isOpen, user])
+  }, [isOpen, user, initialPlan])
 
   // Generate QR Code data URL when invoice is created
   useEffect(() => {

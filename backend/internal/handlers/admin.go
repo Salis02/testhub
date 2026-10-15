@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"testhub/internal/cache"
 	"testhub/internal/database"
 	"testhub/internal/models"
 	"testhub/internal/repository"
@@ -18,12 +19,20 @@ import (
 type AdminHandler struct {
 	db       *database.DB
 	testRepo repository.TestRepository
+	cache    *cache.Client
 }
 
-func NewAdminHandler(db *database.DB, testRepo repository.TestRepository) *AdminHandler {
+func NewAdminHandler(db *database.DB, testRepo repository.TestRepository, cache *cache.Client) *AdminHandler {
 	return &AdminHandler{
 		db:       db,
 		testRepo: testRepo,
+		cache:    cache,
+	}
+}
+
+func (h *AdminHandler) invalidateCatalogCache() {
+	if h.cache != nil {
+		_ = h.cache.DeletePattern("tests:catalog:*")
 	}
 }
 
@@ -105,6 +114,7 @@ func (h *AdminHandler) CreateTest(c *gin.Context) {
 		return
 	}
 
+	h.invalidateCatalogCache()
 	c.JSON(http.StatusCreated, test)
 }
 
@@ -178,6 +188,7 @@ func (h *AdminHandler) UpdateTest(c *gin.Context) {
 		return
 	}
 
+	h.invalidateCatalogCache()
 	updated, err := h.testRepo.GetTestByID(c.Request.Context(), testID)
 	if err != nil {
 		c.JSON(http.StatusOK, test)
@@ -202,6 +213,7 @@ func (h *AdminHandler) TogglePublish(c *gin.Context) {
 		return
 	}
 
+	h.invalidateCatalogCache()
 	c.JSON(http.StatusOK, gin.H{
 		"published":    newStatus,
 		"published_at": time.Now().Format(time.RFC3339),
@@ -223,6 +235,7 @@ func (h *AdminHandler) DeleteTest(c *gin.Context) {
 		return
 	}
 
+	h.invalidateCatalogCache()
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 

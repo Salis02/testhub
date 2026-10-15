@@ -8,9 +8,17 @@ export interface CreateInvoicePayload {
 }
 
 export const paymentsApi = {
-  async createInvoice(payload: CreateInvoicePayload): Promise<PaymentInvoiceResponse> {
+  async createInvoice(payload: CreateInvoicePayload, idempotencyKey?: string): Promise<PaymentInvoiceResponse> {
+    const key =
+      idempotencyKey ||
+      (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`)
     return apiClient<PaymentInvoiceResponse>('/payments/create-invoice', {
       method: 'POST',
+      headers: {
+        'Idempotency-Key': key,
+      },
       body: JSON.stringify(payload),
     })
   },

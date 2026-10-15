@@ -10,11 +10,66 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 
 	"testhub/internal/database"
 	"testhub/internal/models"
 	"testhub/internal/services"
 )
+
+type testResultRow struct {
+	ID                     string    `db:"id"`
+	SessionID              string    `db:"session_id"`
+	TestID                 string    `db:"test_id"`
+	TestTitle              string    `db:"test_title"`
+	Category               string    `db:"category"`
+	TotalScore             float64   `db:"total_score"`
+	PercentageScore        float64   `db:"percentage_score"`
+	Passing                bool      `db:"passing"`
+	PassingScorePercentage int       `db:"passing_score_percentage"`
+	TimeSpentSeconds       int       `db:"time_spent_seconds"`
+	DurationSeconds        int       `db:"duration_seconds"`
+	QuestionsAnswered      int       `db:"questions_answered"`
+	QuestionsCorrect       int       `db:"questions_correct"`
+	TotalQuestions         int       `db:"total_questions"`
+	Percentile             int       `db:"percentile"`
+	CategoryBreakdownJSON  []byte    `db:"category_breakdown"`
+	SubmissionsJSON        []byte    `db:"submissions"`
+	SubmittedAt            time.Time `db:"submitted_at"`
+	CreatedAt              time.Time `db:"created_at"`
+}
+
+func (row *testResultRow) toModel() *models.TestResult {
+	var breakdown []models.CategoryScore
+	if len(row.CategoryBreakdownJSON) > 0 {
+		_ = json.Unmarshal(row.CategoryBreakdownJSON, &breakdown)
+	}
+	var submissions map[string]models.UserSubmission
+	if len(row.SubmissionsJSON) > 0 {
+		_ = json.Unmarshal(row.SubmissionsJSON, &submissions)
+	}
+	return &models.TestResult{
+		ID:                     row.ID,
+		SessionID:              row.SessionID,
+		TestID:                 row.TestID,
+		TestTitle:              row.TestTitle,
+		Category:               row.Category,
+		TotalScore:             row.TotalScore,
+		PercentageScore:        row.PercentageScore,
+		Passing:                row.Passing,
+		PassingScorePercentage: row.PassingScorePercentage,
+		TimeSpentSeconds:       row.TimeSpentSeconds,
+		DurationSeconds:        row.DurationSeconds,
+		QuestionsAnswered:      row.QuestionsAnswered,
+		QuestionsCorrect:       row.QuestionsCorrect,
+		TotalQuestions:         row.TotalQuestions,
+		Percentile:             row.Percentile,
+		CategoryBreakdown:      breakdown,
+		Submissions:            submissions,
+		SubmittedAt:            row.SubmittedAt,
+		CreatedAt:              row.CreatedAt,
+	}
+}
 
 var (
 	ErrSessionNotFound = errors.New("sesi ujian tidak ditemukan")
@@ -116,6 +171,54 @@ func (r *PostgresExamRepository) GetSessionByID(ctx context.Context, sessionID s
 	return &session, nil
 }
 
+// attachBatchOptions loads all question options in a single batch query (Anti N+1)
+func (r *PostgresExamRepository) attachBatchOptions(ctx context.Context, tx *sqlx.Tx, questions []models.TestQuestion, includeCorrect bool) error {
+	if len(questions) == 0 {
+		return nil
+	}
+	questionIDs := make([]string, len(questions))
+	for i, q := range questions {
+		questionIDs[i] = q.ID
+	}
+
+	var query string
+	if includeCorrect {
+		query = "SELECT id, question_id, option_letter, option_text, is_correct FROM question_options WHERE question_id IN (?) ORDER BY option_letter ASC"
+	} else {
+		query = "SELECT id, question_id, option_letter, option_text FROM question_options WHERE question_id IN (?) ORDER BY option_letter ASC"
+	}
+
+	inQuery, args, err := sqlx.In(query, questionIDs)
+	if err != nil {
+		return fmt.Errorf("build batch options query: %w", err)
+	}
+
+	var allOptions []models.QuestionOption
+	if tx != nil {
+		inQuery = tx.Rebind(inQuery)
+		err = tx.SelectContext(ctx, &allOptions, inQuery, args...)
+	} else {
+		inQuery = r.db.Rebind(inQuery)
+		err = r.db.SelectContext(ctx, &allOptions, inQuery, args...)
+	}
+	if err != nil {
+		return fmt.Errorf("select batch options: %w", err)
+	}
+
+	optionsByQ := make(map[string][]models.QuestionOption)
+	for _, opt := range allOptions {
+		if !includeCorrect {
+			opt.IsCorrect = nil
+		}
+		optionsByQ[opt.QuestionID] = append(optionsByQ[opt.QuestionID], opt)
+	}
+
+	for i := range questions {
+		questions[i].Options = optionsByQ[questions[i].ID]
+	}
+	return nil
+}
+
 // GetSessionQuestions fetches sanitized questions and options for exam taking (strips correct answers)
 func (r *PostgresExamRepository) GetSessionQuestions(ctx context.Context, sessionID string) (*models.Test, []models.TestQuestion, error) {
 	session, err := r.GetSessionByID(ctx, sessionID)
@@ -137,17 +240,10 @@ func (r *PostgresExamRepository) GetSessionQuestions(ctx context.Context, sessio
 
 	for i := range questions {
 		questions[i].Explanation = "" // Strip explanation during test taking
+	}
 
-		var options []models.QuestionOption
-		err = r.db.SelectContext(ctx, &options, "SELECT id, question_id, option_letter, option_text FROM question_options WHERE question_id = $1 ORDER BY option_letter ASC", questions[i].ID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("select options for question %s: %w", questions[i].ID, err)
-		}
-
-		for j := range options {
-			options[j].IsCorrect = nil // Strip answer key integrity
-		}
-		questions[i].Options = options
+	if err := r.attachBatchOptions(ctx, nil, questions, false); err != nil {
+		return nil, nil, fmt.Errorf("attach options for test %s: %w", test.ID, err)
 	}
 
 	return &test, questions, nil
@@ -266,6 +362,15 @@ func (r *PostgresExamRepository) FinishExamTx(ctx context.Context, sessionID str
 		return nil, fmt.Errorf("get session for finish: %w", err)
 	}
 
+	// Idempotency: if session was already finished/inactive, return existing test_result immediately
+	if session.SubmittedAt != nil || !session.IsActive {
+		var existingRow testResultRow
+		err = tx.GetContext(ctx, &existingRow, "SELECT * FROM test_results WHERE session_id = $1", sessionID)
+		if err == nil {
+			return existingRow.toModel(), nil
+		}
+	}
+
 	var test models.Test
 	err = tx.GetContext(ctx, &test, "SELECT * FROM tests WHERE id = $1", session.TestID)
 	if err != nil {
@@ -278,13 +383,8 @@ func (r *PostgresExamRepository) FinishExamTx(ctx context.Context, sessionID str
 		return nil, fmt.Errorf("select questions for finish: %w", err)
 	}
 
-	for i := range questions {
-		var options []models.QuestionOption
-		err = tx.SelectContext(ctx, &options, "SELECT id, question_id, option_letter, option_text, is_correct FROM question_options WHERE question_id = $1 ORDER BY option_letter ASC", questions[i].ID)
-		if err != nil {
-			return nil, fmt.Errorf("select options for question %s: %w", questions[i].ID, err)
-		}
-		questions[i].Options = options
+	if err := r.attachBatchOptions(ctx, tx, questions, true); err != nil {
+		return nil, fmt.Errorf("attach batch options for finish: %w", err)
 	}
 
 	type subRow struct {
@@ -381,29 +481,7 @@ func (r *PostgresExamRepository) FinishExamTx(ctx context.Context, sessionID str
 
 // GetResultByID retrieves test result and full questions with explanations for review
 func (r *PostgresExamRepository) GetResultByID(ctx context.Context, resultID string) (*models.TestResult, []models.TestQuestion, error) {
-	type resultRow struct {
-		ID                     string    `db:"id"`
-		SessionID              string    `db:"session_id"`
-		TestID                 string    `db:"test_id"`
-		TestTitle              string    `db:"test_title"`
-		Category               string    `db:"category"`
-		TotalScore             float64   `db:"total_score"`
-		PercentageScore        float64   `db:"percentage_score"`
-		Passing                bool      `db:"passing"`
-		PassingScorePercentage int       `db:"passing_score_percentage"`
-		TimeSpentSeconds       int       `db:"time_spent_seconds"`
-		DurationSeconds        int       `db:"duration_seconds"`
-		QuestionsAnswered      int       `db:"questions_answered"`
-		QuestionsCorrect       int       `db:"questions_correct"`
-		TotalQuestions         int       `db:"total_questions"`
-		Percentile             int       `db:"percentile"`
-		CategoryBreakdownJSON  []byte    `db:"category_breakdown"`
-		SubmissionsJSON        []byte    `db:"submissions"`
-		SubmittedAt            time.Time `db:"submitted_at"`
-		CreatedAt              time.Time `db:"created_at"`
-	}
-
-	var row resultRow
+	var row testResultRow
 	err := r.db.GetContext(ctx, &row, "SELECT * FROM test_results WHERE id = $1", resultID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -412,47 +490,13 @@ func (r *PostgresExamRepository) GetResultByID(ctx context.Context, resultID str
 		return nil, nil, fmt.Errorf("get test result %s: %w", resultID, err)
 	}
 
-	var breakdown []models.CategoryScore
-	if len(row.CategoryBreakdownJSON) > 0 {
-		_ = json.Unmarshal(row.CategoryBreakdownJSON, &breakdown)
-	}
-
-	var submissions map[string]models.UserSubmission
-	if len(row.SubmissionsJSON) > 0 {
-		_ = json.Unmarshal(row.SubmissionsJSON, &submissions)
-	}
-
-	result := models.TestResult{
-		ID:                     row.ID,
-		SessionID:              row.SessionID,
-		TestID:                 row.TestID,
-		TestTitle:              row.TestTitle,
-		Category:               row.Category,
-		TotalScore:             row.TotalScore,
-		PercentageScore:        row.PercentageScore,
-		Passing:                row.Passing,
-		PassingScorePercentage: row.PassingScorePercentage,
-		TimeSpentSeconds:       row.TimeSpentSeconds,
-		DurationSeconds:        row.DurationSeconds,
-		QuestionsAnswered:      row.QuestionsAnswered,
-		QuestionsCorrect:       row.QuestionsCorrect,
-		TotalQuestions:         row.TotalQuestions,
-		Percentile:             row.Percentile,
-		CategoryBreakdown:      breakdown,
-		Submissions:            submissions,
-		SubmittedAt:            row.SubmittedAt,
-		CreatedAt:              row.CreatedAt,
-	}
+	result := row.toModel()
 
 	var questions []models.TestQuestion
 	_ = r.db.SelectContext(ctx, &questions, "SELECT * FROM test_questions WHERE test_id = $1 AND is_deleted = false ORDER BY question_number ASC", result.TestID)
-	for i := range questions {
-		var options []models.QuestionOption
-		_ = r.db.SelectContext(ctx, &options, "SELECT id, question_id, option_letter, option_text, is_correct FROM question_options WHERE question_id = $1 ORDER BY option_letter ASC", questions[i].ID)
-		questions[i].Options = options
-	}
+	_ = r.attachBatchOptions(ctx, nil, questions, true)
 
-	return &result, questions, nil
+	return result, questions, nil
 }
 
 // GetLeaderboard retrieves top 50 participants for a test

@@ -3,6 +3,45 @@ import { Question, TestSession, UserSubmission } from '@/types'
 import { sessionsApi } from '@/services/sessions.api'
 import { testsApi } from '@/services/tests.api'
 
+interface QueuedSubmission {
+  questionId: string
+  payload: {
+    optionId?: string
+    answerText?: string
+    isFlagged?: boolean
+  }
+}
+
+const OFFLINE_QUEUE_KEY = 'testhub_pending_offline_answers'
+
+function getOfflineQueue(sessionId: string): QueuedSubmission[] {
+  try {
+    const raw = localStorage.getItem(`${OFFLINE_QUEUE_KEY}_${sessionId}`)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveOfflineQueue(sessionId: string, queue: QueuedSubmission[]) {
+  try {
+    if (queue.length === 0) {
+      localStorage.removeItem(`${OFFLINE_QUEUE_KEY}_${sessionId}`)
+    } else {
+      localStorage.setItem(`${OFFLINE_QUEUE_KEY}_${sessionId}`, JSON.stringify(queue))
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function enqueueOffline(sessionId: string, item: QueuedSubmission) {
+  const queue = getOfflineQueue(sessionId)
+  const filtered = queue.filter((q) => q.questionId !== item.questionId)
+  filtered.push(item)
+  saveOfflineQueue(sessionId, filtered)
+}
+
 interface TestSessionState {
   // State
   session: TestSession | null
@@ -23,6 +62,7 @@ interface TestSessionState {
   selectOption: (optionId: string) => Promise<void>
   setEssayAnswer: (text: string) => Promise<void>
   toggleFlag: () => Promise<void>
+  syncOfflineQueue: () => Promise<void>
   finishSession: () => Promise<string> // returns result ID
   resetSession: () => void
 }
@@ -109,6 +149,12 @@ export const useTestSessionStore = create<TestSessionState>((set, get) => ({
         loading: false,
         error: null,
       })
+
+      if (typeof window !== 'undefined') {
+        window.addEventListener('online', () => {
+          get().syncOfflineQueue()
+        })
+      }
     } catch (err) {
       set({ loading: false, error: (err as Error).message })
       throw err
@@ -152,6 +198,7 @@ export const useTestSessionStore = create<TestSessionState>((set, get) => ({
       await sessionsApi.submitAnswer(session.session_id, currentQ.id, { optionId })
       set({ autoSaveStatus: 'Tersimpan' })
     } catch {
+      enqueueOffline(session.session_id, { questionId: currentQ.id, payload: { optionId } })
       set({ autoSaveStatus: 'Gagal simpan' })
     }
   },
@@ -176,6 +223,7 @@ export const useTestSessionStore = create<TestSessionState>((set, get) => ({
       await sessionsApi.submitAnswer(session.session_id, currentQ.id, { answerText: text })
       set({ autoSaveStatus: 'Tersimpan' })
     } catch {
+      enqueueOffline(session.session_id, { questionId: currentQ.id, payload: { answerText: text } })
       set({ autoSaveStatus: 'Gagal simpan' })
     }
   },
@@ -203,6 +251,33 @@ export const useTestSessionStore = create<TestSessionState>((set, get) => ({
       await sessionsApi.submitAnswer(session.session_id, currentQ.id, { isFlagged: nextFlag })
       set({ autoSaveStatus: 'Tersimpan' })
     } catch {
+      enqueueOffline(session.session_id, { questionId: currentQ.id, payload: { isFlagged: nextFlag } })
+      set({ autoSaveStatus: 'Gagal simpan' })
+    }
+  },
+
+  syncOfflineQueue: async () => {
+    const { session } = get()
+    if (!session) return
+
+    const queue = getOfflineQueue(session.session_id)
+    if (queue.length === 0) return
+
+    set({ autoSaveStatus: 'Menyimpan...' })
+    const remaining: QueuedSubmission[] = []
+
+    for (const item of queue) {
+      try {
+        await sessionsApi.submitAnswer(session.session_id, item.questionId, item.payload)
+      } catch {
+        remaining.push(item)
+      }
+    }
+
+    saveOfflineQueue(session.session_id, remaining)
+    if (remaining.length === 0) {
+      set({ autoSaveStatus: 'Tersimpan' })
+    } else {
       set({ autoSaveStatus: 'Gagal simpan' })
     }
   },
@@ -213,6 +288,9 @@ export const useTestSessionStore = create<TestSessionState>((set, get) => ({
 
     try {
       set({ isSubmitting: true })
+      // Flush any pending offline queue before finalizing
+      await get().syncOfflineQueue()
+
       const timeSpent = Math.max(1, initialDuration - secondsLeft)
       const res = await sessionsApi.finishTest(session.session_id, timeSpent)
       set({ isSubmitting: false })

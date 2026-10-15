@@ -26,6 +26,7 @@ type SubscriptionRepository interface {
 	GetUserSubscriptions(ctx context.Context, userIdentifier string) ([]models.Subscription, error)
 	CreateOrder(ctx context.Context, order *models.Order) error
 	GetOrderByID(ctx context.Context, orderID string) (*models.Order, error)
+	GetActivePendingOrder(ctx context.Context, userEmail string, testID *string, planType string) (*models.Order, error)
 	SettleOrder(ctx context.Context, orderID string, paymentRef string) (*models.Subscription, error)
 }
 
@@ -215,6 +216,32 @@ func (r *PostgresSubscriptionRepository) CreateOrder(ctx context.Context, order 
 func (r *PostgresSubscriptionRepository) GetOrderByID(ctx context.Context, orderID string) (*models.Order, error) {
 	var order models.Order
 	err := r.db.GetContext(ctx, &order, "SELECT * FROM orders WHERE id = $1", orderID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrOrderNotFound
+		}
+		return nil, err
+	}
+	return &order, nil
+}
+
+// GetActivePendingOrder finds an existing pending unexpired order for the user and item
+func (r *PostgresSubscriptionRepository) GetActivePendingOrder(ctx context.Context, userEmail string, testID *string, planType string) (*models.Order, error) {
+	var order models.Order
+	var err error
+	if testID != nil && *testID != "" {
+		err = r.db.GetContext(ctx, &order, `
+			SELECT * FROM orders 
+			WHERE user_email = $1 AND test_id = $2 AND plan_type = $3 AND status = 'pending' AND (expires_at IS NULL OR expires_at > NOW())
+			ORDER BY created_at DESC LIMIT 1
+		`, userEmail, *testID, planType)
+	} else {
+		err = r.db.GetContext(ctx, &order, `
+			SELECT * FROM orders 
+			WHERE user_email = $1 AND plan_type = $2 AND status = 'pending' AND (expires_at IS NULL OR expires_at > NOW())
+			ORDER BY created_at DESC LIMIT 1
+		`, userEmail, planType)
+	}
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrOrderNotFound
