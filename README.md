@@ -13,6 +13,7 @@
 | [SYSTEM_ARCHITECTURE.md](file:///home/sans/coding/quiz_app/SYSTEM_ARCHITECTURE.md) | **Single Technical Reference:** Arsitektur sistem, skema data relasional, workflow Clean Architecture via CodeGraph, keamanan, dan deployment. |
 | [FRONTEND_ARCHITECTURE.md](file:///home/sans/coding/quiz_app/FRONTEND_ARCHITECTURE.md) | **Arsitektur Frontend:** Standar React 19, TanStack Query v5, Zustand v5, Zod validation, dan UI components. |
 | [style.md](file:///home/sans/coding/quiz_app/style.md) | **Design System:** Strict Tri-Color palette per mode, tipografi tabular, CSS variables, dan standar UX ujian. |
+| [SPRINT_NOTES.md](file:///home/sans/coding/quiz_app/SPRINT_NOTES.md) | **Sprint & Roadmap:** Rekap fitur selesai, rencana sprint, dan peluang fitur baru bernilai tinggi. |
 
 ---
 

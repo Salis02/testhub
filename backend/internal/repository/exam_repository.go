@@ -21,6 +21,7 @@ type testResultRow struct {
 	ID                     string    `db:"id"`
 	SessionID              string    `db:"session_id"`
 	TestID                 string    `db:"test_id"`
+	UserID                 *string   `db:"user_id"`
 	TestTitle              string    `db:"test_title"`
 	Category               string    `db:"category"`
 	TotalScore             float64   `db:"total_score"`
@@ -52,6 +53,7 @@ func (row *testResultRow) toModel() *models.TestResult {
 		ID:                     row.ID,
 		SessionID:              row.SessionID,
 		TestID:                 row.TestID,
+		UserID:                 row.UserID,
 		TestTitle:              row.TestTitle,
 		Category:               row.Category,
 		TotalScore:             row.TotalScore,
@@ -90,6 +92,8 @@ type ExamRepository interface {
 	GetResultByID(ctx context.Context, resultID string) (*models.TestResult, []models.TestQuestion, error)
 	GetLeaderboard(ctx context.Context, testID string, limit int) ([]models.LeaderboardEntry, error)
 	GetCertificate(ctx context.Context, resultID string) (*models.CertificateData, error)
+	GetUserExamHistory(ctx context.Context, userID string, limit, offset int) ([]models.UserExamHistoryItem, int, error)
+	GetUserExamStats(ctx context.Context, userID string) (*models.UserExamStats, error)
 }
 
 type PostgresExamRepository struct {
@@ -148,8 +152,8 @@ func (r *PostgresExamRepository) GetPublicTest(ctx context.Context, testID strin
 // CreateSession persists a new exam session
 func (r *PostgresExamRepository) CreateSession(ctx context.Context, session *models.TestSession) error {
 	query := `
-		INSERT INTO test_sessions (id, test_id, ip_address, user_agent, started_at, expires_at, is_active, created_at)
-		VALUES (:id, :test_id, :ip_address, :user_agent, :started_at, :expires_at, :is_active, :created_at)
+		INSERT INTO test_sessions (id, test_id, user_id, ip_address, user_agent, started_at, expires_at, is_active, created_at)
+		VALUES (:id, :test_id, :user_id, :ip_address, :user_agent, :started_at, :expires_at, :is_active, :created_at)
 	`
 	_, err := r.db.NamedExecContext(ctx, query, session)
 	if err != nil {
@@ -439,6 +443,7 @@ func (r *PostgresExamRepository) FinishExamTx(ctx context.Context, sessionID str
 		TestID:                 test.ID,
 		TestTitle:              test.Title,
 		Category:               test.Category,
+		UserID:                 session.UserID,
 		TotalScore:             scoring.TotalScore,
 		PercentageScore:        scoring.PercentageScore,
 		Passing:                scoring.Passing,
@@ -457,13 +462,13 @@ func (r *PostgresExamRepository) FinishExamTx(ctx context.Context, sessionID str
 
 	insertResultSQL := `
 		INSERT INTO test_results 
-		(id, session_id, test_id, test_title, category, total_score, percentage_score, passing, passing_score_percentage,
+		(id, session_id, test_id, user_id, test_title, category, total_score, percentage_score, passing, passing_score_percentage,
 		 time_spent_seconds, duration_seconds, questions_answered, questions_correct, total_questions, percentile,
 		 category_breakdown, submissions, submitted_at, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 	`
 	_, err = tx.ExecContext(ctx, insertResultSQL,
-		result.ID, result.SessionID, result.TestID, result.TestTitle, result.Category,
+		result.ID, result.SessionID, result.TestID, result.UserID, result.TestTitle, result.Category,
 		result.TotalScore, result.PercentageScore, result.Passing, result.PassingScorePercentage,
 		result.TimeSpentSeconds, result.DurationSeconds, result.QuestionsAnswered, result.QuestionsCorrect,
 		result.TotalQuestions, result.Percentile, breakdownJSON, submissionsJSON, result.SubmittedAt, result.CreatedAt,
@@ -594,3 +599,83 @@ func (r *PostgresExamRepository) GetCertificate(ctx context.Context, resultID st
 	}
 	return &data, nil
 }
+
+// GetUserExamHistory returns paginated exam results for a logged-in user
+func (r *PostgresExamRepository) GetUserExamHistory(ctx context.Context, userID string, limit, offset int) ([]models.UserExamHistoryItem, int, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	countQuery := "SELECT COUNT(*) FROM test_results WHERE user_id = $1"
+	var total int
+	err := r.db.GetContext(ctx, &total, countQuery, userID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count user exam history: %w", err)
+	}
+
+	query := `
+		SELECT 
+			id AS result_id,
+			session_id,
+			test_id,
+			test_title,
+			category,
+			total_score,
+			percentage_score,
+			passing,
+			passing_score_percentage,
+			time_spent_seconds,
+			total_questions,
+			questions_correct,
+			submitted_at
+		FROM test_results
+		WHERE user_id = $1
+		ORDER BY submitted_at DESC
+		LIMIT $2 OFFSET $3
+	`
+	var items []models.UserExamHistoryItem
+	err = r.db.SelectContext(ctx, &items, query, userID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("select user exam history: %w", err)
+	}
+	if items == nil {
+		items = []models.UserExamHistoryItem{}
+	}
+
+	return items, total, nil
+}
+
+// GetUserExamStats returns aggregated performance metrics for a user
+func (r *PostgresExamRepository) GetUserExamStats(ctx context.Context, userID string) (*models.UserExamStats, error) {
+	query := `
+		SELECT 
+			COUNT(*) AS total_exams_taken,
+			COUNT(CASE WHEN passing = true THEN 1 END) AS total_passed,
+			COALESCE(AVG(percentage_score), 0) AS average_score,
+			COALESCE(MAX(percentage_score), 0) AS highest_score
+		FROM test_results
+		WHERE user_id = $1
+	`
+	var stats struct {
+		TotalExamsTaken int     `db:"total_exams_taken"`
+		TotalPassed     int     `db:"total_passed"`
+		AverageScore    float64 `db:"average_score"`
+		HighestScore    float64 `db:"highest_score"`
+	}
+
+	err := r.db.GetContext(ctx, &stats, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get user exam stats: %w", err)
+	}
+
+	return &models.UserExamStats{
+		TotalExamsTaken: stats.TotalExamsTaken,
+		TotalPassed:     stats.TotalPassed,
+		AverageScore:    stats.AverageScore,
+		HighestScore:    stats.HighestScore,
+	}, nil
+}
+

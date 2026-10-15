@@ -156,9 +156,17 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 
 	clientIP := c.ClientIP()
 	userAgent := c.GetHeader("User-Agent")
+	var userIDPtr *string
+	if uidVal, exists := c.Get("user_id"); exists {
+		if uidStr, ok := uidVal.(string); ok && uidStr != "" {
+			userIDPtr = &uidStr
+		}
+	}
+
 	session := models.TestSession{
 		ID:        sessionID,
 		TestID:    test.ID,
+		UserID:    userIDPtr,
 		IPAddress: &clientIP,
 		UserAgent: &userAgent,
 		StartedAt: startedAt,

@@ -62,6 +62,7 @@ type Test struct {
 type TestSession struct {
 	ID                string     `db:"id" json:"session_id"`
 	TestID            string     `db:"test_id" json:"test_id"`
+	UserID            *string    `db:"user_id" json:"user_id,omitempty"`
 	IPAddress         *string    `db:"ip_address" json:"ip_address,omitempty"`
 	UserAgent         *string    `db:"user_agent" json:"user_agent,omitempty"`
 	DeviceFingerprint *string    `db:"device_fingerprint" json:"device_fingerprint,omitempty"`
@@ -105,6 +106,7 @@ type TestResult struct {
 	ID                     string                    `db:"id" json:"id"`
 	SessionID              string                    `db:"session_id" json:"session_id"`
 	TestID                 string                    `db:"test_id" json:"test_id"`
+	UserID                 *string                   `db:"user_id" json:"user_id,omitempty"`
 	TestTitle              string                    `db:"test_title" json:"test_title"`
 	Category               string                    `db:"category" json:"category"`
 	TotalScore             float64                   `db:"total_score" json:"total_score"`
@@ -268,5 +270,49 @@ type AdminAuditLog struct {
 	IPAddress    *string   `db:"ip_address" json:"ip_address,omitempty"`
 	CreatedAt    time.Time `db:"created_at" json:"created_at"`
 }
+
+type UserExamHistoryItem struct {
+	ResultID               string    `db:"result_id" json:"result_id"`
+	SessionID              string    `db:"session_id" json:"session_id"`
+	TestID                 string    `db:"test_id" json:"test_id"`
+	TestTitle              string    `db:"test_title" json:"test_title"`
+	Category               string    `db:"category" json:"category"`
+	TotalScore             float64   `db:"total_score" json:"total_score"`
+	PercentageScore        float64   `db:"percentage_score" json:"percentage_score"`
+	Passing                bool      `db:"passing" json:"passing"`
+	PassingScorePercentage int       `db:"passing_score_percentage" json:"passing_score_percentage"`
+	TimeSpentSeconds       int       `db:"time_spent_seconds" json:"time_spent_seconds"`
+	TotalQuestions         int       `db:"total_questions" json:"total_questions"`
+	QuestionsCorrect       int       `db:"questions_correct" json:"questions_correct"`
+	SubmittedAt            time.Time `db:"submitted_at" json:"submitted_at"`
+}
+
+type UserExamStats struct {
+	TotalExamsTaken int     `json:"total_exams_taken"`
+	TotalPassed     int     `json:"total_passed"`
+	AverageScore    float64 `json:"average_score"`
+	HighestScore    float64 `json:"highest_score"`
+}
+
+type UserListItem struct {
+	ID                    string     `db:"id" json:"id"`
+	Email                 string     `db:"email" json:"email"`
+	FullName              string     `db:"full_name" json:"full_name"`
+	Role                  string     `db:"role" json:"role"`
+	SubscriptionTier      string     `db:"subscription_tier" json:"subscription_tier"`
+	SubscriptionExpiresAt *time.Time `db:"subscription_expires_at" json:"subscription_expires_at,omitempty"`
+	IsActive              bool       `db:"is_active" json:"is_active"`
+	CreatedAt             time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt             time.Time  `db:"updated_at" json:"updated_at"`
+}
+
+type UpdateUserRoleDTO struct {
+	Role string `json:"role" binding:"required,oneof=admin creator user"`
+}
+
+type UpdateUserStatusDTO struct {
+	IsActive bool `json:"is_active"`
+}
+
 
 

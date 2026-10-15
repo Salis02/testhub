@@ -21,13 +21,15 @@ import (
 type AdminHandler struct {
 	db       *database.DB
 	testRepo repository.TestRepository
+	userRepo repository.UserRepository
 	cache    *cache.Client
 }
 
-func NewAdminHandler(db *database.DB, testRepo repository.TestRepository, cache *cache.Client) *AdminHandler {
+func NewAdminHandler(db *database.DB, testRepo repository.TestRepository, userRepo repository.UserRepository, cache *cache.Client) *AdminHandler {
 	return &AdminHandler{
 		db:       db,
 		testRepo: testRepo,
+		userRepo: userRepo,
 		cache:    cache,
 	}
 }
@@ -428,4 +430,66 @@ func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 
 	c.JSON(http.StatusOK, logs)
 }
+
+// ListUsers handles GET /api/admin/users
+func (h *AdminHandler) ListUsers(c *gin.Context) {
+	search := c.Query("search")
+	role := c.Query("role")
+	status := c.Query("status")
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	users, total, err := h.userRepo.ListUsers(c.Request.Context(), search, role, status, limit, offset)
+	if err != nil {
+		log.Printf("[AdminHandler.ListUsers] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar pengguna."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"users":  users,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// ToggleUserStatus handles PATCH /api/admin/users/:userId/status
+func (h *AdminHandler) ToggleUserStatus(c *gin.Context) {
+	userID := c.Param("userId")
+	var req models.UpdateUserStatusDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format data status tidak valid."})
+		return
+	}
+
+	if err := h.userRepo.UpdateUserStatus(c.Request.Context(), userID, req.IsActive); err != nil {
+		log.Printf("[AdminHandler.ToggleUserStatus] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui status pengguna."})
+		return
+	}
+
+	h.logAudit(c, "toggle_user_status", "user", userID, "", fmt.Sprintf("is_active: %v", req.IsActive))
+	c.JSON(http.StatusOK, gin.H{"success": true, "is_active": req.IsActive})
+}
+
+// UpdateUserRole handles PUT /api/admin/users/:userId/role
+func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
+	userID := c.Param("userId")
+	var req models.UpdateUserRoleDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Role harus salah satu dari: admin, creator, user."})
+		return
+	}
+
+	if err := h.userRepo.UpdateUserRole(c.Request.Context(), userID, req.Role); err != nil {
+		log.Printf("[AdminHandler.UpdateUserRole] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui role pengguna."})
+		return
+	}
+
+	h.logAudit(c, "update_user_role", "user", userID, "", fmt.Sprintf("role: %s", req.Role))
+	c.JSON(http.StatusOK, gin.H{"success": true, "role": req.Role})
+}
+
 

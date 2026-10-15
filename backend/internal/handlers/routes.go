@@ -54,10 +54,12 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 	testRepo := repository.NewPostgresTestRepository(db)
 	examRepo := repository.NewPostgresExamRepository(db)
 	subRepo := repository.NewPostgresSubscriptionRepository(db)
+	userRepo := repository.NewPostgresUserRepository(db)
 
 	authHandler := NewAuthHandler(db, cfg)
 	publicHandler := NewPublicHandler(examRepo, subRepo, testRepo, cacheClient)
-	adminHandler := NewAdminHandler(db, testRepo, cacheClient)
+	adminHandler := NewAdminHandler(db, testRepo, userRepo, cacheClient)
+	userHandler := NewUserHandler(examRepo)
 	paymentGateway := services.NewPaymentGatewayProvider(cfg)
 	paymentHandler := NewPaymentHandler(subRepo, testRepo, paymentGateway)
 	adminSubHandler := NewAdminSubscriptionHandler(subRepo, testRepo)
@@ -135,6 +137,8 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		{
 			user.GET("/me", authHandler.Me)
 			user.GET("/subscriptions", paymentHandler.GetUserSubscriptions)
+			user.GET("/history", userHandler.GetExamHistory)
+			user.GET("/stats", userHandler.GetExamStats)
 		}
 
 		// =========================================================================
@@ -172,6 +176,11 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			admin.POST("/subscriptions/manual-grant", adminSubHandler.ManualGrant)
 			admin.PUT("/subscriptions/:id/status", adminSubHandler.UpdateStatus)
 			admin.DELETE("/subscriptions/:id/revoke", adminSubHandler.Revoke)
+
+			// User Management & Access Control
+			admin.GET("/users", adminHandler.ListUsers)
+			admin.PATCH("/users/:userId/status", adminHandler.ToggleUserStatus)
+			admin.PUT("/users/:userId/role", adminHandler.UpdateUserRole)
 		}
 	}
 
