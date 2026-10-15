@@ -6,7 +6,7 @@ import { Skeleton } from './Skeleton'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
-  allowedRoles?: ('admin' | 'creator')[]
+  allowedRoles?: ('admin' | 'creator' | 'user')[]
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
@@ -35,7 +35,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // 3. Unauthorized role (e.g. regular student trying to access admin dashboard)
-  if (allowedRoles && !allowedRoles.includes(user.role as 'admin' | 'creator')) {
+  if (allowedRoles && !allowedRoles.includes(user.role as 'admin' | 'creator' | 'user')) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
         <div className="max-w-md w-full bg-surface border border-red-500/30 rounded-lg p-8 shadow-sm text-center space-y-5">

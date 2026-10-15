@@ -15,6 +15,9 @@ const ResultsPage = React.lazy(() => import('@/pages/ResultsPage').then((m) => (
 const PricingPage = React.lazy(() => import('@/pages/PricingPage').then((m) => ({ default: m.PricingPage })))
 const LoginPage = React.lazy(() => import('@/pages/LoginPage').then((m) => ({ default: m.LoginPage })))
 const AdminPage = React.lazy(() => import('@/pages/AdminPage').then((m) => ({ default: m.AdminPage })))
+const MySubscriptionsPage = React.lazy(() =>
+  import('@/pages/MySubscriptionsPage').then((m) => ({ default: m.MySubscriptionsPage }))
+)
 const VerifyCertificatePage = React.lazy(() =>
   import('@/pages/VerifyCertificatePage').then((m) => ({ default: m.VerifyCertificatePage }))
 )
@@ -58,6 +61,24 @@ export function App() {
                         <Route path="/verify/:certificateId" element={<VerifyCertificatePage />} />
                         <Route path="/verify/certificate/:certificateId" element={<VerifyCertificatePage />} />
                         <Route path="/login" element={<LoginPage />} />
+
+                        {/* User Role Routes (Authenticated Students / Examinees) */}
+                        <Route
+                          path="/my-subscriptions"
+                          element={
+                            <ProtectedRoute allowedRoles={['user', 'admin', 'creator']}>
+                              <MySubscriptionsPage />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/profile"
+                          element={
+                            <ProtectedRoute allowedRoles={['user', 'admin', 'creator']}>
+                              <MySubscriptionsPage />
+                            </ProtectedRoute>
+                          }
+                        />
 
                         {/* Protected Routes (Restricted: Administrator and Creator only) */}
                         <Route

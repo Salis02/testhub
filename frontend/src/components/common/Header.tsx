@@ -55,6 +55,18 @@ export const Header: React.FC = () => {
             >
               Biaya & Paket
             </Link>
+            {isAuthenticated && (
+              <Link
+                to="/my-subscriptions"
+                className={`px-3 py-1.5 rounded-md transition-colors ${
+                  location.pathname === '/my-subscriptions'
+                    ? 'bg-accent/10 text-accent font-semibold'
+                    : 'text-ink-muted hover:text-ink hover:bg-surface-hover'
+                }`}
+              >
+                Langganan Saya
+              </Link>
+            )}
             <Link
               to="/admin"
               className={`px-3 py-1.5 rounded-md transition-colors ${
@@ -86,19 +98,18 @@ export const Header: React.FC = () => {
             {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-ink-muted" />}
           </button>
 
-          {/* Admin Auth quick button */}
+          {/* Auth button */}
           {isAuthenticated ? (
             <div className="flex items-center space-x-2">
               <Link
-                to="/admin"
-                className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-white hover:opacity-90 transition-opacity"
+                to="/my-subscriptions"
+                className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-borderline bg-surface text-ink hover:bg-surface-hover transition-colors"
               >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Admin</span>
+                <span>Akun & Langganan</span>
               </Link>
               <button
                 onClick={logout}
-                title="Keluar Akun Admin"
+                title="Keluar Akun"
                 className="p-2 rounded-md border border-borderline bg-surface text-ink-muted hover:text-red-500 hover:bg-surface-hover transition-colors"
               >
                 <LogOut className="w-4 h-4" />
@@ -110,7 +121,7 @@ export const Header: React.FC = () => {
               className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-borderline bg-surface text-ink hover:bg-surface-hover transition-colors"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-accent" />
-              <span>Login Admin</span>
+              <span>Masuk / Daftar</span>
             </Link>
           )}
         </div>

@@ -14,6 +14,7 @@ interface AuthContextType {
   isAuthenticated: boolean
   isCheckingAuth: boolean
   login: (email: string, pass: string) => Promise<boolean>
+  register: (email: string, pass: string, fullName: string, role?: string) => Promise<boolean>
   logout: () => void
   verifySession: () => Promise<void>
 }
@@ -23,6 +24,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   isCheckingAuth: true,
   login: async () => false,
+  register: async () => false,
   logout: () => {},
   verifySession: async () => {},
 })
@@ -79,6 +81,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false
   }
 
+  const register = async (email: string, pass: string, fullName: string, role?: string): Promise<boolean> => {
+    try {
+      const res = await api.adminRegister(email, pass, fullName, role || 'creator')
+      if (res && res.token && res.user) {
+        setUser(res.user)
+        setStoredToken(res.token)
+        setStoredUserEmail(res.user.email)
+        return true
+      }
+    } catch (err) {
+      console.error('Register error:', err)
+      throw err
+    }
+    return false
+  }
+
   const logout = () => {
     clearStoredToken()
     clearStoredUserEmail()
@@ -92,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         isCheckingAuth,
         login,
+        register,
         logout,
         verifySession,
       }}

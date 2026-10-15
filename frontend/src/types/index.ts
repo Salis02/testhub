@@ -136,13 +136,15 @@ export interface AuthResponse {
 }
 
 export type SubscriptionStatus = 'active' | 'suspended' | 'revoked'
-export type SubscriptionTier = 'per_test' | 'season_pass'
+export type SubscriptionTier = 'per_test' | 'season_pass' | 'monthly_subscription' | 'lifetime' | 'institution'
 export type SubscriptionSource = 'payment_gateway' | 'admin_manual'
 
 export interface Subscription {
   id: string
   user_identifier: string
   test_id?: string | null
+  test_title?: string | null
+  category?: string | null
   tier: SubscriptionTier
   status: SubscriptionStatus
   source: SubscriptionSource
