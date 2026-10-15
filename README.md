@@ -9,13 +9,10 @@
 
 | Dokumen | Fokus Utama |
 |---|---|
-| [PRODUCT_REQUIREMENTS_DOCUMENT.md](file:///home/sans/coding/quiz_app/PRODUCT_REQUIREMENTS_DOCUMENT.md) | **PRD & Bisnis:** Analisis kebutuhan pengguna (siswa/guru/admin), 4 model monetisasi, dan roadmap prioritas ROI. |
-| [ARCHITECTURE_AND_SCHEMA.md](file:///home/sans/coding/quiz_app/ARCHITECTURE_AND_SCHEMA.md) | **Sistem & Data:** Diagram sistem, skema PostgreSQL 15, Redis cache, kamus kontrak API 3-role, dan SOP backend. |
-| [IMPLEMENTATION_AND_CODE.md](file:///home/sans/coding/quiz_app/IMPLEMENTATION_AND_CODE.md) | **Panduan Koding:** Status modul, panduan ekstensi fitur baru, arsitektur repository, dan checklist anti-debt. |
-| [FRONTEND_ARCHITECTURE.md](file:///home/sans/coding/quiz_app/FRONTEND_ARCHITECTURE.md) | **Arsitektur Frontend:** Standar React 19, TanStack Query v5, Zustand v5, Zod validation, dan SOP frontend. |
-| [AI_AGENT_AND_SECURITY.md](file:///home/sans/coding/quiz_app/AI_AGENT_AND_SECURITY.md) | **AI & Keamanan:** Arsitektur generator soal 3-tier (Gemini/Groq/Fallback), validasi soal, dan threat model. |
-| [DEPLOYMENT_AND_MAKEFILE.md](file:///home/sans/coding/quiz_app/DEPLOYMENT_AND_MAKEFILE.md) | **DevOps & Infra:** Cheatsheet Makefile, Docker Compose, Nginx reverse proxy, dan panduan tuning VPS 2GB. |
-| [style.md](file:///home/sans/coding/quiz_app/style.md) | **Design System:** Strict Tri-Color palette per mode, tipografi tabular, CSS variables, dan standar anti-AI-slop. |
+| [PRODUCT_REQUIREMENTS_DOCUMENT.md](file:///home/sans/coding/quiz_app/PRODUCT_REQUIREMENTS_DOCUMENT.md) | **PRD & Bisnis:** Analisis kebutuhan pengguna (siswa/guru/admin), 4 model monetisasi, dan roadmap ROI. |
+| [SYSTEM_ARCHITECTURE.md](file:///home/sans/coding/quiz_app/SYSTEM_ARCHITECTURE.md) | **Single Technical Reference:** Arsitektur sistem, skema data relasional, workflow Clean Architecture via CodeGraph, keamanan, dan deployment. |
+| [FRONTEND_ARCHITECTURE.md](file:///home/sans/coding/quiz_app/FRONTEND_ARCHITECTURE.md) | **Arsitektur Frontend:** Standar React 19, TanStack Query v5, Zustand v5, Zod validation, dan UI components. |
+| [style.md](file:///home/sans/coding/quiz_app/style.md) | **Design System:** Strict Tri-Color palette per mode, tipografi tabular, CSS variables, dan standar UX ujian. |
 
 ---
 
