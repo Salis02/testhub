@@ -23,8 +23,9 @@ export const adminApi = {
         category: testData.category,
         duration_minutes: testData.duration_minutes,
         passing_score_percentage: testData.passing_score_percentage,
-        shuffle_questions: testData.shuffle_questions,
-        shuffle_answers: testData.shuffle_answers,
+        price_idr: testData.price_idr ?? 0,
+        shuffle_questions: Boolean(testData.shuffle_questions),
+        shuffle_answers: Boolean(testData.shuffle_answers),
         published: testData.published,
         questions: questions.map((q, idx) => ({
           question_number: idx + 1,
@@ -57,8 +58,9 @@ export const adminApi = {
         category: testData.category,
         duration_minutes: testData.duration_minutes,
         passing_score_percentage: testData.passing_score_percentage,
-        shuffle_questions: testData.shuffle_questions,
-        shuffle_answers: testData.shuffle_answers,
+        price_idr: testData.price_idr ?? 0,
+        shuffle_questions: Boolean(testData.shuffle_questions),
+        shuffle_answers: Boolean(testData.shuffle_answers),
         published: testData.published,
         questions: questions?.map((q, idx) => ({
           question_number: idx + 1,

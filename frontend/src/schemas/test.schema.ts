@@ -57,6 +57,12 @@ export const TestFormSchema = z.object({
     .min(1, 'Passing score minimal 1%')
     .max(100, 'Passing score maksimal 100%')
     .default(65),
+  price_idr: z
+    .number()
+    .min(0, 'Harga tidak boleh negatif')
+    .default(0),
+  shuffle_questions: z.boolean().default(false),
+  shuffle_answers: z.boolean().default(false),
   published: z.boolean().default(true),
   questions: z
     .array(QuestionSchema)

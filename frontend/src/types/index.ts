@@ -34,6 +34,7 @@ export interface Test {
   duration_minutes: number
   passing_score_percentage: number
   total_questions: number
+  price_idr?: number
   shuffle_questions?: boolean
   shuffle_answers?: boolean
   published: boolean
