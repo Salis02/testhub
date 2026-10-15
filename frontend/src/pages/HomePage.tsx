@@ -103,25 +103,6 @@ export const HomePage: React.FC = () => {
           </button>
         </form>
 
-        {/* Value Proposition Pills */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 text-xs font-mono text-ink-muted max-w-3xl mx-auto">
-          <div className="p-3 rounded border border-borderline bg-surface flex items-center justify-center space-x-1.5">
-            <Zap className="w-3.5 h-3.5 text-accent" />
-            <span>Mulai Seketika</span>
-          </div>
-          <div className="p-3 rounded border border-borderline bg-surface flex items-center justify-center space-x-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-accent" />
-            <span>Koreksi Otomatis</span>
-          </div>
-          <div className="p-3 rounded border border-borderline bg-surface flex items-center justify-center space-x-1.5">
-            <Shield className="w-3.5 h-3.5 text-accent" />
-            <span>Anti-Kecurangan</span>
-          </div>
-          <div className="p-3 rounded border border-borderline bg-surface flex items-center justify-center space-x-1.5">
-            <Award className="w-3.5 h-3.5 text-accent" />
-            <span>Peringkat Persentil</span>
-          </div>
-        </div>
       </section>
 
       {/* Available Tests Catalog */}

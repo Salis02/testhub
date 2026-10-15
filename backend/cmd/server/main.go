@@ -20,10 +20,12 @@ import (
 )
 
 func main() {
-	// Load .env if present
-	_ = godotenv.Load()
-	_ = godotenv.Load("backend/.env")
-	_ = godotenv.Load("../.env")
+	// Load .env from candidate paths (first found file is loaded)
+	for _, envPath := range []string{".env", "backend/.env", "../.env"} {
+		if err := godotenv.Load(envPath); err == nil {
+			break
+		}
+	}
 
 	cfg := config.LoadConfig()
 

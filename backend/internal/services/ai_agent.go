@@ -27,7 +27,7 @@ func NewAIAgentService(cfg *config.Config) *AIAgentService {
 	return &AIAgentService{
 		cfg: cfg,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 60 * time.Second,
 		},
 	}
 }
@@ -115,6 +115,9 @@ func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGe
 			"generationConfig": map[string]interface{}{
 				"response_mime_type": "application/json",
 				"temperature":        0.7,
+				"thinking_config": map[string]interface{}{
+					"thinking_budget": 0,
+				},
 			},
 		}
 
@@ -218,6 +221,10 @@ func (s *AIAgentService) generateWithGroq(ctx context.Context, req models.AIGene
 				},
 			},
 			"temperature": 0.7,
+			"max_tokens":  4096,
+			"response_format": map[string]string{
+				"type": "json_object",
+			},
 		}
 
 		bodyBytes, _ := json.Marshal(reqBody)
