@@ -60,7 +60,7 @@ export const ResultsPage: React.FC = () => {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-8">
       {/* Top Action Bar */}
-      <div className="flex items-center justify-between flex-wrap gap-4 print:hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <Link
           to="/"
           className="inline-flex items-center space-x-1.5 text-xs font-semibold text-ink-muted hover:text-ink transition-colors"
@@ -69,14 +69,14 @@ export const ResultsPage: React.FC = () => {
           <span>Katalog Ujian Lainnya</span>
         </Link>
 
-        <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+        <div className="flex flex-wrap items-center gap-2">
           {result.passing && (
             <button
               onClick={() => setIsCertModalOpen(true)}
               className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-accent/30 bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors shadow-xs"
             >
               <Award className="w-3.5 h-3.5" />
-              <span>Sertifikat Kelulusan</span>
+              <span>Sertifikat</span>
             </button>
           )}
           <button
@@ -84,28 +84,28 @@ export const ResultsPage: React.FC = () => {
             className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-borderline bg-surface text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
           >
             <Trophy className="w-3.5 h-3.5 text-amber-500" />
-            <span>Papan Peringkat</span>
+            <span>Peringkat</span>
           </button>
           <button
             onClick={handleShare}
             className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-md border border-borderline bg-surface text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5" />}
-            <span>{copied ? 'Tautan Disalin' : 'Bagikan Hasil'}</span>
+            <span>{copied ? 'Disalin' : 'Bagikan'}</span>
           </button>
           <button
             onClick={handlePrint}
-            className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-md border border-borderline bg-surface text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
+            className="hidden sm:inline-flex items-center space-x-1 px-3 py-1.5 rounded-md border border-borderline bg-surface text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Cetak Rekap</span>
+            <span>Cetak</span>
           </button>
           <Link
             to={`/test/${result.test_id}`}
-            className="inline-flex items-center space-x-1.5 px-4 py-1.5 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity"
+            className="inline-flex items-center space-x-1.5 px-4 py-1.5 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity ml-auto sm:ml-0"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Coba Ujian Lagi</span>
+            <span>Ulangi Ujian</span>
           </Link>
         </div>
       </div>

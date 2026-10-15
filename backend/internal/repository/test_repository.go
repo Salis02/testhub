@@ -26,6 +26,8 @@ type TestRepository interface {
 	DeleteTest(ctx context.Context, testID string) error
 	GetStats(ctx context.Context) (*models.AdminStats, error)
 	GetAnalytics(ctx context.Context, testID string) (*models.TestAnalytics, error)
+	RecordAuditLog(ctx context.Context, log *models.AdminAuditLog) error
+	GetAuditLogs(ctx context.Context, limit, offset int) ([]models.AdminAuditLog, error)
 }
 
 // PostgresTestRepository implements TestRepository using PostgreSQL and sqlx
@@ -326,4 +328,57 @@ func (r *PostgresTestRepository) GetAnalytics(ctx context.Context, testID string
 		AverageScore:     avgScoreVal,
 		PassingRate:      passingRate,
 	}, nil
+}
+
+// RecordAuditLog inserts an audit log record
+func (r *PostgresTestRepository) RecordAuditLog(ctx context.Context, item *models.AdminAuditLog) error {
+	if item.ID == "" {
+		item.ID = fmt.Sprintf("audit-%d", time.Now().UnixNano())
+	}
+	if item.CreatedAt.IsZero() {
+		item.CreatedAt = time.Now()
+	}
+	query := `
+		INSERT INTO admin_audit_log (id, admin_id, action, resource_type, resource_id, old_value, new_value, ip_address, created_at)
+		VALUES (:id, :admin_id, :action, :resource_type, :resource_id, :old_value, :new_value, :ip_address, :created_at)
+	`
+	_, err := r.db.NamedExecContext(ctx, query, item)
+	return err
+}
+
+// GetAuditLogs retrieves audit logs with admin user details
+func (r *PostgresTestRepository) GetAuditLogs(ctx context.Context, limit, offset int) ([]models.AdminAuditLog, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := `
+		SELECT 
+			a.id, 
+			a.admin_id, 
+			COALESCE(u.email, '') AS admin_email,
+			a.action, 
+			a.resource_type, 
+			a.resource_id, 
+			a.old_value::text AS old_value, 
+			a.new_value::text AS new_value, 
+			a.ip_address, 
+			a.created_at
+		FROM admin_audit_log a
+		LEFT JOIN users u ON a.admin_id = u.id
+		ORDER BY a.created_at DESC
+		LIMIT $1 OFFSET $2
+	`
+	var logs []models.AdminAuditLog
+	err := r.db.SelectContext(ctx, &logs, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("mengambil audit logs: %w", err)
+	}
+	if logs == nil {
+		logs = []models.AdminAuditLog{}
+	}
+	return logs, nil
 }

@@ -256,4 +256,17 @@ type CertificateData struct {
 	Issuer                 string    `json:"issuer"`
 }
 
+type AdminAuditLog struct {
+	ID           string    `db:"id" json:"id"`
+	AdminID      *string   `db:"admin_id" json:"admin_id,omitempty"`
+	AdminEmail   *string   `db:"admin_email" json:"admin_email,omitempty"`
+	Action       string    `db:"action" json:"action"`
+	ResourceType string    `db:"resource_type" json:"resource_type"`
+	ResourceID   *string   `db:"resource_id" json:"resource_id,omitempty"`
+	OldValue     *string   `db:"old_value" json:"old_value,omitempty"`
+	NewValue     *string   `db:"new_value" json:"new_value,omitempty"`
+	IPAddress    *string   `db:"ip_address" json:"ip_address,omitempty"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+}
+
 

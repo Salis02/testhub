@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -34,6 +36,45 @@ func (h *AdminHandler) invalidateCatalogCache() {
 	if h.cache != nil {
 		_ = h.cache.DeletePattern("tests:catalog:*")
 	}
+}
+
+func (h *AdminHandler) logAudit(c *gin.Context, action, resourceType, resourceID, oldValue, newValue string) {
+	var adminID *string
+	if uid, exists := c.Get("user_id"); exists {
+		if s, ok := uid.(string); ok && s != "" {
+			adminID = &s
+		}
+	}
+	ip := c.ClientIP()
+	var resID *string
+	if resourceID != "" {
+		resID = &resourceID
+	}
+	var oldVal *string
+	if oldValue != "" {
+		oldVal = &oldValue
+	}
+	var newVal *string
+	if newValue != "" {
+		newVal = &newValue
+	}
+
+	entry := &models.AdminAuditLog{
+		AdminID:      adminID,
+		Action:       action,
+		ResourceType: resourceType,
+		ResourceID:   resID,
+		OldValue:     oldVal,
+		NewValue:     newVal,
+		IPAddress:    &ip,
+		CreatedAt:    time.Now(),
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = h.testRepo.RecordAuditLog(ctx, entry)
+	}()
 }
 
 // GetStats handles GET /api/admin/stats
@@ -214,6 +255,7 @@ func (h *AdminHandler) TogglePublish(c *gin.Context) {
 	}
 
 	h.invalidateCatalogCache()
+	h.logAudit(c, "toggle_publish", "test", testID, "", fmt.Sprintf("published: %v", newStatus))
 	c.JSON(http.StatusOK, gin.H{
 		"published":    newStatus,
 		"published_at": time.Now().Format(time.RFC3339),
@@ -236,6 +278,7 @@ func (h *AdminHandler) DeleteTest(c *gin.Context) {
 	}
 
 	h.invalidateCatalogCache()
+	h.logAudit(c, "delete", "test", testID, "", "")
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -361,3 +404,28 @@ func (h *AdminHandler) GetAnalytics(c *gin.Context) {
 
 	c.JSON(http.StatusOK, analytics)
 }
+
+// GetAuditLogs handles GET /api/admin/audit-logs
+func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
+	limitStr := c.DefaultQuery("limit", "50")
+	offsetStr := c.DefaultQuery("offset", "0")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 50
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	logs, err := h.testRepo.GetAuditLogs(c.Request.Context(), limit, offset)
+	if err != nil {
+		log.Printf("[AdminHandler.GetAuditLogs] internal error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat log audit."})
+		return
+	}
+
+	c.JSON(http.StatusOK, logs)
+}
+

@@ -169,5 +169,16 @@ export const adminApi = {
   async getTestAnalytics(testId: string, signal?: AbortSignal): Promise<TestAnalytics> {
     return apiClient<TestAnalytics>(`/admin/tests/${testId}/analytics`, { signal })
   },
+
+  async getAuditLogs(
+    params?: { limit?: number; offset?: number },
+    signal?: AbortSignal
+  ): Promise<import('@/types').AdminAuditLog[]> {
+    const searchParams = new URLSearchParams()
+    if (params?.limit) searchParams.set('limit', String(params.limit))
+    if (params?.offset) searchParams.set('offset', String(params.offset))
+    const query = searchParams.toString()
+    return apiClient<import('@/types').AdminAuditLog[]>(`/admin/audit-logs${query ? `?${query}` : ''}`, { signal })
+  },
 }
 

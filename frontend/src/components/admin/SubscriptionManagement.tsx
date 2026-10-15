@@ -6,8 +6,12 @@ import { ManualGrantFormValues } from '@/schemas/subscription.schema'
 import { ManualGrantModal } from '@/components/admin/ManualGrantModal'
 import { ExtendSubscriptionModal } from '@/components/admin/ExtendSubscriptionModal'
 import { Skeleton } from '@/components/common/Skeleton'
+import { Pagination } from '@/components/common/Pagination'
+import { EmptyState } from '@/components/common/EmptyState'
 import { useToast } from '@/context/ToastContext'
 import { useConfirm } from '@/context/ConfirmContext'
+import { useDebounce } from '@/hooks/useDebounce'
+import { formatDate } from '@/utils/formatters'
 import {
   CreditCard,
   Plus,
@@ -33,21 +37,20 @@ export const SubscriptionManagement: React.FC<SubscriptionManagementProps> = ({
 }) => {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState<string>('')
-  const [debouncedSearch, setDebouncedSearch] = useState<string>('')
+  const [page, setPage] = useState<number>(1)
+  const [pageSize, setPageSize] = useState<number>(10)
   const [isGrantModalOpen, setIsGrantModalOpen] = useState(false)
   const [selectedSubForExtend, setSelectedSubForExtend] = useState<Subscription | null>(null)
 
+  const debouncedSearch = useDebounce(searchQuery, 350)
   const toast = useToast()
   const { confirm } = useConfirm()
   const queryClient = useQueryClient()
 
-  // Debounce search input
+  // Reset to page 1 on filter/search change
   React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery)
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [searchQuery])
+    setPage(1)
+  }, [statusFilter, debouncedSearch])
 
   // Query Subscriptions list via TanStack Query
   const {
@@ -56,14 +59,14 @@ export const SubscriptionManagement: React.FC<SubscriptionManagementProps> = ({
     isRefetching,
     refetch,
   } = useQuery({
-    queryKey: ['admin', 'subscriptions', statusFilter, debouncedSearch],
+    queryKey: ['admin', 'subscriptions', statusFilter, debouncedSearch, page, pageSize],
     queryFn: ({ signal }) =>
       adminApi.listSubscriptions(
         {
           status: statusFilter || undefined,
           search: debouncedSearch.trim() || undefined,
-          limit: 50,
-          offset: 0,
+          limit: pageSize,
+          offset: (page - 1) * pageSize,
         },
         signal
       ),
@@ -290,14 +293,16 @@ export const SubscriptionManagement: React.FC<SubscriptionManagementProps> = ({
             <Skeleton className="h-14 w-full rounded" />
           </div>
         ) : subscriptions.length === 0 ? (
-          <div className="py-12 px-4 text-center space-y-2">
-            <CreditCard className="w-8 h-8 text-ink-muted mx-auto opacity-50" />
-            <p className="text-sm font-semibold text-ink">Tidak ada data langganan</p>
-            <p className="text-xs text-ink-muted max-w-sm mx-auto">
-              {debouncedSearch || statusFilter
-                ? 'Tidak ditemukan transaksi yang cocok dengan filter pencarian.'
-                : 'Belum ada data langganan tercatat. Klik "Beri Akses Manual" untuk mendaftarkan hak akses pertama.'}
-            </p>
+          <div className="p-8">
+            <EmptyState
+              icon={<CreditCard className="w-6 h-6" />}
+              title="Tidak ada data langganan"
+              description={
+                debouncedSearch || statusFilter
+                  ? 'Tidak ditemukan data langganan yang cocok dengan kata kunci atau filter saat ini.'
+                  : 'Belum ada data langganan. Klik "Beri Akses Manual" untuk menambahkan data pertama.'
+              }
+            />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -412,10 +417,19 @@ export const SubscriptionManagement: React.FC<SubscriptionManagementProps> = ({
           </div>
         )}
 
-        {/* Footer Info */}
-        <div className="py-2.5 px-4 bg-canvas/30 border-t border-borderline flex items-center justify-between text-[11px] text-ink-muted font-mono">
-          <span>Menampilkan {subscriptions.length} langganan</span>
-          <span>{data?.total || 0} Total Data</span>
+        {/* Centered Pagination Controls */}
+        <div className="border-t border-borderline px-4 bg-canvas/30">
+          <Pagination
+            currentPage={page}
+            totalPages={Math.max(1, Math.ceil((data?.total || 0) / pageSize))}
+            totalItems={data?.total || 0}
+            pageSize={pageSize}
+            onPageChange={(newPage) => setPage(newPage)}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize)
+              setPage(1)
+            }}
+          />
         </div>
       </div>
 

@@ -240,4 +240,17 @@ export interface TestAnalytics {
   passing_rate: number
 }
 
+export interface AdminAuditLog {
+  id: string
+  admin_id?: string
+  admin_email?: string
+  action: string
+  resource_type: string
+  resource_id?: string
+  old_value?: string
+  new_value?: string
+  ip_address?: string
+  created_at: string
+}
+
 

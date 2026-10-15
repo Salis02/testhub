@@ -146,6 +146,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		{
 			// Dashboard & Analytics
 			admin.GET("/stats", adminHandler.GetStats)
+			admin.GET("/audit-logs", adminHandler.GetAuditLogs)
 			admin.GET("/tests/:testId/analytics", adminHandler.GetAnalytics)
 
 			// Test & Question Bank Management

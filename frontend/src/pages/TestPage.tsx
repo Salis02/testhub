@@ -216,8 +216,30 @@ export const TestPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Column: Question Navigator Palette */}
-          <aside className={`lg:col-span-4 ${isDrawerOpen ? 'block' : 'hidden lg:block'}`}>
+          {/* Mobile Drawer Overlay */}
+          {isDrawerOpen && (
+            <div className="fixed inset-0 z-50 lg:hidden flex justify-end">
+              <div
+                className="fixed inset-0 bg-ink/50 backdrop-blur-xs transition-opacity"
+                onClick={() => setIsDrawerOpen(false)}
+              />
+              <div className="relative w-full max-w-xs h-full bg-surface border-l border-borderline p-4 overflow-y-auto z-10 shadow-2xl">
+                <QuestionNav
+                  questions={questions}
+                  currentIndex={currentIndex}
+                  submissions={submissions}
+                  onSelectIndex={(idx) => {
+                    setCurrentIndex(idx)
+                    setIsDrawerOpen(false)
+                  }}
+                  onClose={() => setIsDrawerOpen(false)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Desktop Right Column: Question Navigator Palette */}
+          <aside className="hidden lg:block lg:col-span-4">
             <div className="sticky top-24">
               <QuestionNav
                 questions={questions}
@@ -225,9 +247,7 @@ export const TestPage: React.FC = () => {
                 submissions={submissions}
                 onSelectIndex={(idx) => {
                   setCurrentIndex(idx)
-                  setIsDrawerOpen(false)
                 }}
-                onClose={() => setIsDrawerOpen(false)}
               />
             </div>
           </aside>
