@@ -120,21 +120,63 @@ func (r *PostgresTestRepository) UpdateTestTx(ctx context.Context, test *models.
 	}
 
 	if questions != nil {
-		// Clean existing questions (CASCADE deletes question_options automatically)
-		_, err = tx.ExecContext(ctx, "DELETE FROM test_questions WHERE test_id = $1", test.ID)
+		// 1. Fetch current question IDs to distinguish between in-place updates and removals
+		var existingQuestionIDs []string
+		err = tx.SelectContext(ctx, &existingQuestionIDs, "SELECT id FROM test_questions WHERE test_id = $1", test.ID)
 		if err != nil {
-			return fmt.Errorf("delete old questions: %w", err)
+			return fmt.Errorf("select existing questions: %w", err)
+		}
+
+		existingMap := make(map[string]bool)
+		for _, qID := range existingQuestionIDs {
+			existingMap[qID] = true
+		}
+
+		incomingMap := make(map[string]bool)
+		for _, q := range questions {
+			incomingMap[q.ID] = true
+		}
+
+		// 2. Soft-delete removed questions to PRESERVE historical test_submissions without CASCADE deletion
+		for qID := range existingMap {
+			if !incomingMap[qID] {
+				_, err = tx.ExecContext(ctx, "UPDATE test_questions SET is_deleted = true WHERE id = $1", qID)
+				if err != nil {
+					return fmt.Errorf("soft-delete removed question %s: %w", qID, err)
+				}
+			}
 		}
 
 		now := time.Now()
 		for idx, q := range questions {
-			insertQuestionSQL := `
-				INSERT INTO test_questions (id, test_id, question_number, question_text, question_type, media_url, difficulty_level, explanation, points, is_deleted, created_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
-			`
-			_, err = tx.ExecContext(ctx, insertQuestionSQL, q.ID, test.ID, idx+1, q.QuestionText, q.QuestionType, q.MediaURL, q.DifficultyLevel, q.Explanation, q.Points, now)
+			if existingMap[q.ID] {
+				// Update existing question in-place
+				updateQSQL := `
+					UPDATE test_questions 
+					SET question_number = $1, question_text = $2, question_type = $3, 
+					    media_url = $4, difficulty_level = $5, explanation = $6, points = $7, is_deleted = false
+					WHERE id = $8
+				`
+				_, err = tx.ExecContext(ctx, updateQSQL, idx+1, q.QuestionText, q.QuestionType, q.MediaURL, q.DifficultyLevel, q.Explanation, q.Points, q.ID)
+				if err != nil {
+					return fmt.Errorf("update question %s: %w", q.ID, err)
+				}
+			} else {
+				// Insert new question
+				insertQuestionSQL := `
+					INSERT INTO test_questions (id, test_id, question_number, question_text, question_type, media_url, difficulty_level, explanation, points, is_deleted, created_at)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
+				`
+				_, err = tx.ExecContext(ctx, insertQuestionSQL, q.ID, test.ID, idx+1, q.QuestionText, q.QuestionType, q.MediaURL, q.DifficultyLevel, q.Explanation, q.Points, now)
+				if err != nil {
+					return fmt.Errorf("insert new question %s: %w", q.ID, err)
+				}
+			}
+
+			// Clean and replace options for this specific question
+			_, err = tx.ExecContext(ctx, "DELETE FROM question_options WHERE question_id = $1", q.ID)
 			if err != nil {
-				return fmt.Errorf("insert updated question %s: %w", q.ID, err)
+				return fmt.Errorf("delete old options for question %s: %w", q.ID, err)
 			}
 
 			for _, opt := range q.Options {

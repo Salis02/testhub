@@ -36,7 +36,7 @@ export const adminApi = {
           explanation: q.explanation || '',
           points: q.points || 5,
           options: (q.options || []).map((o) => ({
-            option_letter: o.option_letter,
+            option_letter: (o.option_letter || 'A').toUpperCase(),
             option_text: o.option_text,
             is_correct: !!o.is_correct,
           })),
@@ -71,7 +71,7 @@ export const adminApi = {
           explanation: q.explanation || '',
           points: q.points || 5,
           options: (q.options || []).map((o) => ({
-            option_letter: o.option_letter,
+            option_letter: (o.option_letter || 'A').toUpperCase(),
             option_text: o.option_text,
             is_correct: !!o.is_correct,
           })),

@@ -291,17 +291,25 @@ func (s *AIAgentService) generateWithGroq(ctx context.Context, req models.AIGene
 // PROMPT BUILDER & JSON PARSER
 // -------------------------------------------------------------
 func (s *AIAgentService) buildPrompt(req models.AIGenerateRequest) string {
+	pts := 5
+	if req.Difficulty == "hard" {
+		pts = 10
+	} else if req.Difficulty == "easy" {
+		pts = 3
+	}
+
 	return fmt.Sprintf(`Tolong buatkan %d soal ujian berkualitas tinggi dalam Bahasa Indonesia untuk:
 - Kategori Tes: %s
 - Topik / Mata Uji: %s
-- Tingkat Kesulitan: %s
+- Tingkat Kesulitan: %s (Bobot: %d poin)
 
 Aturan Mutlak (AI_AGENT_AND_SECURITY.md):
-1. Setiap soal bertipe pilihan ganda (multiple_choice) dengan opsi A, B, C, D, E.
+1. Setiap soal bertipe pilihan ganda (multiple_choice) dengan 5 opsi: A, B, C, D, E.
 2. Harus ada TEPAT SATU opsi dengan is_correct = true, dan 4 opsi lainnya is_correct = false.
-3. Distractor (pilihan salah) harus masuk akal, tidak konyol, dan panjang kalimat opsi relatif seimbang.
-4. Sertakan penjelasan ilmiah (explanation) yang mendalam mengapa opsi tersebut benar.
-5. Soal harus faktual, akurat, dan relevan dengan standar asesmen nasional di Indonesia.
+3. KUNCI JAWABAN BENAR (is_correct = true) WAJIB DIDISTRIBUSIKAN SECARA ACAK pada opsi A, B, C, D, atau E (JANGAN SELALU di opsi A).
+4. Distractor (pilihan salah) harus masuk akal, tidak konyol, dan panjang kalimat opsi relatif seimbang.
+5. Sertakan penjelasan ilmiah (explanation) yang mendalam mengapa opsi tersebut benar.
+6. Soal harus faktual, akurat, dan relevan dengan standar asesmen nasional di Indonesia.
 
 Wajib kembalikan HANYA JSON object murni tanpa pembuka/penutup markdown dengan format persis seperti ini:
 {
@@ -309,18 +317,18 @@ Wajib kembalikan HANYA JSON object murni tanpa pembuka/penutup markdown dengan f
     {
       "question_text": "Isi teks pertanyaan...",
       "difficulty_level": "%s",
-      "points": 5,
+      "points": %d,
       "explanation": "Penjelasan kunci jawaban...",
       "options": [
-        {"option_letter": "A", "option_text": "Pilihan A", "is_correct": true},
-        {"option_letter": "B", "option_text": "Pilihan B", "is_correct": false},
+        {"option_letter": "A", "option_text": "Pilihan A", "is_correct": false},
+        {"option_letter": "B", "option_text": "Pilihan B", "is_correct": true},
         {"option_letter": "C", "option_text": "Pilihan C", "is_correct": false},
         {"option_letter": "D", "option_text": "Pilihan D", "is_correct": false},
         {"option_letter": "E", "option_text": "Pilihan E", "is_correct": false}
       ]
     }
   ]
-}`, req.Count, req.Category, req.Subject, req.Difficulty, req.Difficulty)
+}`, req.Count, req.Category, req.Subject, req.Difficulty, pts, req.Difficulty, pts)
 }
 
 func (s *AIAgentService) parseAIQuestionJSON(rawText string, req models.AIGenerateRequest) ([]models.TestQuestion, error) {
@@ -372,10 +380,14 @@ func (s *AIAgentService) parseAIQuestionJSON(rawText string, req models.AIGenera
 
 		for optIdx, opt := range item.Options {
 			isCorr := opt.IsCorrect
+			letter := strings.ToUpper(strings.TrimSpace(opt.OptionLetter))
+			if letter == "" && optIdx < 5 {
+				letter = string(rune('A' + optIdx))
+			}
 			q.Options[optIdx] = models.QuestionOption{
-				ID:           fmt.Sprintf("opt-%s-%s", qID, strings.ToLower(opt.OptionLetter)),
+				ID:           fmt.Sprintf("opt-%s-%s", qID, strings.ToLower(letter)),
 				QuestionID:   qID,
-				OptionLetter: opt.OptionLetter,
+				OptionLetter: letter,
 				OptionText:   opt.OptionText,
 				IsCorrect:    &isCorr,
 			}
@@ -431,8 +443,6 @@ func (s *AIAgentService) generateLocalDeterministic(req models.AIGenerateRequest
 		topics = sampleTopics["custom"]
 	}
 
-	trueVal := true
-	falseVal := false
 	var result []models.TestQuestion
 
 	pts := 5
@@ -442,9 +452,25 @@ func (s *AIAgentService) generateLocalDeterministic(req models.AIGenerateRequest
 		pts = 3
 	}
 
+	letters := []string{"A", "B", "C", "D", "E"}
+
 	for i := 0; i < req.Count; i++ {
 		topic := topics[i%len(topics)]
 		qID := fmt.Sprintf("ai-local-%d-%d", time.Now().UnixNano(), i+1)
+		correctIdx := i % len(letters)
+		correctLetter := letters[correctIdx]
+
+		texts := []string{
+			fmt.Sprintf("Penerapan sistematis sesuai regulasi resmi %s dengan audit kepatuhan berkala dan transparansi.", topic),
+			"Penetapan kebijakan sepihak tanpa mempertimbangkan kapabilitas internal organisasi dan analisis dampak risiko.",
+			"Pendelegasian seluruh proses tanpa mekanisme pengawasan independen dan indikator kinerja terukur.",
+			"Penghapusan prosedur audit mutu demi percepatan tenggat waktu administratif jangka pendek.",
+			"Pengabaian asas keterbukaan informasi dan penolakan evaluasi berkala oleh pemangku kepentingan.",
+		}
+		// Swap the correct text into the target option index
+		if correctIdx != 0 {
+			texts[0], texts[correctIdx] = texts[correctIdx], texts[0]
+		}
 
 		q := models.TestQuestion{
 			ID:              qID,
@@ -454,40 +480,19 @@ func (s *AIAgentService) generateLocalDeterministic(req models.AIGenerateRequest
 			QuestionType:    "multiple_choice",
 			DifficultyLevel: req.Difficulty,
 			Points:          pts,
-			Explanation:     fmt.Sprintf("Analisis AI Asesmen: Opsi A menyajikan sintesis komprehensif berdasarkan prinsip %s dan kepatuhan standar profesional.", topic),
-			Options: []models.QuestionOption{
-				{
-					ID:           fmt.Sprintf("opt-%s-a", qID),
-					QuestionID:   qID,
-					OptionLetter: "A",
-					OptionText:   fmt.Sprintf("Penerapan sistematis sesuai regulasi resmi %s dengan audit kepatuhan berkala dan transparansi.", topic),
-					IsCorrect:    &trueVal,
-				},
-				{
-					ID:           fmt.Sprintf("opt-%s-b", qID),
-					OptionLetter: "B",
-					OptionText:   "Penetapan kebijakan sepihak tanpa mempertimbangkan kapabilitas internal organisasi dan analisis dampak risiko.",
-					IsCorrect:    &falseVal,
-				},
-				{
-					ID:           fmt.Sprintf("opt-%s-c", qID),
-					OptionLetter: "C",
-					OptionText:   "Pendelegasian seluruh proses tanpa mekanisme pengawasan independen dan indikator kinerja terukur.",
-					IsCorrect:    &falseVal,
-				},
-				{
-					ID:           fmt.Sprintf("opt-%s-d", qID),
-					OptionLetter: "D",
-					OptionText:   "Penghapusan prosedur audit mutu demi percepatan tenggat waktu administratif jangka pendek.",
-					IsCorrect:    &falseVal,
-				},
-				{
-					ID:           fmt.Sprintf("opt-%s-e", qID),
-					OptionLetter: "E",
-					OptionText:   "Pengabaian asas keterbukaan informasi dan penolakan evaluasi berkala oleh pemangku kepentingan.",
-					IsCorrect:    &falseVal,
-				},
-			},
+			Explanation:     fmt.Sprintf("Analisis AI Asesmen: Opsi %s menyajikan sintesis komprehensif berdasarkan prinsip %s dan kepatuhan standar profesional.", correctLetter, topic),
+			Options:         make([]models.QuestionOption, len(letters)),
+		}
+
+		for optIdx, letter := range letters {
+			isCorr := (optIdx == correctIdx)
+			q.Options[optIdx] = models.QuestionOption{
+				ID:           fmt.Sprintf("opt-%s-%s", qID, strings.ToLower(letter)),
+				QuestionID:   qID,
+				OptionLetter: letter,
+				OptionText:   texts[optIdx],
+				IsCorrect:    &isCorr,
+			}
 		}
 
 		if err := validateQuestion(&q); err != nil {

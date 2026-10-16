@@ -160,7 +160,10 @@ export const AdminPage: React.FC = () => {
 
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => setIsAIModalOpen(true)}
+            onClick={() => {
+              setAiContext('auto')
+              setIsAIModalOpen(true)
+            }}
             className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-accent/40 bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors"
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -264,9 +267,10 @@ export const AdminPage: React.FC = () => {
           onSubmit={handleCreateTest}
           onOpenAIAssistant={() => {
             setAiContext('create')
-            setIsCreateModalOpen(false)
             setIsAIModalOpen(true)
           }}
+          pendingAIQuestions={aiContext === 'create' ? pendingAIQuestions : []}
+          onClearPendingAIQuestions={() => setPendingAIQuestions([])}
         />
       )}
 
@@ -280,7 +284,7 @@ export const AdminPage: React.FC = () => {
             setAiContext('edit')
             setIsAIModalOpen(true)
           }}
-          pendingAIQuestions={pendingAIQuestions}
+          pendingAIQuestions={aiContext === 'edit' ? pendingAIQuestions : []}
           onClearPendingAIQuestions={() => setPendingAIQuestions([])}
         />
       )}
@@ -290,17 +294,22 @@ export const AdminPage: React.FC = () => {
           isOpen={isAIModalOpen}
           onClose={() => setIsAIModalOpen(false)}
           onAppendQuestions={async (newQuestions) => {
+            if (aiContext === 'create') {
+              setPendingAIQuestions(newQuestions)
+              return
+            }
+
             if (aiContext === 'edit' && editingTestId) {
               setPendingAIQuestions(newQuestions)
               return
             }
 
-            // Auto-create test if generated from main overview
+            // Auto-create test if generated directly from main overview dashboard
             if (newQuestions.length > 0) {
               await adminApi.createTest(
                 {
                   title: `Simulasi Otomatis AI: ${newQuestions[0].question_text.substring(0, 35)}...`,
-                  description: 'Modul ujian hasil kurasi otomatis AI Agent sesuai batasan AI_AGENT_AND_SECURITY.md.',
+                  description: 'Modul ujian hasil kurasi otomatis AI Agent.',
                   category: 'custom',
                   duration_minutes: 15,
                   passing_score_percentage: 60,

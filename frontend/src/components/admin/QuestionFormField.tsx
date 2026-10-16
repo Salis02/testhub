@@ -42,6 +42,8 @@ export const QuestionFormField: React.FC<QuestionFormFieldProps> = ({
     setValue(`questions.${index}.question_type`, newType, { shouldValidate: true })
     if (newType === 'multiple_choice' && (!options || options.length === 0)) {
       setValue(`questions.${index}.options`, DEFAULT_OPTIONS, { shouldValidate: true })
+    } else if (newType === 'essay') {
+      setValue(`questions.${index}.options`, [], { shouldValidate: true })
     }
   }
 
@@ -127,7 +129,7 @@ export const QuestionFormField: React.FC<QuestionFormFieldProps> = ({
           >
             <option value="multiple_choice">Pilihan Ganda</option>
             <option value="essay">Esai / Uraian</option>
-            <option value="matching">Menjodohkan</option>
+            <option value="matching" disabled>Menjodohkan (Segera Hadir)</option>
           </select>
 
           {canRemove && (
