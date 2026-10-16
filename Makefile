@@ -1,5 +1,5 @@
 # Makefile for TestHub SaaS Platform
-.PHONY: help setup dev prod logs down clean test migrate seed build-backend build-frontend
+.PHONY: help setup dev prod logs down clean test migrate seed build-backend build-frontend migrate-refresh migrate-fresh
 
 PROJECT_NAME := testhub
 ENV_FILE := .env
@@ -24,6 +24,8 @@ help:
 	@echo "  $(YELLOW)make dev-frontend$(NC)   - Run React frontend (Vite/Bun) on port 5173"
 	@echo "  $(YELLOW)make migrate$(NC)        - Run database migrations"
 	@echo "  $(YELLOW)make seed$(NC)           - Seed initial admin and quiz catalog"
+	@echo "  $(YELLOW)make migrate-refresh$(NC)- Rollback & re-run all migrations"
+	@echo "  $(YELLOW)make migrate-fresh$(NC)  - Refresh migrations and run seed"
 	@echo "  $(YELLOW)make test$(NC)           - Run Go test suite"
 	@echo "  $(YELLOW)make build-backend$(NC)  - Build backend binaries into bin/"
 	@echo "  $(YELLOW)make build-frontend$(NC) - Build React frontend bundle"
@@ -49,6 +51,15 @@ seed:
 	@echo "$(BLUE)Seeding catalog & admin user...$(NC)"
 	cd backend && GOTOOLCHAIN=local go run cmd/seed/main.go
 	@echo "$(GREEN)✓ Seed data loaded!$(NC)"
+
+migrate-refresh:
+	@echo "$(YELLOW)Re-running all migrations...$(NC)"
+	cd backend && GOTOOLCHAIN=local go run cmd/migrate/main.go down || true
+	cd backend && GOTOOLCHAIN=local go run cmd/migrate/main.go up
+	@echo "$(GREEN)✓ Migrations refreshed!$(NC)"
+
+migrate-fresh: migrate-refresh seed
+	@echo "$(GREEN)✓ Database refreshed and re-seeded!$(NC)"
 
 test:
 	@echo "$(BLUE)Running backend tests...$(NC)"

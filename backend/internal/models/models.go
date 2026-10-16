@@ -189,10 +189,11 @@ type GradeEssayRequest struct {
 }
 
 type AIGenerateRequest struct {
-	Category   string `json:"category" binding:"required"`
-	Subject    string `json:"subject" binding:"required"`
-	Difficulty string `json:"difficulty" binding:"required"`
-	Count      int    `json:"count" binding:"required,min=1,max=10"`
+	Category     string `json:"category" binding:"required"`
+	Subject      string `json:"subject" binding:"required"`
+	Difficulty   string `json:"difficulty" binding:"required"`
+	Count        int    `json:"count" binding:"required,min=1,max=10"`
+	CustomPrompt string `json:"custom_prompt,omitempty" binding:"omitempty,max=400"`
 }
 
 type TestAnalytics struct {

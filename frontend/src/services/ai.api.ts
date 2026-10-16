@@ -8,6 +8,7 @@ export const aiApi = {
       subject: string
       difficulty: DifficultyLevel
       count: number
+      custom_prompt?: string
     },
     signal?: AbortSignal
   ): Promise<Question[]> {

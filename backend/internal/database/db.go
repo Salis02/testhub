@@ -78,3 +78,16 @@ func (db *DB) RunMigrations(migrationsDir string) error {
 	log.Printf("[DB] Successfully applied %d migrations", len(sqlFiles))
 	return nil
 }
+
+func (db *DB) DropAllTables() error {
+	query := `
+		DROP TABLE IF EXISTS test_submissions, test_results, test_sessions, question_options, test_questions, subscriptions, orders, admin_audit_log, tests, users CASCADE;
+	`
+	log.Println("[DB] Dropping all database tables (CASCADE)...")
+	if _, err := db.Exec(query); err != nil {
+		return fmt.Errorf("drop tables failed: %w", err)
+	}
+	log.Println("[DB] All database tables dropped successfully.")
+	return nil
+}
+

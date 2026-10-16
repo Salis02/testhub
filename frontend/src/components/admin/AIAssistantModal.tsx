@@ -5,7 +5,6 @@ import { api } from '@/services/api'
 import {
   Sparkles,
   X,
-  ShieldCheck,
   PlusCircle,
   Clock,
   AlertTriangle,
@@ -42,6 +41,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   const [subject, setSubject] = useState('Tes Wawasan Kebangsaan - Integritas & Nilai Dasar ASN')
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('medium')
   const [count, setCount] = useState<number>(3)
+  const [customPrompt, setCustomPrompt] = useState('')
   const toast = useToast()
 
   // Loading, progress & timer states
@@ -124,6 +124,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           subject: subject.trim(),
           difficulty,
           count: Math.min(10, Math.max(1, count)),
+          custom_prompt: customPrompt.trim() || undefined,
         },
         abortController.signal
       )
@@ -216,19 +217,6 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           </button>
         </div>
 
-        {/* Security & Validation Notice */}
-        <div className="p-3.5 rounded-md bg-canvas border border-borderline text-xs space-y-1.5 font-mono">
-          <div className="flex items-center space-x-2 text-ink font-semibold">
-            <ShieldCheck className="w-4 h-4 text-accent" />
-            <span>Standar Validasi Kepatuhan (AI_AGENT_AND_SECURITY.md):</span>
-          </div>
-          <ul className="list-disc list-inside text-ink-muted space-y-0.5 text-[11px]">
-            <li>Hanya membuat soal berbobot ilmiah dengan 1 opsi benar & 4 distractor rasional.</li>
-            <li>Panjang karakter seluruh opsi jawaban diseimbangkan secara proporsional.</li>
-            <li>Didukung auto-failover provider: Google Gemini &rarr; Groq LLaMA &rarr; Local Engine.</li>
-          </ul>
-        </div>
-
         {/* Configuration Form */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
           <div>
@@ -278,6 +266,56 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             />
           </div>
 
+          {/* Custom Prompt / Specific Guidelines */}
+          <div className="sm:col-span-2 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="block font-semibold text-ink uppercase tracking-wider">
+                Instruksi Spesifik / Konteks Tambahan (Opsional)
+              </label>
+              <span className={`text-[11px] font-mono ${customPrompt.length > 270 ? 'text-amber-500 font-bold' : 'text-ink-muted'}`}>
+                {customPrompt.length} / 300
+              </span>
+            </div>
+            <textarea
+              rows={2}
+              maxLength={300}
+              disabled={loading}
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              placeholder="Contoh: Fokus pada studi kasus dilema etika ASN dengan konflik kepentingan, gunakan skenario kantor dinas..."
+              className="w-full p-2.5 rounded-md border border-borderline bg-canvas text-ink text-xs focus:outline-none focus:ring-2 focus:ring-accent leading-relaxed"
+            />
+            {/* Quick Presets */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span className="text-[10px] text-ink-muted font-medium mr-1">Preset Cepat:</span>
+              {[
+                'Studi kasus dilema etika',
+                'Silogisme 3 premis logis',
+                'Soal cerita numerik komparatif',
+                'Analisis tabel / data',
+              ].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setCustomPrompt((prev) => (prev ? `${prev}, ${preset.toLowerCase()}` : preset).slice(0, 300))}
+                  className="text-[10px] px-2 py-0.5 rounded border border-borderline bg-surface hover:bg-surface-hover text-ink-muted hover:text-ink transition-colors"
+                >
+                  + {preset}
+                </button>
+              ))}
+              {customPrompt && (
+                <button
+                  type="button"
+                  onClick={() => setCustomPrompt('')}
+                  className="text-[10px] text-red-500 hover:underline ml-1"
+                >
+                  Hapus
+                </button>
+              )}
+            </div>
+          </div>
+
           <div>
             <label className="block font-semibold text-ink uppercase tracking-wider mb-1">
               Jumlah Butir Soal (1 - 10 Soal)
@@ -314,6 +352,16 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                 <span>Mulai Buat Soal AI</span>
               </button>
             )}
+          </div>
+
+          {/* Token Guardrail Indicator */}
+          <div className="sm:col-span-2 flex items-center justify-between p-2.5 rounded border border-accent/20 bg-accent/5 text-[11px] text-ink-muted">
+            <div className="flex items-center space-x-2">
+              <Sparkles className="w-3.5 h-3.5 text-accent shrink-0" />
+              <span>
+                <strong>Token Guardrail Aktif:</strong> Kuota output dibatasi otomatis ke <strong>{count * 280 + 200} tokens</strong> untuk melindungi API key dari pemborosan kuota.
+              </span>
+            </div>
           </div>
         </div>
 

@@ -94,6 +94,14 @@ func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGe
 		model = "gemini-1.5-flash"
 	}
 
+	maxTokens := req.Count*280 + 200
+	if maxTokens > 4096 {
+		maxTokens = 4096
+	}
+	if maxTokens < 500 {
+		maxTokens = 500
+	}
+
 	startIndex := int(atomic.AddUint64(&s.geminiKeyIdx, 1) % uint64(totalKeys))
 
 	// Try each key sequentially if rate limited (HTTP 429)
@@ -115,6 +123,7 @@ func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGe
 			"generationConfig": map[string]interface{}{
 				"response_mime_type": "application/json",
 				"temperature":        0.7,
+				"max_output_tokens":  maxTokens,
 				"thinking_config": map[string]interface{}{
 					"thinking_budget": 0,
 				},
@@ -199,6 +208,14 @@ func (s *AIAgentService) generateWithGroq(ctx context.Context, req models.AIGene
 		model = "llama-3.3-70b-versatile"
 	}
 
+	maxTokens := req.Count*280 + 200
+	if maxTokens > 4096 {
+		maxTokens = 4096
+	}
+	if maxTokens < 500 {
+		maxTokens = 500
+	}
+
 	startIndex := int(atomic.AddUint64(&s.groqKeyIdx, 1) % uint64(totalKeys))
 
 	var lastErr error
@@ -221,7 +238,7 @@ func (s *AIAgentService) generateWithGroq(ctx context.Context, req models.AIGene
 				},
 			},
 			"temperature": 0.7,
-			"max_tokens":  4096,
+			"max_tokens":  maxTokens,
 			"response_format": map[string]string{
 				"type": "json_object",
 			},
@@ -298,10 +315,18 @@ func (s *AIAgentService) buildPrompt(req models.AIGenerateRequest) string {
 		pts = 3
 	}
 
+	customInstruction := ""
+	if trimmed := strings.TrimSpace(req.CustomPrompt); trimmed != "" {
+		if len(trimmed) > 400 {
+			trimmed = trimmed[:400]
+		}
+		customInstruction = fmt.Sprintf("\n- PANDUAN SPESIFIK & KONTEKS PENGAJAR: %s", trimmed)
+	}
+
 	return fmt.Sprintf(`Tolong buatkan %d soal ujian berkualitas tinggi dalam Bahasa Indonesia untuk:
 - Kategori Tes: %s
 - Topik / Mata Uji: %s
-- Tingkat Kesulitan: %s (Bobot: %d poin)
+- Tingkat Kesulitan: %s (Bobot: %d poin)%s
 
 Aturan Mutlak (AI_AGENT_AND_SECURITY.md):
 1. Setiap soal bertipe pilihan ganda (multiple_choice) dengan 5 opsi: A, B, C, D, E.
@@ -328,7 +353,7 @@ Wajib kembalikan HANYA JSON object murni tanpa pembuka/penutup markdown dengan f
       ]
     }
   ]
-}`, req.Count, req.Category, req.Subject, req.Difficulty, pts, req.Difficulty, pts)
+}`, req.Count, req.Category, req.Subject, req.Difficulty, pts, customInstruction, req.Difficulty, pts)
 }
 
 func (s *AIAgentService) parseAIQuestionJSON(rawText string, req models.AIGenerateRequest) ([]models.TestQuestion, error) {
@@ -472,11 +497,19 @@ func (s *AIAgentService) generateLocalDeterministic(req models.AIGenerateRequest
 			texts[0], texts[correctIdx] = texts[correctIdx], texts[0]
 		}
 
+		subjectContext := req.Subject
+		if trimmed := strings.TrimSpace(req.CustomPrompt); trimmed != "" {
+			if len(trimmed) > 60 {
+				trimmed = trimmed[:60] + "..."
+			}
+			subjectContext = fmt.Sprintf("%s (%s)", req.Subject, trimmed)
+		}
+
 		q := models.TestQuestion{
 			ID:              qID,
 			TestID:          "",
 			QuestionNumber:  i + 1,
-			QuestionText:    fmt.Sprintf("[AI Asesmen: %s] Berdasarkan prinsip baku terkait %s, manakah kesimpulan evaluatif yang paling tepat dalam konteks asesmen tingkat %s?", req.Subject, topic, req.Difficulty),
+			QuestionText:    fmt.Sprintf("[AI Asesmen: %s] Berdasarkan prinsip baku terkait %s, manakah kesimpulan evaluatif yang paling tepat dalam konteks asesmen tingkat %s?", subjectContext, topic, req.Difficulty),
 			QuestionType:    "multiple_choice",
 			DifficultyLevel: req.Difficulty,
 			Points:          pts,
