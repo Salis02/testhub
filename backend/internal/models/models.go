@@ -196,6 +196,20 @@ type AIGenerateRequest struct {
 	CustomPrompt string `json:"custom_prompt,omitempty" binding:"omitempty,max=400"`
 }
 
+type AIEssayGradeRequest struct {
+	EssayID        string `json:"essay_id,omitempty"`
+	QuestionText   string `json:"question_text" binding:"required"`
+	UserAnswerText string `json:"user_answer_text" binding:"required"`
+	ReferenceKey   string `json:"reference_key,omitempty"`
+}
+
+type AIEssayGradeResponse struct {
+	SuggestedScore  int            `json:"suggested_score"`
+	FeedbackNote    string         `json:"feedback_note"`
+	RubricBreakdown map[string]int `json:"rubric_breakdown"`
+	Provider        string         `json:"provider"`
+}
+
 type TestAnalytics struct {
 	TestID           string  `json:"test_id"`
 	TestTitle        string  `json:"test_title"`

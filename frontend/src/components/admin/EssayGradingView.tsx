@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { EssaySubmission } from '@/types'
-import { CheckCircle2, FileText, Send } from 'lucide-react'
+import { CheckCircle2, FileText, Send, Sparkles, Loader2, Award } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
+import { adminApi } from '@/services/admin.api'
 
 interface EssayGradingViewProps {
   submissions: EssaySubmission[]
@@ -19,6 +20,13 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
   const [score, setScore] = useState<number>(85)
   const [note, setNote] = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isAiGrading, setIsAiGrading] = useState(false)
+  const [aiResult, setAiResult] = useState<{
+    suggested_score: number
+    feedback_note: string
+    rubric_breakdown: Record<string, number>
+    provider: string
+  } | null>(null)
 
   const selectedEssay = submissions.find((s) => s.id === selectedEssayId)
 
@@ -34,10 +42,39 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
         `Skor ${score} dan catatan evaluasi telah dicatat ke rekam jejak peserta.`
       )
       setNote('')
+      setAiResult(null)
     } catch (err) {
       toast.error('Gagal Menyimpan Penilaian', (err as Error).message)
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleAIGrade = async () => {
+    if (!selectedEssay) return
+    if (!selectedEssay.user_answer_text.trim()) {
+      toast.warning('Jawaban Kosong', 'Peserta tidak memberikan jawaban esai untuk dinilai.')
+      return
+    }
+
+    try {
+      setIsAiGrading(true)
+      const res = await adminApi.aiGradeEssay({
+        essay_id: selectedEssay.id,
+        question_text: selectedEssay.question_text,
+        user_answer_text: selectedEssay.user_answer_text,
+      })
+      setScore(res.suggested_score)
+      setNote(res.feedback_note)
+      setAiResult(res)
+      toast.success(
+        'Rekomendasi AI Selesai',
+        `Skor ${res.suggested_score} dialokasikan via ${res.provider}. Anda dapat mereview dan menyesuaikan nilai sebelum disimpan.`
+      )
+    } catch (err) {
+      toast.error('Gagal Mengakses AI Grader', (err as Error).message)
+    } finally {
+      setIsAiGrading(false)
     }
   }
 
@@ -69,6 +106,7 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
                 key={essay.id}
                 onClick={() => {
                   setSelectedEssayId(essay.id)
+                  setAiResult(null)
                   if (essay.score !== undefined) setScore(essay.score)
                   if (essay.admin_review_note) setNote(essay.admin_review_note)
                 }}
@@ -124,6 +162,75 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
               </p>
             </div>
 
+            {/* AI Auto-Grader Toolbar & Quick Actions */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-lg bg-surface border border-borderline shadow-2xs">
+              <div className="flex items-center space-x-2">
+                <div className="w-7 h-7 rounded-md bg-accent/10 border border-accent/20 flex items-center justify-center text-accent">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h5 className="text-xs font-semibold text-ink">AI Essay Auto-Grader</h5>
+                  <p className="text-[11px] text-ink-muted">Evaluasi jawaban berdasarkan substansi, penalaran, dan tata bahasa.</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={isAiGrading || !selectedEssay.user_answer_text.trim()}
+                onClick={handleAIGrade}
+                className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-md bg-accent text-white text-xs font-semibold hover:bg-accent/90 shadow-xs transition-all disabled:opacity-50"
+              >
+                {isAiGrading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menganalisis Jawaban...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>✨ Nilai Otomatis dengan AI</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* AI Rubric Breakdown Card (Visible when generated) */}
+            {aiResult && (
+              <div className="p-4 rounded-lg bg-accent/5 border border-accent/20 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center space-x-1.5 font-semibold text-accent">
+                    <Award className="w-4 h-4" />
+                    <span>Rekomendasi Rubrik AI ({aiResult.provider})</span>
+                  </span>
+                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20">
+                    Skor: {aiResult.suggested_score} / 100
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2.5 text-center font-mono text-xs">
+                  <div className="p-2 rounded bg-surface border border-borderline">
+                    <span className="block text-ink-muted text-[10px] uppercase font-sans">Substansi & Teori</span>
+                    <span className="font-bold text-ink">{aiResult.rubric_breakdown?.substance ?? 0}</span>
+                    <span className="text-[10px] text-ink-muted font-sans"> / 40</span>
+                  </div>
+                  <div className="p-2 rounded bg-surface border border-borderline">
+                    <span className="block text-ink-muted text-[10px] uppercase font-sans">Analisis Kritis</span>
+                    <span className="font-bold text-ink">{aiResult.rubric_breakdown?.analysis ?? 0}</span>
+                    <span className="text-[10px] text-ink-muted font-sans"> / 30</span>
+                  </div>
+                  <div className="p-2 rounded bg-surface border border-borderline">
+                    <span className="block text-ink-muted text-[10px] uppercase font-sans">Sistematika Argumen</span>
+                    <span className="font-bold text-ink">{aiResult.rubric_breakdown?.structure ?? 0}</span>
+                    <span className="text-[10px] text-ink-muted font-sans"> / 30</span>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-ink-muted italic">
+                  * Skor dan umpan balik telah diisikan ke form di bawah. Anda dapat mengedit atau menambahkan catatan sebelum menyimpan.
+                </p>
+              </div>
+            )}
+
             {/* Grading Form (US-103) */}
             <form onSubmit={handleGradeSubmit} className="space-y-4 pt-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -144,7 +251,7 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
 
                 <div>
                   <label className="block text-xs font-semibold text-ink uppercase tracking-wider mb-1">
-                    Template Rubrik Cepat:
+                    Template Rubrik Manual:
                   </label>
                   <div className="flex space-x-1.5">
                     <button

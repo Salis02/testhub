@@ -103,17 +103,29 @@ codegraph explore "models.Test"              # Melihat struktur data & tag db/js
 
 ---
 
-## 5. Integrasi AI Question Generator
+## 5. Integrasi AI Multi-Provider (Question Generator & Essay Auto-Grader)
 
-Layanan AI Question Generator menggunakan arsitektur **3-Tier Resilient Fallback**:
-1. **Tier 1 (Primary)**: Google Gemini 2.5 Flash API (kecepatan tinggi & pemahaman penalaran mendalam).
-2. **Tier 2 (Secondary)**: Groq API (Llama 3.3 70B OSS) jika Tier 1 mengalami limitasi kuota.
-3. **Tier 3 (Zero Downtime Fallback)**: Bank kurasi soal internal deterministik berbasis kategori (CPNS, SBMPTN, IQ, BUMN).
+Layanan AI pada TestHub mengadopsi arsitektur **3-Tier Resilient Fallback Engine**:
+1. **Tier 1 (Primary)**: Google Gemini 2.5 Flash API (kecepatan tinggi & penalaran mendalam).
+2. **Tier 2 (Secondary)**: Groq API (`llama-3.3-70b-versatile` / `gpt-oss-120b`) jika Tier 1 mengalami limitasi kuota (HTTP 429).
+3. **Tier 3 (Zero Downtime Fallback)**: Bank kurasi soal deterministik dan Heuristic Rubric Engine lokal jika seluruh cloud API offline.
+
+### Fitur AI Utama:
+- **AI Question Generator (`/api/ai/generate-questions`)**:
+  - Generator butir soal pilihan ganda (A-E) dengan acuan standar asesmen nasional (CPNS, UTBK, IQ, BUMN).
+  - Dilengkapi *Prompt Fleksibel* (konteks / studi kasus pengajar) dan *Token Guardrail Dinamis* (`count * 650 + 2500 tokens`, aman hingga 8.192 tokens) guna mengantisipasi *thinking tokens* Gemini 2.5 tanpa memotong output JSON.
+  - Auto-complement fallback: Jika LLM mengembalikan butir soal kurang dari target (misal: 8 dari 10), backend otomatis menggenapi sisa butir soal via bank deterministik lokal secara transparan.
+- **AI Essay Auto-Grader (`/api/ai/grade-essay` & `/api/admin/essays/ai-grade`)**:
+  - Asesor otomatis koreksi lembar jawaban esai dengan pembobotan rubrik objektif:
+    - *Substansi & Teori* (Maks. 40 poin)
+    - *Analisis Kritis & Solusi* (Maks. 30 poin)
+    - *Sistematika Argumen & Bahasa* (Maks. 30 poin)
+  - Memberikan rekomendasi skor (0-100), umpan balik evaluatif komprehensif, dan breakdown rubrik yang dapat ditinjau serta diedit langsung oleh instruktur di `EssayGradingView.tsx`.
 
 > **Aturan Validasi Keras (*Hard Constraints*):**
 > - Wajib memiliki tepat 4 atau 5 opsi jawaban (A-D / A-E).
-> - Tepat 1 opsi bertindak sebagai kunci jawaban (`is_correct: true`).
-> - Wajib menyertakan teks pembahasan (`explanation`).
+> - Tepat 1 opsi bertindak sebagai kunci jawaban (`is_correct: true`), didistribusikan acak across opsi.
+> - Wajib menyertakan teks pembahasan ilmiah (`explanation`).
 > - Mengikat `context.Context` agar proses di-abort seketika jika koneksi klien terputus.
 
 ---
@@ -128,6 +140,8 @@ Dikelola melalui `Makefile` di root proyek:
 | `make dev` | Menjalankan Go backend di port `8000` | Native Host |
 | `make dev-frontend` | Menjalankan Vite dev server di port `5173` | Native Host (Bun) |
 | `make migrate` | Menjalankan migrasi SQL skema database | PostgreSQL |
+| `make migrate-refresh` | Rollback (drop all tables) dan jalankan ulang semua migrasi | PostgreSQL |
+| `make migrate-fresh` | Rollback, jalankan ulang semua migrasi, dan seed ulang data | PostgreSQL |
 | `make seed` | Mengisi data dummy tryout dan akun default admin | PostgreSQL |
 | `make test` | Menjalankan unit & integration test Go | Go Test Engine |
 | `make build-backend` | Kompilasi binary Go (`backend/bin/server`) | Production Bin |

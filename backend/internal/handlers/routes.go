@@ -123,10 +123,11 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			payments.POST("/webhook", paymentHandler.HandleWebhook)
 		}
 
-		// Public AI Assistance
+		// Public AI Assistance & Copilot
 		ai := api.Group("/ai")
 		{
 			ai.POST("/generate-questions", aiHandler.GenerateQuestions)
+			ai.POST("/grade-essay", aiHandler.GradeEssay)
 		}
 
 		// =========================================================================
@@ -163,9 +164,10 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			admin.POST("/tests/:testId/publish", adminHandler.TogglePublish)
 			admin.DELETE("/tests/:testId", adminHandler.DeleteTest)
 
-			// Essay Manual Grading
+			// Essay Manual Grading & AI Auto-Grader
 			admin.GET("/essays", adminHandler.GetPendingEssays)
 			admin.POST("/essays/:essayId/grade", adminHandler.GradeEssay)
+			admin.POST("/essays/ai-grade", aiHandler.GradeEssay)
 
 			// Media Uploads
 			admin.POST("/upload-media", mediaHandler.UploadMedia)

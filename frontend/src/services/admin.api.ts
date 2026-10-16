@@ -106,6 +106,24 @@ export const adminApi = {
     return true
   },
 
+  async aiGradeEssay(payload: {
+    essay_id?: string
+    question_text: string
+    user_answer_text: string
+    reference_key?: string
+  }, signal?: AbortSignal): Promise<{
+    suggested_score: number
+    feedback_note: string
+    rubric_breakdown: Record<string, number>
+    provider: string
+  }> {
+    return apiClient('/ai/grade-essay', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      signal,
+    })
+  },
+
   async uploadMedia(file: File): Promise<{ url: string; filename: string; size_bytes: number; content_type: string }> {
     const formData = new FormData()
     formData.append('file', file)

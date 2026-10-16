@@ -57,6 +57,7 @@ func (s *AIAgentService) GenerateQuestions(ctx context.Context, req models.AIGen
 	if s.cfg != nil && len(s.cfg.GeminiAPIKeys) > 0 {
 		questions, err := s.generateWithGemini(ctx, req)
 		if err == nil && len(questions) > 0 {
+			questions = s.ensureQuestionCount(questions, req)
 			log.Printf("[AI-Agent] Successfully generated %d questions using Google Gemini (%s)", len(questions), s.cfg.GeminiModel)
 			return questions, nil
 		}
@@ -67,6 +68,7 @@ func (s *AIAgentService) GenerateQuestions(ctx context.Context, req models.AIGen
 	if s.cfg != nil && len(s.cfg.GroqAPIKeys) > 0 {
 		questions, err := s.generateWithGroq(ctx, req)
 		if err == nil && len(questions) > 0 {
+			questions = s.ensureQuestionCount(questions, req)
 			log.Printf("[AI-Agent] Successfully generated %d questions using Groq (%s)", len(questions), s.cfg.GroqModel)
 			return questions, nil
 		}
@@ -76,6 +78,22 @@ func (s *AIAgentService) GenerateQuestions(ctx context.Context, req models.AIGen
 	// 3. Fallback to Local Deterministic Generator (Zero Downtime guarantee)
 	log.Printf("[AI-Agent] Using local deterministic generator for category %s, subject %s", req.Category, req.Subject)
 	return s.generateLocalDeterministic(req)
+}
+
+func (s *AIAgentService) ensureQuestionCount(questions []models.TestQuestion, req models.AIGenerateRequest) []models.TestQuestion {
+	if len(questions) >= req.Count {
+		return questions[:req.Count]
+	}
+	missing := req.Count - len(questions)
+	log.Printf("[AI-Agent] Provider returned %d questions, needed %d. Complementing %d questions with deterministic generator...", len(questions), req.Count, missing)
+	compReq := req
+	compReq.Count = missing
+	fallbackQuestions, _ := s.generateLocalDeterministic(compReq)
+	for i, fq := range fallbackQuestions {
+		fq.QuestionNumber = len(questions) + 1 + i
+		questions = append(questions, fq)
+	}
+	return questions
 }
 
 // -------------------------------------------------------------
@@ -94,12 +112,12 @@ func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGe
 		model = "gemini-1.5-flash"
 	}
 
-	maxTokens := req.Count*280 + 200
-	if maxTokens > 4096 {
-		maxTokens = 4096
+	maxTokens := req.Count*650 + 2500
+	if maxTokens > 8192 {
+		maxTokens = 8192
 	}
-	if maxTokens < 500 {
-		maxTokens = 500
+	if maxTokens < 2048 {
+		maxTokens = 2048
 	}
 
 	startIndex := int(atomic.AddUint64(&s.geminiKeyIdx, 1) % uint64(totalKeys))
@@ -124,9 +142,6 @@ func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGe
 				"response_mime_type": "application/json",
 				"temperature":        0.7,
 				"max_output_tokens":  maxTokens,
-				"thinking_config": map[string]interface{}{
-					"thinking_budget": 0,
-				},
 			},
 		}
 
@@ -161,7 +176,8 @@ func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGe
 		// Parse Gemini response structure
 		var geminiResp struct {
 			Candidates []struct {
-				Content struct {
+				FinishReason string `json:"finishReason"`
+				Content      struct {
 					Parts []struct {
 						Text string `json:"text"`
 					} `json:"parts"`
@@ -177,6 +193,10 @@ func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGe
 		if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
 			lastErr = fmt.Errorf("empty gemini candidates")
 			continue
+		}
+
+		if geminiResp.Candidates[0].FinishReason == "MAX_TOKENS" {
+			log.Printf("[AI-Agent] Warning: Gemini Key %d hit MAX_TOKENS limit", keyIndex+1)
 		}
 
 		rawJSON := geminiResp.Candidates[0].Content.Parts[0].Text
@@ -208,12 +228,12 @@ func (s *AIAgentService) generateWithGroq(ctx context.Context, req models.AIGene
 		model = "llama-3.3-70b-versatile"
 	}
 
-	maxTokens := req.Count*280 + 200
-	if maxTokens > 4096 {
-		maxTokens = 4096
+	maxTokens := req.Count*650 + 1000
+	if maxTokens > 8192 {
+		maxTokens = 8192
 	}
-	if maxTokens < 500 {
-		maxTokens = 500
+	if maxTokens < 2048 {
+		maxTokens = 2048
 	}
 
 	startIndex := int(atomic.AddUint64(&s.groqKeyIdx, 1) % uint64(totalKeys))
@@ -329,12 +349,13 @@ func (s *AIAgentService) buildPrompt(req models.AIGenerateRequest) string {
 - Tingkat Kesulitan: %s (Bobot: %d poin)%s
 
 Aturan Mutlak (AI_AGENT_AND_SECURITY.md):
-1. Setiap soal bertipe pilihan ganda (multiple_choice) dengan 5 opsi: A, B, C, D, E.
-2. Harus ada TEPAT SATU opsi dengan is_correct = true, dan 4 opsi lainnya is_correct = false.
-3. KUNCI JAWABAN BENAR (is_correct = true) WAJIB DIDISTRIBUSIKAN SECARA ACAK pada opsi A, B, C, D, atau E (JANGAN SELALU di opsi A).
-4. Distractor (pilihan salah) harus masuk akal, tidak konyol, dan panjang kalimat opsi relatif seimbang.
-5. Sertakan penjelasan ilmiah (explanation) yang mendalam mengapa opsi tersebut benar.
-6. Soal harus faktual, akurat, dan relevan dengan standar asesmen nasional di Indonesia.
+1. JUMLAH SOAL: WAJIB MENGHASILKAN TEPAT %d BUTIR SOAL DI DALAM ARRAY "questions" (Dilarang berhenti sebelum semua %d butir soal selesai dibuat).
+2. Setiap soal bertipe pilihan ganda (multiple_choice) dengan 5 opsi: A, B, C, D, E.
+3. Harus ada TEPAT SATU opsi dengan is_correct = true, dan 4 opsi lainnya is_correct = false.
+4. KUNCI JAWABAN BENAR (is_correct = true) WAJIB DIDISTRIBUSIKAN SECARA ACAK pada opsi A, B, C, D, atau E (JANGAN SELALU di opsi A).
+5. Distractor (pilihan salah) harus masuk akal, tidak konyol, dan panjang kalimat opsi relatif seimbang.
+6. Sertakan penjelasan ilmiah (explanation) yang mendalam mengapa opsi tersebut benar.
+7. Soal harus faktual, akurat, dan relevan dengan standar asesmen nasional di Indonesia.
 
 Wajib kembalikan HANYA JSON object murni tanpa pembuka/penutup markdown dengan format persis seperti ini:
 {
@@ -353,7 +374,7 @@ Wajib kembalikan HANYA JSON object murni tanpa pembuka/penutup markdown dengan f
       ]
     }
   ]
-}`, req.Count, req.Category, req.Subject, req.Difficulty, pts, customInstruction, req.Difficulty, pts)
+}`, req.Count, req.Category, req.Subject, req.Difficulty, pts, customInstruction, req.Count, req.Count, req.Difficulty, pts)
 }
 
 func (s *AIAgentService) parseAIQuestionJSON(rawText string, req models.AIGenerateRequest) ([]models.TestQuestion, error) {
@@ -558,4 +579,317 @@ func validateQuestion(q *models.TestQuestion) error {
 		return fmt.Errorf("validation error: explanation_provided violated")
 	}
 	return nil
+}
+
+// -------------------------------------------------------------
+// AI ESSAY AUTO-GRADER (RESILIENT MULTI-PROVIDER)
+// -------------------------------------------------------------
+func (s *AIAgentService) GradeEssay(ctx context.Context, req models.AIEssayGradeRequest) (*models.AIEssayGradeResponse, error) {
+	// 1. Try Google Gemini
+	if s.cfg != nil && len(s.cfg.GeminiAPIKeys) > 0 {
+		res, err := s.gradeEssayWithGemini(ctx, req)
+		if err == nil && res != nil {
+			res.Provider = fmt.Sprintf("Google Gemini (%s)", s.cfg.GeminiModel)
+			log.Printf("[AI-Agent] Successfully evaluated essay using Gemini (%s) - Score: %d", s.cfg.GeminiModel, res.SuggestedScore)
+			return res, nil
+		}
+		log.Printf("[AI-Agent] Gemini essay grading failed: %v. Attempting Groq fallback...", err)
+	}
+
+	// 2. Try Groq (Llama-3 / GPT-OSS)
+	if s.cfg != nil && len(s.cfg.GroqAPIKeys) > 0 {
+		res, err := s.gradeEssayWithGroq(ctx, req)
+		if err == nil && res != nil {
+			res.Provider = fmt.Sprintf("Groq (%s)", s.cfg.GroqModel)
+			log.Printf("[AI-Agent] Successfully evaluated essay using Groq (%s) - Score: %d", s.cfg.GroqModel, res.SuggestedScore)
+			return res, nil
+		}
+		log.Printf("[AI-Agent] Groq essay grading failed: %v. Falling back to local rubric...", err)
+	}
+
+	// 3. Fallback to Local Deterministic Rubric Engine
+	log.Printf("[AI-Agent] Using local deterministic rubric for essay evaluation")
+	res := s.gradeEssayDeterministic(req)
+	return res, nil
+}
+
+func (s *AIAgentService) buildEssayPrompt(req models.AIEssayGradeRequest) string {
+	refText := strings.TrimSpace(req.ReferenceKey)
+	if refText == "" {
+		refText = "Standar kompetensi dan kebenaran konseptual umum terkait topik pertanyaan."
+	}
+
+	return fmt.Sprintf(`Tolong bertindak sebagai asesor dan pemeriksa akademis ujian tingkat nasional di Indonesia.
+Evaluasi dan berikan nilai pada jawaban esai peserta berikut berdasarkan rubrik baku:
+
+SOAL ESAI:
+%s
+
+KUNCI ACUAN / RUBRIK JAWABAN:
+%s
+
+JAWABAN PESERTA:
+%s
+
+KRITERIA PENILAIAN OBJEKTIF (Skala 0 - 100):
+1. Akurasi & Kedalaman Substansi (0 - 40 poin): Kebenaran konsep materi, data/fakta pendukung, dan kelengkapan menjawab pertanyaan.
+2. Analisis & Argumentasi Kritis (0 - 30 poin): Logika penalaran, keterkaitan sebab-akibat, dan pemecahan masalah konkret.
+3. Sistematika & Tata Bahasa (0 - 30 poin): Kejelasan penyampaian, koherensi antarparagraf, dan penggunaan Bahasa Indonesia yang baku.
+
+Wajib kembalikan HANYA JSON object murni tanpa markdown dengan format persis:
+{
+  "suggested_score": 85,
+  "rubric_breakdown": {
+    "substance": 34,
+    "analysis": 26,
+    "structure": 25
+  },
+  "feedback_note": "Apresiasi aspek jawaban yang sudah tepat, evaluasi titik celah, serta saran perbaikan konseptual secara profesional."
+}`, req.QuestionText, refText, req.UserAnswerText)
+}
+
+func (s *AIAgentService) gradeEssayWithGemini(ctx context.Context, req models.AIEssayGradeRequest) (*models.AIEssayGradeResponse, error) {
+	keys := s.cfg.GeminiAPIKeys
+	totalKeys := len(keys)
+	if totalKeys == 0 {
+		return nil, fmt.Errorf("no gemini api keys configured")
+	}
+
+	prompt := s.buildEssayPrompt(req)
+	model := s.cfg.GeminiModel
+	if model == "" {
+		model = "gemini-1.5-flash"
+	}
+
+	startIndex := int(atomic.AddUint64(&s.geminiKeyIdx, 1) % uint64(totalKeys))
+
+	var lastErr error
+	for i := 0; i < totalKeys; i++ {
+		keyIndex := (startIndex + i) % totalKeys
+		apiKey := keys[keyIndex]
+
+		url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
+
+		reqBody := map[string]interface{}{
+			"contents": []map[string]interface{}{
+				{
+					"parts": []map[string]interface{}{
+						{"text": prompt},
+					},
+				},
+			},
+			"generationConfig": map[string]interface{}{
+				"response_mime_type": "application/json",
+				"temperature":        0.3,
+				"max_output_tokens":  4096,
+			},
+		}
+
+		bodyBytes, _ := json.Marshal(reqBody)
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bodyBytes))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		resp, err := s.httpClient.Do(httpReq)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		respBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("gemini key %d status %d: %s", keyIndex+1, resp.StatusCode, string(respBytes))
+			continue
+		}
+
+		var geminiResp struct {
+			Candidates []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+		}
+
+		if err := json.Unmarshal(respBytes, &geminiResp); err != nil {
+			lastErr = err
+			continue
+		}
+
+		if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
+			lastErr = fmt.Errorf("empty gemini candidates")
+			continue
+		}
+
+		return s.parseEssayGradeJSON(geminiResp.Candidates[0].Content.Parts[0].Text)
+	}
+
+	return nil, fmt.Errorf("all gemini keys failed: %w", lastErr)
+}
+
+func (s *AIAgentService) gradeEssayWithGroq(ctx context.Context, req models.AIEssayGradeRequest) (*models.AIEssayGradeResponse, error) {
+	keys := s.cfg.GroqAPIKeys
+	totalKeys := len(keys)
+	if totalKeys == 0 {
+		return nil, fmt.Errorf("no groq api keys configured")
+	}
+
+	prompt := s.buildEssayPrompt(req)
+	model := s.cfg.GroqModel
+	if model == "" {
+		model = "llama-3.3-70b-versatile"
+	}
+
+	startIndex := int(atomic.AddUint64(&s.groqKeyIdx, 1) % uint64(totalKeys))
+
+	var lastErr error
+	for i := 0; i < totalKeys; i++ {
+		keyIndex := (startIndex + i) % totalKeys
+		apiKey := keys[keyIndex]
+
+		url := "https://api.groq.com/openai/v1/chat/completions"
+
+		reqBody := map[string]interface{}{
+			"model": model,
+			"messages": []map[string]string{
+				{
+					"role":    "system",
+					"content": "You are a senior academic assessor grading student essay responses based on rigorous evaluation rubrics. Return pure JSON object.",
+				},
+				{
+					"role":    "user",
+					"content": prompt,
+				},
+			},
+			"temperature": 0.3,
+			"max_tokens":  4096,
+			"response_format": map[string]string{
+				"type": "json_object",
+			},
+		}
+
+		bodyBytes, _ := json.Marshal(reqBody)
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bodyBytes))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		resp, err := s.httpClient.Do(httpReq)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		respBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("groq key %d status %d: %s", keyIndex+1, resp.StatusCode, string(respBytes))
+			continue
+		}
+
+		var groqResp struct {
+			Choices []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			} `json:"choices"`
+		}
+
+		if err := json.Unmarshal(respBytes, &groqResp); err != nil {
+			lastErr = err
+			continue
+		}
+
+		if len(groqResp.Choices) == 0 {
+			lastErr = fmt.Errorf("empty groq choices")
+			continue
+		}
+
+		return s.parseEssayGradeJSON(groqResp.Choices[0].Message.Content)
+	}
+
+	return nil, fmt.Errorf("all groq keys failed: %w", lastErr)
+}
+
+func (s *AIAgentService) parseEssayGradeJSON(raw string) (*models.AIEssayGradeResponse, error) {
+	cleanText := strings.TrimSpace(raw)
+	cleanText = strings.TrimPrefix(cleanText, "```json")
+	cleanText = strings.TrimPrefix(cleanText, "```")
+	cleanText = strings.TrimSuffix(cleanText, "```")
+	cleanText = strings.TrimSpace(cleanText)
+
+	var res models.AIEssayGradeResponse
+	if err := json.Unmarshal([]byte(cleanText), &res); err != nil {
+		return nil, fmt.Errorf("failed to parse AI essay evaluation JSON: %w", err)
+	}
+
+	if res.SuggestedScore < 0 {
+		res.SuggestedScore = 0
+	}
+	if res.SuggestedScore > 100 {
+		res.SuggestedScore = 100
+	}
+	if strings.TrimSpace(res.FeedbackNote) == "" {
+		res.FeedbackNote = fmt.Sprintf("Penilaian selesai dengan skor %d/100 berdasarkan evaluasi rubrik substansi dan logika argumentasi.", res.SuggestedScore)
+	}
+	if res.RubricBreakdown == nil {
+		sub := res.SuggestedScore * 40 / 100
+		ana := res.SuggestedScore * 30 / 100
+		str := res.SuggestedScore - (sub + ana)
+		res.RubricBreakdown = map[string]int{
+			"substance": sub,
+			"analysis":  ana,
+			"structure": str,
+		}
+	}
+
+	return &res, nil
+}
+
+func (s *AIAgentService) gradeEssayDeterministic(req models.AIEssayGradeRequest) *models.AIEssayGradeResponse {
+	text := strings.TrimSpace(req.UserAnswerText)
+	words := strings.Fields(text)
+	wordCount := len(words)
+
+	score := 50
+	feedback := ""
+
+	if wordCount < 10 {
+		score = 35
+		feedback = "Jawaban terlalu singkat dan belum memaparkan argumentasi maupun konsep pokok yang dipersyaratkan soal. Perlu penjelasan lebih mendalam."
+	} else if wordCount < 30 {
+		score = 65
+		feedback = "Jawaban telah menyentuh inti bahasan, namun pembahasannya masih bersifat umum dan membutuhkan contoh konkret atau rujukan data."
+	} else if wordCount < 60 {
+		score = 82
+		feedback = "Jawaban terstruktur dengan baik, argumentasi runut, dan mencakup sebagian besar indikator konseptual yang relevan."
+	} else {
+		score = 92
+		feedback = "Analisis sangat tajam dan komprehensif. Menunjukkan pemahaman mendalam terhadap materi, argumentasi berbasis bukti, dan alur berpikir yang terstruktur rapi."
+	}
+
+	sub := score * 40 / 100
+	ana := score * 30 / 100
+	str := score - (sub + ana)
+
+	return &models.AIEssayGradeResponse{
+		SuggestedScore: score,
+		FeedbackNote:   feedback,
+		RubricBreakdown: map[string]int{
+			"substance": sub,
+			"analysis":  ana,
+			"structure": str,
+		},
+		Provider: "Local Heuristic Rubric Engine",
+	}
 }

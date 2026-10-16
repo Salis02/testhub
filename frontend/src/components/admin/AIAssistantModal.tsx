@@ -359,7 +359,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             <div className="flex items-center space-x-2">
               <Sparkles className="w-3.5 h-3.5 text-accent shrink-0" />
               <span>
-                <strong>Token Guardrail Aktif:</strong> Kuota output dibatasi otomatis ke <strong>{count * 280 + 200} tokens</strong> untuk melindungi API key dari pemborosan kuota.
+                <strong>Token Guardrail Aktif:</strong> Kuota dialokasikan dinamis (<strong>{Math.min(8192, count * 650 + 2500)} tokens</strong>) dengan proteksi penalaran (thinking buffer) & anti-truncation.
               </span>
             </div>
           </div>
