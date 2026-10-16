@@ -194,32 +194,20 @@ export const TestPage: React.FC = () => {
                 <span>{autoSaveStatus}</span>
               </div>
 
-              <div className="flex items-center space-x-2">
+              {currentIndex < questions.length - 1 ? (
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(true)}
-                  className={`inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-md text-xs font-semibold btn-press focus-ring shadow-subtle transition-all cursor-pointer ${
-                    currentIndex === questions.length - 1
-                      ? 'bg-success text-white hover:brightness-105'
-                      : 'border border-borderline bg-canvas text-ink hover:bg-surface-hover hover:border-ink/20'
-                  }`}
-                  title="Selesaikan dan kumpulkan lembar jawaban"
+                  onClick={() => setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1))}
+                  className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-md bg-accent text-white text-xs font-semibold hover:brightness-105 btn-press focus-ring shadow-subtle transition-all cursor-pointer"
                 >
-                  <Check className={`w-4 h-4 ${currentIndex === questions.length - 1 ? 'text-white' : 'text-success'}`} />
-                  <span>Kumpulkan Jawaban</span>
+                  <span>Berikutnya</span>
+                  <ChevronRight className="w-4 h-4" />
                 </button>
-
-                {currentIndex < questions.length - 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1))}
-                    className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-md bg-accent text-white text-xs font-semibold hover:brightness-105 btn-press focus-ring shadow-subtle transition-all cursor-pointer"
-                  >
-                    <span>Berikutnya</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+              ) : (
+                <div className="text-[11px] font-mono text-ink-muted italic hidden sm:block">
+                  Butir soal terakhir
+                </div>
+              )}
             </div>
           </div>
 
@@ -240,10 +228,6 @@ export const TestPage: React.FC = () => {
                     setIsDrawerOpen(false)
                   }}
                   onClose={() => setIsDrawerOpen(false)}
-                  onFinish={() => {
-                    setIsDrawerOpen(false)
-                    setIsModalOpen(true)
-                  }}
                 />
               </div>
             </div>
@@ -259,7 +243,6 @@ export const TestPage: React.FC = () => {
                 onSelectIndex={(idx) => {
                   setCurrentIndex(idx)
                 }}
-                onFinish={() => setIsModalOpen(true)}
               />
             </div>
           </aside>

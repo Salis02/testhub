@@ -1,6 +1,6 @@
 import React from 'react'
 import { Question, UserSubmission } from '@/types'
-import { X, Check } from 'lucide-react'
+import { X } from 'lucide-react'
 
 interface QuestionNavProps {
   questions: Question[]
@@ -8,7 +8,6 @@ interface QuestionNavProps {
   submissions: Record<string, UserSubmission>
   onSelectIndex: (index: number) => void
   onClose?: () => void
-  onFinish?: () => void
 }
 
 export const QuestionNav: React.FC<QuestionNavProps> = ({
@@ -17,7 +16,6 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
   submissions,
   onSelectIndex,
   onClose,
-  onFinish,
 }) => {
   return (
     <div className="bg-surface surface-card border border-borderline rounded-lg p-5 shadow-card">
@@ -89,20 +87,6 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
           )
         })}
       </div>
-
-      {/* Finish Exam Button at bottom of Question Palette */}
-      {onFinish && (
-        <div className="pt-4 mt-4 border-t border-borderline">
-          <button
-            type="button"
-            onClick={onFinish}
-            className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 rounded-md bg-success text-white text-xs font-semibold hover:brightness-105 btn-press focus-ring shadow-subtle transition-all cursor-pointer"
-          >
-            <Check className="w-4 h-4" />
-            <span>Kumpulkan Lembar Jawaban</span>
-          </button>
-        </div>
-      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { TestCountdownTimer } from '@/components/test/TestCountdownTimer'
 
@@ -66,14 +66,16 @@ export const TestHeader: React.FC<TestHeaderProps> = ({
           {/* Isolated Tabular Numerals Countdown Timer */}
           <TestCountdownTimer />
 
-          {/* Finish Button - Always prominently visible */}
+          {/* Finish Button - The SINGLE prominent submit button in navbar */}
           <button
+            type="button"
             onClick={onFinishClick}
-            className="inline-flex items-center space-x-1.5 px-3 sm:px-4 py-1.5 text-xs font-semibold rounded-md bg-success text-white hover:brightness-105 btn-press focus-ring shadow-subtle transition-all shrink-0 cursor-pointer"
+            className="inline-flex items-center space-x-1.5 px-3.5 sm:px-4 py-1.5 text-xs font-semibold rounded-md bg-accent text-white hover:opacity-90 shadow-sm border border-transparent transition-all shrink-0 cursor-pointer"
             title="Selesaikan dan kumpulkan lembar jawaban"
           >
-            <span>Kumpulkan</span>
-            <span className="hidden md:inline">Ujian</span>
+            <Check className="w-4 h-4 text-white shrink-0" />
+            <span className="hidden sm:inline">Kumpulkan Ujian</span>
+            <span className="sm:hidden">Kumpulkan</span>
           </button>
         </div>
       </div>
