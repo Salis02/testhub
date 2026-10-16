@@ -117,7 +117,7 @@ export const ResultsPage: React.FC = () => {
       <CategoryBreakdown breakdown={result.category_breakdown} />
 
       {/* Review Mode (All questions + answers + explanations) */}
-      <QuestionReviewList questions={questions} submissions={result.submissions} />
+      <QuestionReviewList questions={questions || []} submissions={result.submissions || {}} />
 
       {/* Official Certificate Modal */}
       {resultId && (

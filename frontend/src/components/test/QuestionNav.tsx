@@ -1,6 +1,6 @@
 import React from 'react'
 import { Question, UserSubmission } from '@/types'
-import { X } from 'lucide-react'
+import { X, Check } from 'lucide-react'
 
 interface QuestionNavProps {
   questions: Question[]
@@ -8,6 +8,7 @@ interface QuestionNavProps {
   submissions: Record<string, UserSubmission>
   onSelectIndex: (index: number) => void
   onClose?: () => void
+  onFinish?: () => void
 }
 
 export const QuestionNav: React.FC<QuestionNavProps> = ({
@@ -16,15 +17,17 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
   submissions,
   onSelectIndex,
   onClose,
+  onFinish,
 }) => {
   return (
-    <div className="bg-surface border border-borderline rounded-lg p-5 shadow-sm">
+    <div className="bg-surface surface-card border border-borderline rounded-lg p-5 shadow-card">
       <div className="flex items-center justify-between border-b border-borderline pb-3 mb-4">
         <h3 className="text-sm font-semibold text-ink">Nomor Soal</h3>
         {onClose && (
           <button
             onClick={onClose}
-            className="md:hidden p-1 rounded hover:bg-surface-hover text-ink-muted"
+            className="md:hidden p-1 rounded-md hover:bg-surface-hover text-ink-muted btn-press focus-ring transition-colors cursor-pointer"
+            aria-label="Tutup Navigasi Soal"
           >
             <X className="w-4 h-4" />
           </button>
@@ -32,13 +35,13 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
       </div>
 
       {/* Legend */}
-      <div className="grid grid-cols-2 gap-2 text-[11px] text-ink-muted mb-4 pb-3 border-b border-borderline font-mono">
+      <div className="grid grid-cols-2 gap-2 text-[11px] text-ink-muted mb-4 pb-3 border-b border-borderline font-mono select-none">
         <div className="flex items-center space-x-1.5">
-          <span className="w-3.5 h-3.5 rounded bg-accent text-white flex items-center justify-center text-[9px] font-bold">✓</span>
+          <span className="w-3.5 h-3.5 rounded bg-accent text-white flex items-center justify-center text-[9px] font-bold shadow-subtle">✓</span>
           <span>Terjawab</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="w-3.5 h-3.5 rounded bg-amber-500/20 border border-amber-500 text-amber-600 flex items-center justify-center text-[9px]">⚐</span>
+          <span className="w-3.5 h-3.5 rounded bg-warning-subtle border border-warning-border text-warning flex items-center justify-center text-[9px] font-bold">⚐</span>
           <span>Ragu-ragu</span>
         </div>
         <div className="flex items-center space-x-1.5">
@@ -46,7 +49,7 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
           <span>Belum Jawab</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="w-3.5 h-3.5 rounded ring-2 ring-accent border border-accent flex items-center justify-center text-[9px]">●</span>
+          <span className="w-3.5 h-3.5 rounded ring-2 ring-accent border border-accent flex items-center justify-center text-[9px] font-bold text-accent">●</span>
           <span>Aktif</span>
         </div>
       </div>
@@ -62,12 +65,12 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
           const isFlagged = !!sub?.is_flagged
           const isCurrent = currentIndex === idx
 
-          let buttonClasses = 'border-borderline bg-surface text-ink hover:bg-surface-hover'
+          let buttonClasses = 'border-borderline bg-surface text-ink hover:bg-surface-hover hover:border-ink/30'
 
           if (isFlagged) {
-            buttonClasses = 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400 font-semibold'
+            buttonClasses = 'bg-warning-subtle border-warning-border text-warning font-semibold'
           } else if (isAnswered) {
-            buttonClasses = 'bg-accent text-white border-accent font-semibold shadow-xs'
+            buttonClasses = 'bg-accent text-white border-accent font-semibold shadow-subtle hover:brightness-105'
           }
 
           if (isCurrent) {
@@ -78,7 +81,7 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
             <button
               key={q.id}
               onClick={() => onSelectIndex(idx)}
-              className={`h-9 rounded font-mono text-xs flex items-center justify-center transition-all ${buttonClasses}`}
+              className={`h-9 rounded-md font-mono text-xs flex items-center justify-center border btn-press focus-ring transition-all cursor-pointer ${buttonClasses}`}
               title={`Nomor ${idx + 1}${isFlagged ? ' (Ragu)' : isAnswered ? ' (Terjawab)' : ' (Kosong)'}`}
             >
               {idx + 1}
@@ -86,6 +89,20 @@ export const QuestionNav: React.FC<QuestionNavProps> = ({
           )
         })}
       </div>
+
+      {/* Finish Exam Button at bottom of Question Palette */}
+      {onFinish && (
+        <div className="pt-4 mt-4 border-t border-borderline">
+          <button
+            type="button"
+            onClick={onFinish}
+            className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 rounded-md bg-success text-white text-xs font-semibold hover:brightness-105 btn-press focus-ring shadow-subtle transition-all cursor-pointer"
+          >
+            <Check className="w-4 h-4" />
+            <span>Kumpulkan Lembar Jawaban</span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

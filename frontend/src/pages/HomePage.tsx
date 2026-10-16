@@ -148,7 +148,7 @@ export const HomePage: React.FC = () => {
             {tests.map((test) => (
               <div
                 key={test.id}
-                className="bg-surface border border-borderline rounded-lg p-6 shadow-sm hover:border-accent/50 transition-all flex flex-col justify-between space-y-5"
+                className="bg-surface surface-card border border-borderline rounded-lg p-6 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 hover:border-accent/40 transition-all duration-200 ease-out flex flex-col justify-between space-y-5"
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2">
@@ -179,18 +179,18 @@ export const HomePage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setLeaderboardTest({ id: test.id, title: test.title })}
-                      className="inline-flex items-center space-x-1.5 px-2.5 py-2 rounded-md bg-surface hover:bg-surface-hover border border-borderline text-ink text-xs font-medium transition-colors"
+                      className="inline-flex items-center space-x-1.5 px-2.5 py-2 rounded-md bg-surface hover:bg-surface-hover hover:border-ink/20 border border-borderline text-ink text-xs font-medium btn-press focus-ring transition-all cursor-pointer shadow-subtle"
                       title="Lihat Papan Peringkat"
                     >
-                      <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                      <Trophy className="w-3.5 h-3.5 text-warning" />
                       <span className="hidden sm:inline">Peringkat</span>
                     </button>
 
                     <button
                       onClick={() => handleStartTest(test.id)}
-                      className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity"
+                      className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-md bg-accent text-white text-xs font-semibold hover:brightness-105 btn-press focus-ring shadow-subtle transition-all cursor-pointer"
                     >
-                      <Play className="w-3.5 h-3.5" />
+                      <Play className="w-3.5 h-3.5 fill-current" />
                       <span>Mulai Ujian</span>
                     </button>
                   </div>

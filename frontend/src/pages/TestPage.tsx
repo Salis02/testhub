@@ -176,43 +176,50 @@ export const TestPage: React.FC = () => {
               />
             )}
 
-            {/* Bottom Question Controls Bar strictly per style.md Section 4.1 */}
-            <div className="bg-surface border border-borderline rounded-lg p-4 flex items-center justify-between gap-3 shadow-xs">
+            {/* Bottom Question Controls Bar */}
+            <div className="bg-surface border border-borderline rounded-lg p-4 flex items-center justify-between gap-3 shadow-card">
               <button
                 type="button"
                 onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
                 disabled={currentIndex === 0}
-                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-md border border-borderline bg-canvas text-xs font-semibold text-ink hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-md border border-borderline bg-canvas text-xs font-semibold text-ink hover:bg-surface-hover hover:border-ink/20 disabled:opacity-30 disabled:cursor-not-allowed btn-press focus-ring shadow-subtle transition-all cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
                 <span>Sebelumnya</span>
               </button>
 
               {/* Status save tag */}
-              <div className="text-[11px] font-mono text-ink-muted hidden sm:flex items-center space-x-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <div className="text-[11px] font-mono text-ink-muted hidden sm:flex items-center space-x-1.5 select-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-success"></span>
                 <span>{autoSaveStatus}</span>
               </div>
 
-              {currentIndex < questions.length - 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1))}
-                  className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity"
-                >
-                  <span>Berikutnya</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              ) : (
+              <div className="flex items-center space-x-2">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 shadow-xs transition-colors"
+                  className={`inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-md text-xs font-semibold btn-press focus-ring shadow-subtle transition-all cursor-pointer ${
+                    currentIndex === questions.length - 1
+                      ? 'bg-success text-white hover:brightness-105'
+                      : 'border border-borderline bg-canvas text-ink hover:bg-surface-hover hover:border-ink/20'
+                  }`}
+                  title="Selesaikan dan kumpulkan lembar jawaban"
                 >
-                  <Check className="w-4 h-4" />
+                  <Check className={`w-4 h-4 ${currentIndex === questions.length - 1 ? 'text-white' : 'text-success'}`} />
                   <span>Kumpulkan Jawaban</span>
                 </button>
-              )}
+
+                {currentIndex < questions.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1))}
+                    className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-md bg-accent text-white text-xs font-semibold hover:brightness-105 btn-press focus-ring shadow-subtle transition-all cursor-pointer"
+                  >
+                    <span>Berikutnya</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -233,6 +240,10 @@ export const TestPage: React.FC = () => {
                     setIsDrawerOpen(false)
                   }}
                   onClose={() => setIsDrawerOpen(false)}
+                  onFinish={() => {
+                    setIsDrawerOpen(false)
+                    setIsModalOpen(true)
+                  }}
                 />
               </div>
             </div>
@@ -248,6 +259,7 @@ export const TestPage: React.FC = () => {
                 onSelectIndex={(idx) => {
                   setCurrentIndex(idx)
                 }}
+                onFinish={() => setIsModalOpen(true)}
               />
             </div>
           </aside>

@@ -98,7 +98,7 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         ref={modalRef}
         className={cn(
-          'relative w-full rounded-lg bg-surface border border-borderline shadow-2xl z-10 my-8 overflow-hidden transform transition-all duration-200 ease-out',
+          'relative w-full rounded-lg bg-surface surface-card border border-borderline shadow-modal z-10 my-8 overflow-hidden transform transition-all duration-200 ease-out',
           maxWidthClasses,
           isVisible
             ? 'opacity-100 scale-100 translate-y-0'
@@ -122,7 +122,7 @@ export const Modal: React.FC<ModalProps> = ({
                 type="button"
                 onClick={onClose}
                 aria-label="Tutup Modal"
-                className="p-1 rounded-md text-ink-muted hover:text-ink hover:bg-surface/80 transition-colors"
+                className="p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-hover btn-press focus-ring transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

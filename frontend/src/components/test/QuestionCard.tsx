@@ -69,13 +69,13 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
         <button
           type="button"
           onClick={onToggleFlag}
-          className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-medium border transition-colors ${
+          className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-medium border btn-press focus-ring transition-colors ${
             isFlagged
-              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/40'
+              ? 'bg-warning-subtle text-warning border-warning-border shadow-subtle'
               : 'bg-surface text-ink-muted border-borderline hover:text-ink hover:bg-surface-hover'
           }`}
         >
-          <Bookmark className={`w-3.5 h-3.5 ${isFlagged ? 'fill-amber-500 text-amber-500' : ''}`} />
+          <Bookmark className={`w-3.5 h-3.5 ${isFlagged ? 'fill-warning text-warning' : ''}`} />
           <span>{isFlagged ? 'Ditandai Ragu-ragu' : 'Tandai Ragu'}</span>
         </button>
       </div>
@@ -100,44 +100,58 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 
       {/* Answer Options: Multiple Choice */}
       {question.question_type === 'multiple_choice' && (
-        <div className="space-y-3">
-          {question.options.map((opt) => {
+        <div className="space-y-3" role="radiogroup" aria-label="Pilihan Jawaban">
+          {question.options.map((opt, idx) => {
             const isSelected = selectedOptionId === opt.id
 
             return (
               <div
                 key={opt.id}
+                role="radio"
+                aria-checked={isSelected}
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onSelectOption(opt.id)
+                  }
+                }}
                 onClick={() => onSelectOption(opt.id)}
-                className={`group relative flex items-start p-4 rounded-md border cursor-pointer transition-all duration-150 select-none ${
+                className={`group relative flex items-start p-4 rounded-lg border cursor-pointer select-none transition-all duration-150 btn-press focus-ring ${
                   isSelected
-                    ? 'border-accent bg-accent/10 shadow-xs'
-                    : 'border-borderline bg-surface hover:border-ink-muted/50 hover:bg-surface-hover'
+                    ? 'border-accent bg-accent-tint ring-1 ring-accent/30 shadow-subtle'
+                    : 'border-borderline bg-surface hover:border-accent/40 hover:bg-surface-hover'
                 }`}
               >
-                {/* Letter Box (A, B, C, D, E) per style.md Section 4.1 */}
+                {/* Letter Box (A, B, C, D, E) per style.md */}
                 <div
-                  className={`flex-shrink-0 w-7 h-7 rounded flex items-center justify-center font-mono font-semibold text-xs transition-colors ${
+                  className={`flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center font-mono font-semibold text-xs transition-all ${
                     isSelected
-                      ? 'bg-accent text-white shadow-xs'
-                      : 'bg-canvas text-ink border border-borderline group-hover:border-ink-muted'
+                      ? 'bg-accent text-white shadow-subtle'
+                      : 'bg-canvas text-ink border border-borderline group-hover:border-accent/50'
                   }`}
                 >
                   {opt.option_letter}
                 </div>
 
                 {/* Option Text */}
-                <div className="ml-3.5 flex-1 pt-0.5">
-                  <p className={`text-sm sm:text-base leading-snug transition-colors ${
+                <div className="ml-3.5 flex-1 pt-1">
+                  <p className={`text-sm sm:text-base leading-relaxed transition-colors ${
                     isSelected ? 'text-ink font-medium' : 'text-ink/90'
                   }`}>
                     {opt.option_text}
                   </p>
                 </div>
 
-                {/* Check indicator if selected */}
-                {isSelected && (
-                  <CheckCircle2 className="w-4 h-4 text-accent ml-2 flex-shrink-0 mt-1" />
-                )}
+                {/* Status indicator on right */}
+                <div className="ml-2 flex-shrink-0 pt-1.5 flex items-center space-x-2">
+                  <span className="text-[10px] font-mono text-ink-muted opacity-0 group-hover:opacity-70 transition-opacity hidden sm:inline">
+                    [{idx + 1}]
+                  </span>
+                  {isSelected && (
+                    <CheckCircle2 className="w-4 h-4 text-accent shrink-0 animate-in fade-in zoom-in-95" />
+                  )}
+                </div>
               </div>
             )
           })}
@@ -156,10 +170,13 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             onChange={(e) => handleEssayChange(e.target.value)}
             onBlur={handleEssayBlur}
             placeholder="Tuliskan elaborasi jawaban Saudara secara sistematis, komprehensif, dan berbasis bukti..."
-            className="w-full p-4 rounded-md border border-borderline bg-canvas text-ink text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors resize-y"
+            className="w-full p-4 rounded-lg border border-borderline bg-canvas text-ink text-sm sm:text-base focus-ring focus:border-accent transition-all resize-y shadow-subtle"
           />
           <div className="flex justify-between items-center text-xs text-ink-muted pt-1">
-            <span>Disimpan otomatis ke cloud storage.</span>
+            <span className="flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-success"></span>
+              <span>Disimpan otomatis ke cloud storage.</span>
+            </span>
             <span className="font-mono">{localEssayText.length} karakter</span>
           </div>
         </div>

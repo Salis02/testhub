@@ -1,98 +1,159 @@
-# 🎨 TestHub Design System & Styling Guide (`style.md`)
+# 🎨 TestHub Design System & Tasteful UX Guide (`style.md`)
 
-> **Prinsip:** Minimalis, Konsisten, Bebas "AI-Slop", dan Ramah Kognitif (*Cognitive-Calm*).  
-> **Target UX:** Konsentrasi maksimal peserta asesmen ujian resmi (CPNS, SBMPTN, IQ, Sertifikasi) tanpa polusi visual (*Zero Visual Noise*).
-
----
-
-## 1. Aturan Warna: Strict Tri-Color System (3 Warna per Mode)
-
-Variasi visual (kartu, hover, border) dihasilkan **hanya melalui tingkat opasitas (alpha channel)** dari Ink atau Canvas, **bukan** menambah warna pelangi baru.
-
-### 1.1 Palet Light Mode
-| Token | Nama Token | HEX | HSL | Penggunaan Utama |
-|---|---|---|---|---|
-| **Base Canvas** | `canvas-light` | `#F8FAFC` | `210° 40% 98%` | Latar belakang seluruh halaman, body |
-| **Solid Ink** | `ink-light` | `#0F172A` | `222° 47% 11%` | Teks heading, paragraf, garis pemisah |
-| **Action Accent**| `accent-light` | `#1D4ED8` | `224° 76% 48%` | Tombol primer, timer aktif, radio terpilih |
-
-* **Derivasi Opasitas Light:** Surface Card (`#FFFFFF`), Text Muted (`rgba(15, 23, 42, 0.65)`), Border Subtle (`rgba(15, 23, 42, 0.12)`), Card Hover (`rgba(15, 23, 42, 0.03)`), Accent Soft (`rgba(29, 78, 216, 0.08)`).
-
-### 1.2 Palet Night / Dark Mode
-| Token | Nama Token | HEX | HSL | Penggunaan Utama |
-|---|---|---|---|---|
-| **Base Canvas** | `canvas-dark` | `#0B0F17` | `220° 35% 7%` | Latar belakang matte slate anti silau |
-| **Solid Ink** | `ink-dark` | `#F1F5F9` | `210° 40% 96%` | Teks utama, border outline, label |
-| **Action Accent**| `accent-dark` | `#3B82F6` | `217° 91% 60%` | Status aktif, tombol submit, highlight |
-
-* **Derivasi Opasitas Dark:** Surface Card (`rgba(241, 245, 249, 0.04)`), Text Muted (`rgba(241, 245, 249, 0.60)`), Border Subtle (`rgba(241, 245, 249, 0.12)`), Card Hover (`rgba(241, 245, 249, 0.08)`), Accent Soft (`rgba(59, 130, 246, 0.12)`).
+> **Filosofi Inti: "Tasteful Cognitive-Calm" (Target Nilai UX: 9+/10)**  
+> Mengeliminasi *AI-Slop* (warna neon pelangi, efek blur lebay, dan animasi lambat) **TIDAK SAMA** dengan membuat antarmuka kering, kaku, dingin, dan hampa feedback (*wireframe flat 6/10*).  
+> TestHub memadukan **ketenangan kognitif peserta ujian resmi** dengan **fisikalitas interaksi yang snappy, hierarki kedalaman berlapis (layered elevation), dan umpan balik taktil yang memuaskan**.
 
 ---
 
-## 2. Token Tipografi & Spacing
+## 1. Empat Pilar UX Taste (The 4 Pillars of UX Craftsmanship)
 
-- **Font Sans:** `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;`
-- **Font Mono (Timer):** `'JetBrains Mono', 'Roboto Mono', monospace;` *(wajib `font-variant-numeric: tabular-nums` agar timer tidak bergetar)*.
+### 1.1 Tactile Affordance & Micro-Interactions (Fisikalitas Interaksi)
+* Setiap elemen yang dapat diklik atau ditekan harus memberikan umpan balik taktil seketika:
+  * **Active Recoil:** Menggunakan utility `.btn-press` (`active:scale-[0.98]` dengan durasi `120ms` cubic-bezier).
+  * **Snappy Transitions:** Durasi transisi interaktif maksimal `150ms–200ms` menggunakan kurva `cubic-bezier(0.16, 1, 0.3, 1)`. Hindari transisi lambat (>300ms) yang membuat aplikasi terasa berat/lemot.
+  * **Cursor Affordance:** Seluruh elemen interaktif wajib menyertakan `cursor-pointer`, dan elemen non-aktif wajib `cursor-not-allowed opacity-40 select-none`.
 
-| Skala | Tailwind Class | Ukuran / Line Height | Penggunaan |
-|---|---|---|---|
-| **Display** | `text-3xl font-bold` | `30px / 36px` | Skor Akhir, Header Utama Dashboard |
-| **Heading 1** | `text-2xl font-semibold` | `24px / 32px` | Judul Tes, Nama Modul |
-| **Heading 2** | `text-xl font-medium` | `20px / 28px` | Teks Soal Ujian (Pertanyaan) |
-| **Body Large** | `text-base font-normal` | `16px / 24px` | Opsi Jawaban (Pilihan Ganda), Pembahasan |
-| **Body Regular** | `text-sm font-normal` | `14px / 20px` | Metadata (Durasi, Kategori, Tabel) |
-| **Caption/Mono** | `text-xs font-mono` | `12px / 16px` | Timer Ujian, Session ID, Badges |
+### 1.2 Aksesibilitas Keyboard & Dual-Layer Focus Rings
+* Pengguna yang menggunakan keyboard (Tab / Shift-Tab / Enter / Space) harus mendapatkan indikator fokus yang sangat jelas tanpa menimbulkan lingkaran biru acak saat diklik mouse:
+  * **Utility Class:** `.focus-ring` (memanfaatkan pseudo-class `:focus-visible`).
+  * **Visual Style:** Cincin ganda: 2px offset warna canvas (`var(--bg-canvas)`) + 2px ring solid aksen (`var(--color-accent)`).
 
-* **Layout Container:** Max width ujian `max-w-3xl` (768px, optimal untuk kenyamanan membaca soal panjang). Max width dashboard `max-w-7xl` (1280px).
-* **Border Radius:** Kartu `rounded-lg` (`8px`), Tombol & Input `rounded-md` (`6px`), Badges `rounded` (`4px`). Hindari sudut bulat berlebih (*no bubbly pills*).
+### 1.3 Hierarki Kedalaman Berlapis (Layered Elevation & Depth)
+Elemen antarmuka disusun dalam tingkat elevasi yang presisi tanpa blur glassmorphism yang mengotori layar:
+* **Level 0 (Canvas Base):** Latar belakang halaman (`bg-canvas`).
+* **Level 1 (Surface Card):** Kartu modul ujian, panel soal (`bg-surface surface-card shadow-card border border-borderline`).
+  * *Dark Mode Rim Highlight:* Pada dark mode, permukaan kartu memiliki inset light boundary `box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05)` agar tidak menyatu dengan kegelapan latar.
+* **Level 2 (Interactive Card Lift):** Saat hover pada kartu ujian di katalog, kartu terangkat halus: `hover:-translate-y-0.5 hover:shadow-card-hover hover:border-accent/40`.
+* **Level 3 (Sticky Header & Dropdown):** Navigasi atas yang menempel saat scroll (`shadow-subtle backdrop-blur-md bg-canvas/90`).
+* **Level 4 (Modal Dialog Window):** Jendela konfirmasi atau checkout pembayaran (`shadow-modal border border-borderline z-50`).
+* **Level 5 (Floating Feedback):** Toast notifikasi dan quick timer countdown (`shadow-popover`).
+
+### 1.4 Cognitive-Calm Semantic Harmony (Palet Status Fungsional)
+Sistem tri-color dasar diperkaya dengan status semantik yang terkalibrasi saturasi rendah (*low-saturation*) dan memiliki background soft-tint (`8%–12%` alpha) agar informatif tanpa berteriak:
+* **Success (Lulus, Jawaban Benar, Tersimpan):** Emerald (`#059669` light / `#10B981` dark) + `bg-success-subtle` + `border-success-border`.
+* **Warning (Ragu-ragu, Timer < 5 Menit):** Amber (`#D97706` light / `#F59E0B` dark) + `bg-warning-subtle` + `border-warning-border`.
+* **Danger (Salah, Hapus, Timer Kritis < 1 Menit):** Rose (`#DC2626` light / `#EF4444` dark) + `bg-danger-subtle` + `border-danger-border`.
+* **Info (Informasi, Petunjuk Teknis):** Sky/Slate (`#0284C7` light / `#38BDF8` dark) + `bg-info-subtle` + `border-info-border`.
 
 ---
 
-## 3. Implementasi CSS Variables & Tailwind
+## 2. Token Warna & Spesifikasi Variabel CSS
 
 ```css
 :root {
-  --bg-canvas: #F8FAFC;
-  --text-ink: #0F172A;
-  --color-accent: #1D4ED8;
+  /* ================= BASE TRI-COLOR (LIGHT) ================= */
+  --bg-canvas: #F8FAFC;        /* Latar belakang kanvas matte */
+  --text-ink: #0F172A;         /* Teks utama, garis pemisah */
+  --color-accent: #1D4ED8;     /* Tombol primer, status aktif */
+
+  /* Derived Surface & Alpha */
   --surface-card: #FFFFFF;
   --text-muted: rgba(15, 23, 42, 0.65);
   --border-subtle: rgba(15, 23, 42, 0.12);
   --surface-hover: rgba(15, 23, 42, 0.03);
   --accent-tint: rgba(29, 78, 216, 0.08);
+
+  /* Semantic Harmony (Light) */
+  --color-success: #059669;
+  --success-subtle: rgba(5, 150, 105, 0.08);
+  --success-border: rgba(5, 150, 105, 0.22);
+
+  --color-warning: #D97706;
+  --warning-subtle: rgba(217, 119, 6, 0.08);
+  --warning-border: rgba(217, 119, 6, 0.22);
+
+  --color-danger: #DC2626;
+  --danger-subtle: rgba(220, 38, 38, 0.08);
+  --danger-border: rgba(220, 38, 38, 0.22);
+
+  --color-info: #0284C7;
+  --info-subtle: rgba(2, 132, 199, 0.08);
+  --info-border: rgba(2, 132, 199, 0.22);
 }
-[data-theme='dark'], .dark {
-  --bg-canvas: #0B0F17;
-  --text-ink: #F1F5F9;
-  --color-accent: #3B82F6;
+
+[data-theme='dark'],
+.dark {
+  /* ================= BASE TRI-COLOR (DARK) ================= */
+  --bg-canvas: #0B0F17;        /* Matte slate anti silau */
+  --text-ink: #F1F5F9;         /* Teks kontras tinggi */
+  --color-accent: #3B82F6;     /* Biru aksen terang */
+
+  /* Derived Surface & Alpha */
   --surface-card: #131926;
   --text-muted: rgba(241, 245, 249, 0.60);
   --border-subtle: rgba(241, 245, 249, 0.12);
   --surface-hover: rgba(241, 245, 249, 0.06);
   --accent-tint: rgba(59, 130, 246, 0.12);
-}
-```
 
-```javascript
-// tailwind.config.js extend colors
-colors: {
-  canvas: { DEFAULT: 'var(--bg-canvas)' },
-  ink: { DEFAULT: 'var(--text-ink)', muted: 'var(--text-muted)' },
-  accent: { DEFAULT: 'var(--color-accent)', tint: 'var(--accent-tint)' },
-  surface: { DEFAULT: 'var(--surface-card)', hover: 'var(--surface-hover)' },
-  borderline: { DEFAULT: 'var(--border-subtle)' },
+  /* Semantic Harmony (Dark) */
+  --color-success: #10B981;
+  --success-subtle: rgba(16, 185, 129, 0.12);
+  --success-border: rgba(16, 185, 129, 0.28);
+
+  --color-warning: #F59E0B;
+  --warning-subtle: rgba(245, 158, 11, 0.12);
+  --warning-border: rgba(245, 158, 11, 0.28);
+
+  --color-danger: #EF4444;
+  --danger-subtle: rgba(239, 68, 68, 0.12);
+  --danger-border: rgba(239, 68, 68, 0.28);
+
+  --color-info: #38BDF8;
+  --info-subtle: rgba(56, 189, 248, 0.12);
+  --info-border: rgba(56, 189, 248, 0.28);
 }
 ```
 
 ---
 
-## 4. Checklist Kepatuhan Visual: "AI Slop" vs "TestHub Standard"
+## 3. Ergonomi Asesmen & Ujian Resmi
 
-| Aspek | ❌ AI Slop (DILARANG) | ✅ TestHub Standard (WAJIB) |
-|---|---|---|
-| **Warna** | Gradien ungu/pink neon acak pada tombol | 3 warna tegas: Canvas, Ink, Accent |
-| **Latar** | Efek blur glassmorphism berlebihan | Solid matte clean canvas dengan kontras tajam |
-| **Border & Card**| Border glowing tebal, rounded raksasa | Border 1px halus, radius 6px–8px |
-| **Timer** | Angka bergetar/melompat saat detik berganti | Tabular nums (`tabular-nums`) font monospace |
-| **Dark Mode** | Pure black `#000000` kontras menyilaukan | Matte slate `#0B0F17` ramah mata (*Cognitive-Calm*) |
-| **Kode Kelas** | Arbitrary hex liar (`bg-[#4f46e5]`) | Token semantik (`bg-canvas`, `text-ink`, `border-borderline`) |
+### 3.1 Kartu Pilihan Ganda (Question Option Card)
+1. **Letter Box:** Kotak huruf (A, B, C, D, E) berukuran `w-8 h-8 rounded-md font-mono text-xs font-semibold`.
+   - Default: `bg-canvas text-ink border border-borderline`.
+   - Selected: `bg-accent text-white shadow-subtle`.
+2. **Card Container States:**
+   - **Default:** `border border-borderline bg-surface hover:border-accent/40 hover:bg-surface-hover btn-press focus-ring`.
+   - **Selected:** `border-accent bg-accent-tint ring-1 ring-accent/30 shadow-subtle`.
+   - **Check Icon:** Ikon centang (`CheckCircle2`) muncul halus di sebelah kanan saat dipilih.
+   - **Keyboard Shortcut Hint:** Hint angka/huruf `[1]`, `[2]`, `[3]` muncul saat hover di desktop.
+
+### 3.2 Timer Ujian 3-Tier Urgency
+Wajib menggunakan `font-variant-numeric: tabular-nums` agar tidak ada getaran layout per detik:
+* **Normal (> 5 Menit):** `bg-surface text-ink border-borderline shadow-subtle` dengan ikon aksen.
+* **Warning (≤ 5 Menit):** `bg-warning-subtle text-warning border-warning-border` untuk memberi kesadaran waktu tanpa panik.
+* **Critical (≤ 1 Menit):** `bg-danger-subtle text-danger border-danger-border animate-pulse` sebagai sinyal finalisasi segera.
+
+### 3.3 Indikator Autosave & Navigasi Halaman
+* Status penyimpanan jawaban otomatis ditampilkan dengan dot hijau halus (`w-1.5 h-1.5 rounded-full bg-success`) dan font mono `text-[11px]`.
+* Saat berpindah nomor soal, layar otomatis melakukan scroll halus ke puncak kontainer soal (`window.scrollTo({ top: 0, behavior: 'smooth' })`).
+
+---
+
+## 4. Tipografi & Skala Spacing
+
+* **Font Utama:** `'Inter', system-ui, -apple-system, sans-serif`
+* **Font Monospace:** `'JetBrains Mono', 'Roboto Mono', monospace` *(wajib untuk Timer, Skor, ID Sesi, Nomor Soal)*.
+
+| Token | Class | Line Height | Keterangan UX |
+|---|---|---|---|
+| **Display** | `text-3xl font-bold` | `1.2` | Skor akhir hasil ujian |
+| **Heading 1** | `text-xl sm:text-2xl font-semibold` | `1.3` | Judul modul tryout / modal |
+| **Heading 2** | `text-lg sm:text-xl font-medium` | `1.6` | Pertanyaan soal ujian (optimal membaca lama) |
+| **Body Large**| `text-sm sm:text-base font-normal`| `1.5` | Opsi pilihan jawaban & pembahasan |
+| **Body Small**| `text-xs sm:text-sm text-ink-muted`| `1.5` | Deskripsi modul, petunjuk teknis |
+| **Caption**   | `text-[11px] font-mono` | `1.4` | Timer, badges, status autosave |
+
+---
+
+## 5. Komparasi Kualitas UX: "Kering 6/10" vs "AI Slop" vs "TestHub 9+/10"
+
+| Dimensi | ❌ Kering & Hampa (6/10) | ❌ AI Slop Liar | ✅ TestHub Tasteful (9+/10) |
+|---|---|---|---|
+| **Interaksi Tombol** | Statis, tidak ada rasa klik, tanpa focus ring | Animasi membal lambat, glow neon menyilaukan | `.btn-press` (`active:scale-[0.98]`), `.focus-ring` (cincin ganda presisi) |
+| **Kedalaman Kartu** | Rata total (*flat border* tanpa bayangan), tampak mentah | Drop shadow ungu tebal, glassmorphism buram | Layered ambient shadow (`shadow-card`, `shadow-card-hover`), dark mode rim highlight |
+| **Pilihan Jawaban** | Radio button standar browser yang kecil dan kaku | Tombol warna-warni kontras tinggi membuat pusing | Card seleksi luas, letter box mono, indikator centang, hint shortcut keyboard |
+| **Status Ujian** | Hanya hitam-putih, status ragu-ragu tidak terbaca | Merah/hijau neon mencolok merusak konsentrasi | Palet semantik terkalibrasi (`subtle tint` 8-12%, border kontras nyaman) |
+| **Timer** | Angka bergeser/goyang saat detik berganti | Countdown berkedip-kedip liar sejak menit pertama | `tabular-nums` stabil, 3-tier urgensi (tenang → waspada → kritis) |
+| **Transisi Modal** | Muncul mendadak tanpa transisi (*jarring*) | Zoom lambat 500ms dengan efek rotasi | Backdrop blur halus, spring zoom `200ms cubic-bezier(0.16, 1, 0.3, 1)` |

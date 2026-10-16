@@ -49,28 +49,31 @@ export const TestHeader: React.FC<TestHeaderProps> = ({
         </div>
 
         {/* Right: Tabular Timer & Actions */}
-        <div className="flex items-center space-x-3 flex-shrink-0">
-          {/* Question Grid Toggle Button */}
+        <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
+          {/* Question Grid Toggle Button (Mobile/Tablet only, since desktop has QuestionNav sidebar) */}
           <button
             onClick={onToggleDrawer}
-            className={`px-3 py-1.5 text-xs font-mono font-medium rounded border transition-colors ${
+            className={`lg:hidden px-2.5 sm:px-3 py-1.5 text-xs font-mono font-medium rounded-md border btn-press focus-ring transition-colors cursor-pointer ${
               isDrawerOpen
                 ? 'bg-accent text-white border-accent'
                 : 'bg-surface text-ink border-borderline hover:bg-surface-hover'
             }`}
           >
-            Daftar Soal ({answeredCount}/{totalQuestions})
+            <span className="hidden sm:inline">Daftar Soal</span>
+            <span className="sm:hidden">Soal</span> ({answeredCount}/{totalQuestions})
           </button>
 
           {/* Isolated Tabular Numerals Countdown Timer */}
           <TestCountdownTimer />
 
-          {/* Finish Button */}
+          {/* Finish Button - Always prominently visible */}
           <button
             onClick={onFinishClick}
-            className="px-4 py-1.5 text-xs font-semibold rounded-md bg-accent text-white hover:opacity-95 shadow-sm transition-all"
+            className="inline-flex items-center space-x-1.5 px-3 sm:px-4 py-1.5 text-xs font-semibold rounded-md bg-success text-white hover:brightness-105 btn-press focus-ring shadow-subtle transition-all shrink-0 cursor-pointer"
+            title="Selesaikan dan kumpulkan lembar jawaban"
           >
-            Kumpulkan Ujian
+            <span>Kumpulkan</span>
+            <span className="hidden md:inline">Ujian</span>
           </button>
         </div>
       </div>

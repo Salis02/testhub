@@ -77,27 +77,27 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     switch (variant) {
       case 'danger':
         return {
-          icon: <ShieldAlert className="w-5 h-5 text-red-500" />,
-          buttonClass: 'bg-red-600 hover:bg-red-700 text-white shadow-sm',
-          borderClass: 'border-red-500/30',
+          icon: <ShieldAlert className="w-5 h-5 text-danger" />,
+          buttonClass: 'bg-danger hover:brightness-105 text-white shadow-subtle',
+          borderClass: 'border-danger-border',
         }
       case 'warning':
         return {
-          icon: <AlertTriangle className="w-5 h-5 text-amber-500" />,
-          buttonClass: 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm',
-          borderClass: 'border-amber-500/30',
+          icon: <AlertTriangle className="w-5 h-5 text-warning" />,
+          buttonClass: 'bg-warning hover:brightness-105 text-white shadow-subtle',
+          borderClass: 'border-warning-border',
         }
       case 'info':
         return {
-          icon: <Info className="w-5 h-5 text-accent" />,
-          buttonClass: 'bg-accent hover:opacity-90 text-white shadow-sm',
-          borderClass: 'border-accent/30',
+          icon: <Info className="w-5 h-5 text-info" />,
+          buttonClass: 'bg-info hover:brightness-105 text-white shadow-subtle',
+          borderClass: 'border-info-border',
         }
       case 'primary':
       default:
         return {
           icon: <HelpCircle className="w-5 h-5 text-accent" />,
-          buttonClass: 'bg-accent hover:opacity-90 text-white shadow-sm',
+          buttonClass: 'bg-accent hover:brightness-105 text-white shadow-subtle',
           borderClass: 'border-borderline',
         }
     }
@@ -155,7 +155,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => handleClose(false)}
-                  className="px-4 py-2 rounded-md border border-borderline text-xs font-medium text-ink hover:bg-canvas transition-colors"
+                  className="px-4 py-2 rounded-md border border-borderline text-xs font-medium text-ink hover:bg-surface-hover hover:border-ink/20 btn-press focus-ring transition-all cursor-pointer shadow-subtle"
                 >
                   {options.cancelText || 'Batal'}
                 </button>
@@ -163,7 +163,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                   ref={confirmButtonRef}
                   type="button"
                   onClick={() => handleClose(true)}
-                  className={`px-4 py-2 rounded-md text-xs font-medium transition-colors ${variantStyles.buttonClass}`}
+                  className={`px-4 py-2 rounded-md text-xs font-medium btn-press focus-ring transition-all cursor-pointer ${variantStyles.buttonClass}`}
                 >
                   {options.confirmText || 'Lanjutkan'}
                 </button>

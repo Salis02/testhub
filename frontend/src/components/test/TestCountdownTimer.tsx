@@ -20,17 +20,23 @@ export const TestCountdownTimer: React.FC<TestCountdownTimerProps> = ({ classNam
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
   }
 
-  const isLowTime = secondsLeft < 300 && secondsLeft > 0
+  const isWarning = secondsLeft <= 300 && secondsLeft > 60
+  const isCritical = secondsLeft <= 60 && secondsLeft > 0
+
+  const statusClasses = isCritical
+    ? 'bg-danger-subtle text-danger border-danger-border animate-pulse'
+    : isWarning
+      ? 'bg-warning-subtle text-warning border-warning-border'
+      : 'bg-surface text-ink border-borderline shadow-subtle'
+
+  const iconColor = isCritical ? 'text-danger' : isWarning ? 'text-warning' : 'text-accent'
 
   return (
     <div
-      className={`flex items-center space-x-1.5 px-3 py-1.5 rounded font-mono text-sm font-semibold tabular-nums border transition-colors ${
-        isLowTime
-          ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 animate-pulse'
-          : 'bg-surface text-ink border-borderline'
-      } ${className}`}
+      className={`flex items-center space-x-2 px-3 py-1.5 rounded-md font-mono text-xs sm:text-sm font-semibold tabular-nums border transition-colors select-none ${statusClasses} ${className}`}
+      title={isCritical ? 'Waktu tersisa kurang dari 1 menit!' : isWarning ? 'Waktu tersisa kurang dari 5 menit' : 'Sisa Waktu Ujian'}
     >
-      <Clock className={`w-4 h-4 ${isLowTime ? 'text-red-500' : 'text-accent'}`} />
+      <Clock className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${iconColor}`} />
       <span>{formatTime(secondsLeft)}</span>
     </div>
   )

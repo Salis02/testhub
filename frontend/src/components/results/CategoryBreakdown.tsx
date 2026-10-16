@@ -2,7 +2,10 @@ import React from 'react'
 import { CategoryScore } from '@/types'
 import { BarChart3 } from 'lucide-react'
 
-export const CategoryBreakdown: React.FC<{ breakdown: CategoryScore[] }> = ({ breakdown }) => {
+export const CategoryBreakdown: React.FC<{ breakdown?: CategoryScore[] | null }> = ({ breakdown }) => {
+  const safeBreakdown = breakdown || []
+  if (safeBreakdown.length === 0) return null
+
   return (
     <div className="bg-surface border border-borderline rounded-lg p-6 sm:p-8 shadow-sm">
       <div className="flex items-center space-x-2 pb-4 mb-6 border-b border-borderline">
@@ -13,7 +16,7 @@ export const CategoryBreakdown: React.FC<{ breakdown: CategoryScore[] }> = ({ br
       </div>
 
       <div className="space-y-5">
-        {breakdown.map((item, idx) => (
+        {safeBreakdown.map((item, idx) => (
           <div key={idx} className="space-y-1.5">
             <div className="flex justify-between items-center text-xs">
               <span className="font-medium text-ink">{item.category_name}</span>

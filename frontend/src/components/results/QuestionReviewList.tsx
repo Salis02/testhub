@@ -16,17 +16,18 @@ export const QuestionReviewList: React.FC<QuestionReviewListProps> = ({
   const [filter, setFilter] = useState<FilterType>('all')
 
   const getQuestionStatus = (q: Question) => {
-    const sub = submissions[q.id]
+    const sub = submissions?.[q.id]
     if (q.question_type === 'essay') {
       return { isEssay: true, isCorrect: false }
     }
-    const correctOpt = q.options.find((o) => o.is_correct)
+    const options = q.options || []
+    const correctOpt = options.find((o) => o.is_correct)
     const isCorrect = !!(sub?.selected_option_id && correctOpt && sub.selected_option_id === correctOpt.id)
     return { isEssay: false, isCorrect }
   }
 
-  const filteredQuestions = questions.filter((q) => {
-    const sub = submissions[q.id]
+  const filteredQuestions = (questions || []).filter((q) => {
+    const sub = submissions?.[q.id]
     const { isEssay, isCorrect } = getQuestionStatus(q)
 
     if (filter === 'all') return true
@@ -60,7 +61,7 @@ export const QuestionReviewList: React.FC<QuestionReviewListProps> = ({
                 : 'text-ink-muted hover:text-ink'
             }`}
           >
-            Semua ({questions.length})
+            Semua ({(questions || []).length})
           </button>
           <button
             onClick={() => setFilter('correct')}
@@ -98,9 +99,10 @@ export const QuestionReviewList: React.FC<QuestionReviewListProps> = ({
       {/* Question Cards List */}
       <div className="space-y-6">
         {filteredQuestions.map((q) => {
-          const sub = submissions[q.id]
+          const sub = submissions?.[q.id]
           const { isEssay, isCorrect } = getQuestionStatus(q)
-          const userSelectedOption = q.options.find((o) => o.id === sub?.selected_option_id)
+          const options = q.options || []
+          const userSelectedOption = options.find((o) => o.id === sub?.selected_option_id)
 
           return (
             <div
@@ -152,7 +154,7 @@ export const QuestionReviewList: React.FC<QuestionReviewListProps> = ({
               {/* Options Breakdown for Multiple Choice */}
               {q.question_type === 'multiple_choice' && (
                 <div className="space-y-2 pt-1">
-                  {q.options.map((opt) => {
+                  {options.map((opt) => {
                     const isUserChoice = userSelectedOption?.id === opt.id
                     const isTheCorrectOne = opt.is_correct
 

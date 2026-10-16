@@ -3,27 +3,32 @@ import { TestCategory, DifficultyLevel } from '@/types'
 
 interface BadgeProps {
   children: React.ReactNode
-  variant?: 'default' | 'accent' | 'success' | 'warning' | 'outline'
+  variant?: 'default' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'outline'
   size?: 'sm' | 'md'
+  withDot?: boolean
 }
 
 export const Badge: React.FC<BadgeProps> = ({
   children,
   variant = 'default',
   size = 'sm',
+  withDot = false,
 }) => {
   const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs'
 
   const variantClasses = {
     default: 'bg-surface border border-borderline text-ink',
-    accent: 'bg-accent/10 border border-accent/20 text-accent font-medium',
-    success: 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-medium',
-    warning: 'bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-medium',
+    accent: 'bg-accent-tint border border-accent/25 text-accent font-medium',
+    success: 'bg-success-subtle border border-success-border text-success font-medium',
+    warning: 'bg-warning-subtle border border-warning-border text-warning font-medium',
+    danger: 'bg-danger-subtle border border-danger-border text-danger font-medium',
+    info: 'bg-info-subtle border border-info-border text-info font-medium',
     outline: 'border border-borderline text-ink-muted',
   }[variant]
 
   return (
     <span className={`inline-flex items-center rounded font-mono uppercase tracking-wider ${sizeClasses} ${variantClasses}`}>
+      {withDot && <span className="w-1.5 h-1.5 rounded-full bg-current mr-1.5 shrink-0 opacity-80" />}
       {children}
     </span>
   )

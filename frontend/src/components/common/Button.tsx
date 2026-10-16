@@ -26,17 +26,17 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const variantClasses = {
-      primary: 'bg-accent text-white hover:opacity-90 shadow-sm border border-transparent',
-      secondary: 'bg-surface text-ink border border-borderline hover:bg-surface/80',
-      outline: 'bg-transparent text-accent border border-accent hover:bg-accent/10',
-      ghost: 'bg-transparent text-ink-muted hover:text-ink hover:bg-surface/60 border border-transparent',
-      danger: 'bg-red-600 text-white hover:bg-red-700 shadow-sm border border-transparent',
+      primary: 'bg-accent text-white hover:brightness-105 active:brightness-95 shadow-subtle border border-transparent focus-visible:ring-accent',
+      secondary: 'bg-surface text-ink border border-borderline hover:bg-surface-hover hover:border-ink/20 shadow-subtle focus-visible:ring-ink-muted',
+      outline: 'bg-transparent text-accent border border-accent/40 hover:bg-accent-tint hover:border-accent focus-visible:ring-accent',
+      ghost: 'bg-transparent text-ink-muted hover:text-ink hover:bg-surface-hover border border-transparent focus-visible:ring-ink-muted',
+      danger: 'bg-danger text-white hover:brightness-105 active:brightness-95 shadow-subtle border border-transparent focus-visible:ring-danger',
     }[variant]
 
     const sizeClasses = {
-      sm: 'px-2.5 py-1.5 text-xs rounded',
-      md: 'px-3.5 py-2 text-sm rounded-md',
-      lg: 'px-5 py-2.5 text-base rounded-md',
+      sm: 'px-2.5 py-1.5 text-xs rounded gap-1.5',
+      md: 'px-3.5 py-2 text-sm rounded-md gap-2',
+      lg: 'px-5 py-2.5 text-base rounded-md gap-2.5',
     }[size]
 
     return (
@@ -44,7 +44,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || isLoading}
         className={cn(
-          'inline-flex items-center justify-center font-medium transition-all duration-150 active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none select-none',
+          'inline-flex items-center justify-center font-medium btn-press focus-ring disabled:opacity-40 disabled:pointer-events-none select-none cursor-pointer',
           variantClasses,
           sizeClasses,
           className
