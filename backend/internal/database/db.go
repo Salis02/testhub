@@ -45,7 +45,7 @@ func New(cfg *config.Config) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping postgres: %w", err)
 	}
 
-	return &DB{db}, nil
+	return &DB{db.Unsafe()}, nil
 }
 
 func (db *DB) RunMigrations(migrationsDir string) error {

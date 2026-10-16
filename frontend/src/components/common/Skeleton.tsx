@@ -172,3 +172,94 @@ export const AdminOverviewSkeleton: React.FC = () => {
     </div>
   )
 }
+
+export const SubscriptionListSkeleton: React.FC = () => {
+  return (
+    <div className="space-y-6 animate-pulse">
+      {/* Profile Overview Card Skeleton */}
+      <div className="bg-surface border border-borderline rounded-lg p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xs">
+        <div className="space-y-3">
+          <Skeleton className="h-6 w-48 rounded" />
+          <Skeleton className="h-4 w-64 rounded" />
+        </div>
+        <div className="flex gap-3">
+          <Skeleton className="h-10 w-32 rounded-md" />
+          <Skeleton className="h-10 w-32 rounded-md" />
+        </div>
+      </div>
+
+      {/* Subscription Cards Skeleton */}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-5 w-40 rounded" />
+          <Skeleton className="h-4 w-20 rounded" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="bg-surface border border-borderline rounded-lg p-6 space-y-4 shadow-xs">
+              <div className="flex justify-between items-start">
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-36 rounded" />
+                  <Skeleton className="h-4 w-24 rounded" />
+                </div>
+                <Skeleton className="h-6 w-20 rounded-full" />
+              </div>
+              <div className="pt-3 border-t border-borderline flex justify-between items-center">
+                <Skeleton className="h-4 w-40 rounded" />
+                <Skeleton className="h-8 w-24 rounded-md" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export const CertificateVerifySkeleton: React.FC = () => {
+  return (
+    <div className="bg-surface border border-borderline rounded-lg p-8 sm:p-10 space-y-6 shadow-sm animate-pulse">
+      <div className="flex items-center space-x-4 pb-6 border-b border-borderline">
+        <Skeleton className="w-14 h-14 rounded-full flex-shrink-0" />
+        <div className="space-y-2 flex-1">
+          <Skeleton className="h-6 w-48 rounded" />
+          <Skeleton className="h-4 w-32 rounded" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="p-4 rounded-md bg-canvas border border-borderline space-y-2">
+            <Skeleton className="h-3.5 w-24 rounded" />
+            <Skeleton className="h-5 w-36 rounded" />
+          </div>
+        ))}
+      </div>
+      <div className="pt-4 border-t border-borderline flex justify-end">
+        <Skeleton className="h-9 w-32 rounded-md" />
+      </div>
+    </div>
+  )
+}
+
+export const LeaderboardTableSkeleton: React.FC = () => {
+  return (
+    <div className="space-y-3 animate-pulse">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="flex items-center justify-between p-3.5 rounded-lg border border-borderline bg-surface">
+          <div className="flex items-center space-x-3">
+            <Skeleton className="w-7 h-7 rounded-full" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-4 w-28 rounded" />
+              <Skeleton className="h-3 w-16 rounded" />
+            </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Skeleton className="h-5 w-16 rounded" />
+            <Skeleton className="h-5 w-12 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+

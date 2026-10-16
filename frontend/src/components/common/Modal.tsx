@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
@@ -23,11 +24,32 @@ export const Modal: React.FC<ModalProps> = ({
   className,
   showCloseButton = true,
 }) => {
+  const [isRendered, setIsRendered] = useState(isOpen)
+  const [isVisible, setIsVisible] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
 
-  // ESC key listener & focus trap
+  // Smooth enter & exit transition state
   useEffect(() => {
-    if (!isOpen) return
+    if (isOpen) {
+      setIsRendered(true)
+      const frame = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsVisible(true)
+        })
+      })
+      return () => cancelAnimationFrame(frame)
+    } else {
+      setIsVisible(false)
+      const timer = setTimeout(() => {
+        setIsRendered(false)
+      }, 220)
+      return () => clearTimeout(timer)
+    }
+  }, [isOpen])
+
+  // ESC key listener & body scroll lock
+  useEffect(() => {
+    if (!isRendered) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -42,9 +64,9 @@ export const Modal: React.FC<ModalProps> = ({
       document.removeEventListener('keydown', handleKeyDown)
       document.body.style.overflow = ''
     }
-  }, [isOpen, onClose])
+  }, [isRendered, onClose])
 
-  if (!isOpen) return null
+  if (!isRendered) return null
 
   const maxWidthClasses = {
     sm: 'max-w-sm',
@@ -56,7 +78,7 @@ export const Modal: React.FC<ModalProps> = ({
     '4xl': 'max-w-4xl',
   }[maxWidth]
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -64,7 +86,10 @@ export const Modal: React.FC<ModalProps> = ({
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-ink/40 dark:bg-black/60 backdrop-blur-sm transition-opacity"
+        className={cn(
+          'fixed inset-0 bg-ink/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 ease-out',
+          isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        )}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -73,8 +98,11 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         ref={modalRef}
         className={cn(
-          'relative w-full rounded-lg bg-surface border border-borderline shadow-2xl transition-all duration-200 z-10 my-8 overflow-hidden',
+          'relative w-full rounded-lg bg-surface border border-borderline shadow-2xl z-10 my-8 overflow-hidden transform transition-all duration-200 ease-out',
           maxWidthClasses,
+          isVisible
+            ? 'opacity-100 scale-100 translate-y-0'
+            : 'opacity-0 scale-95 translate-y-3 pointer-events-none',
           className
         )}
       >
@@ -105,6 +133,7 @@ export const Modal: React.FC<ModalProps> = ({
         {/* Content Body */}
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

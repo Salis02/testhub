@@ -2,6 +2,7 @@ import React from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ShieldCheck, AlertCircle, Award, CheckCircle2, Calendar, FileText, ArrowLeft, Loader2, Share2 } from 'lucide-react'
+import { CertificateVerifySkeleton } from '@/components/common/Skeleton'
 import { sessionsApi } from '@/services/sessions.api'
 import { CertificateData } from '@/types'
 
@@ -29,13 +30,7 @@ export const VerifyCertificatePage: React.FC = () => {
       </div>
 
       {isLoading ? (
-        <div className="bg-surface border border-borderline rounded-lg p-12 text-center space-y-4 shadow-sm">
-          <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto" />
-          <div className="space-y-1">
-            <h3 className="text-base font-semibold text-ink">Memverifikasi Keaslian Sertifikat...</h3>
-            <p className="text-xs text-ink-muted">Memeriksa tanda tangan digital di database TestHub Certification Authority.</p>
-          </div>
-        </div>
+        <CertificateVerifySkeleton />
       ) : error || !cert || cert.valid === false ? (
         <div className="bg-surface border border-red-500/20 rounded-lg p-8 sm:p-10 text-center space-y-5 shadow-sm">
           <div className="w-14 h-14 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto">

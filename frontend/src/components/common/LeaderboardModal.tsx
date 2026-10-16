@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Trophy, Medal, Clock, Award, X, Loader2, UserCheck, Flame } from 'lucide-react'
 import { testsApi } from '@/services/tests.api'
+import { LeaderboardTableSkeleton } from '@/components/common/Skeleton'
 
 interface LeaderboardModalProps {
   isOpen: boolean
@@ -113,9 +114,8 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
 
         {/* Content */}
         {isLoading ? (
-          <div className="py-12 flex flex-col items-center justify-center space-y-3">
-            <Loader2 className="w-6 h-6 animate-spin text-accent" />
-            <p className="text-xs text-ink-muted">Memuat peringkat peserta...</p>
+          <div className="py-2">
+            <LeaderboardTableSkeleton />
           </div>
         ) : error ? (
           <div className="py-8 text-center text-sm text-red-500">

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { paymentsApi } from '@/services/payments.api'
 import { useAuth } from '@/context/AuthContext'
 import { Subscription } from '@/types'
+import { SubscriptionListSkeleton } from '@/components/common/Skeleton'
 import {
   CreditCard,
   CheckCircle2,
@@ -56,8 +57,12 @@ export const MySubscriptionsPage: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 space-y-8">
-      {/* User Profile Overview Header */}
-      <div className="bg-surface border border-borderline rounded-lg p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xs">
+      {isLoading ? (
+        <SubscriptionListSkeleton />
+      ) : (
+        <>
+          {/* User Profile Overview Header */}
+          <div className="bg-surface border border-borderline rounded-lg p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xs">
         <div className="space-y-2">
           <div className="flex items-center space-x-3">
             <div className="w-12 h-12 rounded-full bg-accent/15 border border-accent/30 text-accent font-bold flex items-center justify-center text-lg">
@@ -239,6 +244,8 @@ export const MySubscriptionsPage: React.FC = () => {
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   )
 }
