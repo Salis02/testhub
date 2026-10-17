@@ -128,6 +128,7 @@ func (h *PaymentHandler) CreateInvoice(c *gin.Context) {
 	})
 	if err != nil {
 		log.Printf("[PaymentHandler.CreateInvoice] gateway error: %v", err)
+		helpers.LogAudit(c, h.testRepo, "payment_invoice_failed", "payment_order", orderID, "", fmt.Sprintf(`{"error": %q, "amount": %d, "user_email": %q, "plan_type": %q}`, err.Error(), amount, req.UserEmail, req.PlanType))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghubungkan ke gateway pembayaran."})
 		return
 	}
@@ -153,6 +154,8 @@ func (h *PaymentHandler) CreateInvoice(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan faktur pembayaran."})
 		return
 	}
+
+	helpers.LogAudit(c, h.testRepo, "payment_invoice_created", "payment_order", order.ID, "", fmt.Sprintf(`{"amount": %d, "plan_type": %q, "user_email": %q, "provider": %q, "has_snap_token": %v}`, order.Amount, order.PlanType, order.UserEmail, gwResp.Provider, order.SnapToken != ""))
 
 	c.JSON(http.StatusCreated, gin.H{
 		"order_id":         order.ID,
@@ -229,6 +232,7 @@ func (h *PaymentHandler) HandleWebhook(c *gin.Context) {
 
 	if !verif.SignatureValid {
 		log.Printf("[PaymentHandler.Webhook] Warning: Signature verifikasi gateway tidak valid untuk OrderID %s", verif.OrderID)
+		helpers.LogAudit(c, h.testRepo, "payment_webhook_invalid_signature", "payment_order", verif.OrderID, "", fmt.Sprintf(`{"status": %q, "error": "signature_mismatch"}`, verif.TransactionStatus))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Signature verifikasi gateway tidak valid"})
 		return
 	}
@@ -239,6 +243,7 @@ func (h *PaymentHandler) HandleWebhook(c *gin.Context) {
 		// Handle Midtrans Dashboard test pings / simulator order probes
 		if strings.HasPrefix(verif.OrderID, "payment_notif_test") {
 			log.Printf("[PaymentHandler.Webhook] Midtrans dashboard test notification acknowledged for %s", verif.OrderID)
+			helpers.LogAudit(c, h.testRepo, "payment_webhook_test_ping", "payment_order", verif.OrderID, "", `{"type": "midtrans_dashboard_test"}`)
 			c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Test notification acknowledged"})
 			return
 		}
@@ -247,14 +252,20 @@ func (h *PaymentHandler) HandleWebhook(c *gin.Context) {
 		if err != nil {
 			if errors.Is(err, repository.ErrOrderNotFound) {
 				log.Printf("[PaymentHandler.Webhook] Order %s not found in DB (likely test/external order). Acknowledged with 200.", verif.OrderID)
+				helpers.LogAudit(c, h.testRepo, "payment_webhook_untracked_order", "payment_order", verif.OrderID, "", `{"detail": "order_not_found_acknowledged"}`)
 				c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Order not tracked, notification acknowledged"})
 				return
 			}
 			log.Printf("[PaymentHandler.Webhook] Failed to settle order %s: %v", verif.OrderID, err)
+			helpers.LogAudit(c, h.testRepo, "payment_settlement_failed", "payment_order", verif.OrderID, "", fmt.Sprintf(`{"error": %q, "order_id": %q}`, err.Error(), verif.OrderID))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memproses settlement order"})
 			return
 		}
 		log.Printf("[PaymentHandler.Webhook] Order %s successfully settled! Active Subscription ID: %s", verif.OrderID, sub.ID)
+		helpers.LogAudit(c, h.testRepo, "payment_order_settled", "payment_order", verif.OrderID, "", fmt.Sprintf(`{"subscription_id": %q, "payment_reference": %q, "status": %q}`, sub.ID, verif.PaymentReference, verif.TransactionStatus))
+	} else {
+		// Other gateway statuses: expire, cancel, deny, pending
+		helpers.LogAudit(c, h.testRepo, "payment_order_"+verif.TransactionStatus, "payment_order", verif.OrderID, "", fmt.Sprintf(`{"payment_reference": %q, "status": %q}`, verif.PaymentReference, verif.TransactionStatus))
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})

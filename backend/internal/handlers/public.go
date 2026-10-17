@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"testhub/internal/cache"
+	"testhub/internal/helpers"
 	"testhub/internal/models"
 	"testhub/internal/repository"
 )
@@ -139,6 +140,7 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 		}
 
 		if !hasAccess {
+			helpers.LogAudit(c, h.testRepo, "test_paywall_blocked", "test", test.ID, "", fmt.Sprintf(`{"user": %q, "price_idr": %d}`, userIdentifier, test.PriceIDR))
 			c.JSON(http.StatusPaymentRequired, gin.H{
 				"error":     "Modul ujian ini berbayar. Silakan selesaikan pembayaran invoice terlebih dahulu.",
 				"paywall":   true,
@@ -183,6 +185,7 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 
 	// Cache session for fast access
 	_ = h.cache.Set("session:"+sessionID, session, 24*time.Hour)
+	helpers.LogAudit(c, h.testRepo, "test_session_started", "test_session", session.ID, "", fmt.Sprintf(`{"test_id": %q, "user": %q}`, test.ID, userIdentifier))
 
 	resp := models.TestSessionResponse{
 		SessionID: sessionID,
@@ -308,6 +311,7 @@ func (h *PublicHandler) FinishTest(c *gin.Context) {
 
 	// Push score to Redis leaderboard ZSET (key "leaderboard:" + testID)
 	_ = h.cache.ZAdd("leaderboard:"+result.TestID, result.PercentageScore, result.SessionID)
+	helpers.LogAudit(c, h.testRepo, "test_exam_completed", "test_result", result.ID, "", fmt.Sprintf(`{"test_id": %q, "session_id": %q, "total_score": %.2f, "percentage": %.2f, "passing": %v}`, result.TestID, result.SessionID, result.TotalScore, result.PercentageScore, result.Passing))
 
 	c.JSON(http.StatusOK, result)
 }

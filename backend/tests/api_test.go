@@ -879,11 +879,42 @@ func TestAdminAuditLogFlow(t *testing.T) {
 		t.Fatalf("Toggle publish failed with status %d: %s", wToggle.Code, wToggle.Body.String())
 	}
 
-	// Wait 100ms for background goroutine to persist audit logs
-	time.Sleep(100 * time.Millisecond)
+	// 3. Create a payment invoice to trigger "payment_invoice_created" audit log
+	invBody, _ := json.Marshal(map[string]interface{}{
+		"user_email": "payer-" + time.Now().Format("150405") + "@example.com",
+		"plan_type":  "season_pass",
+	})
+	reqInv, _ := http.NewRequest("POST", "/api/payments/create-invoice", bytes.NewBuffer(invBody))
+	reqInv.Header.Set("Content-Type", "application/json")
+	reqInv.Header.Set("Authorization", "Bearer "+token)
+	wInv := httptest.NewRecorder()
+	router.ServeHTTP(wInv, reqInv)
 
-	// 3. Fetch audit logs via GET /api/admin/audit-logs
-	reqLogs, _ := http.NewRequest("GET", "/api/admin/audit-logs", nil)
+	if wInv.Code != http.StatusCreated {
+		t.Fatalf("Create invoice failed with status %d: %s", wInv.Code, wInv.Body.String())
+	}
+
+	// 4. Generate AI questions to trigger "ai_generate_success" audit log
+	aiReqBody, _ := json.Marshal(map[string]interface{}{
+		"category":   "sbmptn",
+		"subject":    "Matematika",
+		"difficulty": "medium",
+		"count":      2,
+	})
+	reqAI, _ := http.NewRequest("POST", "/api/ai/generate-questions", bytes.NewBuffer(aiReqBody))
+	reqAI.Header.Set("Content-Type", "application/json")
+	wAI := httptest.NewRecorder()
+	router.ServeHTTP(wAI, reqAI)
+
+	if wAI.Code != http.StatusOK {
+		t.Fatalf("AI generate questions failed with status %d: %s", wAI.Code, wAI.Body.String())
+	}
+
+	// Wait 150ms for background goroutines to persist audit logs
+	time.Sleep(150 * time.Millisecond)
+
+	// 5. Fetch audit logs via GET /api/admin/audit-logs
+	reqLogs, _ := http.NewRequest("GET", "/api/admin/audit-logs?limit=100", nil)
 	reqLogs.Header.Set("Authorization", "Bearer "+token)
 	wLogs := httptest.NewRecorder()
 	router.ServeHTTP(wLogs, reqLogs)
@@ -901,15 +932,23 @@ func TestAdminAuditLogFlow(t *testing.T) {
 		t.Fatalf("Expected audit logs to not be empty, got 0 logs. Response: %s", wLogs.Body.String())
 	}
 
-	// Verify that at least one of the actions matches "publish_test" or "create_test"
 	foundCreate := false
 	foundPublish := false
+	foundPayment := false
+	foundAI := false
+
 	for _, l := range logs {
 		if l.Action == "create_test" && l.ResourceID != nil && *l.ResourceID == createdTest.ID {
 			foundCreate = true
 		}
 		if l.Action == "toggle_publish" && l.ResourceID != nil && *l.ResourceID == createdTest.ID {
 			foundPublish = true
+		}
+		if l.Action == "payment_invoice_created" {
+			foundPayment = true
+		}
+		if l.Action == "ai_generate_success" {
+			foundAI = true
 		}
 	}
 
@@ -918,6 +957,12 @@ func TestAdminAuditLogFlow(t *testing.T) {
 	}
 	if !foundPublish {
 		t.Errorf("Expected toggle_publish audit log for test %s, but wasn't found", createdTest.ID)
+	}
+	if !foundPayment {
+		t.Errorf("Expected payment_invoice_created audit log, but wasn't found")
+	}
+	if !foundAI {
+		t.Errorf("Expected ai_generate_success audit log, but wasn't found")
 	}
 }
 

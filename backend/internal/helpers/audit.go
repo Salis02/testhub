@@ -10,21 +10,36 @@ import (
 	"testhub/internal/repository"
 )
 
-// LogAudit records an administrative audit log entry asynchronously.
-// It extracts the authenticated admin ID, client IP, applies safe context timeouts,
-// and ensures consistent auditing across all application modules without code duplication.
+// LogAudit records an audit log entry asynchronously.
+// It extracts the authenticated user ID and client IP from context (if available),
+// applies safe context timeouts, and safely isolates logging failures from blocking HTTP requests.
 func LogAudit(c *gin.Context, repo repository.TestRepository, action, resourceType, resourceID, oldValue, newValue string) {
+	LogAuditWithActor(c, repo, nil, action, resourceType, resourceID, oldValue, newValue)
+}
+
+// LogAuditWithActor records an audit log with an explicitly designated actor ID (or falls back to context user_id).
+func LogAuditWithActor(c *gin.Context, repo repository.TestRepository, explicitActorID *string, action, resourceType, resourceID, oldValue, newValue string) {
 	if repo == nil {
 		return
 	}
 
-	var adminID *string
-	if uid, exists := c.Get("user_id"); exists {
-		if s, ok := uid.(string); ok && s != "" {
-			adminID = &s
+	var actorID *string = explicitActorID
+	var ipPtr *string
+
+	if c != nil {
+		if actorID == nil {
+			if uid, exists := c.Get("user_id"); exists {
+				if s, ok := uid.(string); ok && s != "" {
+					actorID = &s
+				}
+			}
+		}
+		ip := c.ClientIP()
+		if ip != "" {
+			ipPtr = &ip
 		}
 	}
-	ip := c.ClientIP()
+
 	var resID *string
 	if resourceID != "" {
 		resID = &resourceID
@@ -39,13 +54,13 @@ func LogAudit(c *gin.Context, repo repository.TestRepository, action, resourceTy
 	}
 
 	entry := &models.AdminAuditLog{
-		AdminID:      adminID,
+		AdminID:      actorID,
 		Action:       action,
 		ResourceType: resourceType,
 		ResourceID:   resID,
 		OldValue:     oldVal,
 		NewValue:     newVal,
-		IPAddress:    &ip,
+		IPAddress:    ipPtr,
 		CreatedAt:    time.Now(),
 	}
 

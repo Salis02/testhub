@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -11,17 +12,20 @@ import (
 
 	"testhub/internal/config"
 	"testhub/internal/database"
+	"testhub/internal/helpers"
 	"testhub/internal/middleware"
 	"testhub/internal/models"
+	"testhub/internal/repository"
 )
 
 type AuthHandler struct {
-	db  *database.DB
-	cfg *config.Config
+	db       *database.DB
+	cfg      *config.Config
+	testRepo repository.TestRepository
 }
 
-func NewAuthHandler(db *database.DB, cfg *config.Config) *AuthHandler {
-	return &AuthHandler{db: db, cfg: cfg}
+func NewAuthHandler(db *database.DB, cfg *config.Config, testRepo repository.TestRepository) *AuthHandler {
+	return &AuthHandler{db: db, cfg: cfg, testRepo: testRepo}
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -85,6 +89,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	refreshToken, _ := middleware.GenerateToken(user.ID, user.Email, user.Role, h.cfg.JWTSecret, h.cfg.RefreshTokenExpiry)
 
+	helpers.LogAudit(c, h.testRepo, "auth_registered", "user", user.ID, "", fmt.Sprintf(`{"email": %q, "role": %q}`, user.Email, user.Role))
+
 	c.JSON(http.StatusCreated, models.AuthResponse{
 		UserID:       user.ID,
 		Email:        user.Email,
@@ -105,11 +111,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var user models.User
 	err := h.db.Get(&user, "SELECT * FROM users WHERE email = $1", req.Email)
 	if err != nil {
+		helpers.LogAudit(c, h.testRepo, "auth_login_failed", "user", "", "", fmt.Sprintf(`{"attempted_email": %q, "reason": "user_not_found"}`, req.Email))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Email atau kata sandi tidak cocok"})
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		helpers.LogAudit(c, h.testRepo, "auth_login_failed", "user", user.ID, "", fmt.Sprintf(`{"attempted_email": %q, "reason": "invalid_password"}`, req.Email))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Email atau kata sandi tidak cocok"})
 		return
 	}
@@ -121,6 +129,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	refreshToken, _ := middleware.GenerateToken(user.ID, user.Email, user.Role, h.cfg.JWTSecret, h.cfg.RefreshTokenExpiry)
+
+	helpers.LogAudit(c, h.testRepo, "auth_login_success", "user", user.ID, "", fmt.Sprintf(`{"email": %q, "role": %q}`, user.Email, user.Role))
 
 	c.JSON(http.StatusOK, models.AuthResponse{
 		UserID:       user.ID,
