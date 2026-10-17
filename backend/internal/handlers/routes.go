@@ -63,7 +63,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 	paymentGateway := services.NewPaymentGatewayProvider(cfg)
 	paymentHandler := NewPaymentHandler(subRepo, testRepo, paymentGateway)
 	adminSubHandler := NewAdminSubscriptionHandler(subRepo, testRepo)
-	mediaHandler := NewMediaHandler(storage)
+	mediaHandler := NewMediaHandler(storage, testRepo)
 	aiService := services.NewAIAgentService(cfg)
 	aiHandler := NewAIHandler(aiService)
 

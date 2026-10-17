@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -13,6 +13,7 @@ import (
 
 	"testhub/internal/cache"
 	"testhub/internal/database"
+	"testhub/internal/helpers"
 	"testhub/internal/models"
 	"testhub/internal/repository"
 	"testhub/internal/validator"
@@ -38,45 +39,6 @@ func (h *AdminHandler) invalidateCatalogCache() {
 	if h.cache != nil {
 		_ = h.cache.DeletePattern("tests:catalog:*")
 	}
-}
-
-func (h *AdminHandler) logAudit(c *gin.Context, action, resourceType, resourceID, oldValue, newValue string) {
-	var adminID *string
-	if uid, exists := c.Get("user_id"); exists {
-		if s, ok := uid.(string); ok && s != "" {
-			adminID = &s
-		}
-	}
-	ip := c.ClientIP()
-	var resID *string
-	if resourceID != "" {
-		resID = &resourceID
-	}
-	var oldVal *string
-	if oldValue != "" {
-		oldVal = &oldValue
-	}
-	var newVal *string
-	if newValue != "" {
-		newVal = &newValue
-	}
-
-	entry := &models.AdminAuditLog{
-		AdminID:      adminID,
-		Action:       action,
-		ResourceType: resourceType,
-		ResourceID:   resID,
-		OldValue:     oldVal,
-		NewValue:     newVal,
-		IPAddress:    &ip,
-		CreatedAt:    time.Now(),
-	}
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = h.testRepo.RecordAuditLog(ctx, entry)
-	}()
 }
 
 // GetStats handles GET /api/admin/stats
@@ -158,6 +120,14 @@ func (h *AdminHandler) CreateTest(c *gin.Context) {
 	}
 
 	h.invalidateCatalogCache()
+	newValBytes, _ := json.Marshal(map[string]interface{}{
+		"title":           test.Title,
+		"category":        test.Category,
+		"total_questions": test.TotalQuestions,
+		"price_idr":       test.PriceIDR,
+		"published":       test.Published,
+	})
+	helpers.LogAudit(c, h.testRepo, "create_test", "test", test.ID, "", string(newValBytes))
 	c.JSON(http.StatusCreated, test)
 }
 
@@ -232,6 +202,15 @@ func (h *AdminHandler) UpdateTest(c *gin.Context) {
 	}
 
 	h.invalidateCatalogCache()
+	newValBytes, _ := json.Marshal(map[string]interface{}{
+		"title":           req.Title,
+		"category":        req.Category,
+		"total_questions": len(req.Questions),
+		"price_idr":       req.PriceIDR,
+		"published":       req.Published,
+	})
+	helpers.LogAudit(c, h.testRepo, "update_test", "test", testID, "", string(newValBytes))
+
 	updated, err := h.testRepo.GetTestByID(c.Request.Context(), testID)
 	if err != nil {
 		c.JSON(http.StatusOK, test)
@@ -257,7 +236,7 @@ func (h *AdminHandler) TogglePublish(c *gin.Context) {
 	}
 
 	h.invalidateCatalogCache()
-	h.logAudit(c, "toggle_publish", "test", testID, "", fmt.Sprintf("published: %v", newStatus))
+	helpers.LogAudit(c, h.testRepo, "toggle_publish", "test", testID, "", fmt.Sprintf("published: %v", newStatus))
 	c.JSON(http.StatusOK, gin.H{
 		"published":    newStatus,
 		"published_at": time.Now().Format(time.RFC3339),
@@ -280,7 +259,7 @@ func (h *AdminHandler) DeleteTest(c *gin.Context) {
 	}
 
 	h.invalidateCatalogCache()
-	h.logAudit(c, "delete", "test", testID, "", "")
+	helpers.LogAudit(c, h.testRepo, "delete", "test", testID, "", "")
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -386,6 +365,7 @@ func (h *AdminHandler) GradeEssay(c *gin.Context) {
 		return
 	}
 
+	helpers.LogAudit(c, h.testRepo, "grade_essay", "essay", essayID, "", fmt.Sprintf(`{"score": %d, "note": %q}`, req.Score, req.Note))
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -469,7 +449,7 @@ func (h *AdminHandler) ToggleUserStatus(c *gin.Context) {
 		return
 	}
 
-	h.logAudit(c, "toggle_user_status", "user", userID, "", fmt.Sprintf("is_active: %v", req.IsActive))
+	helpers.LogAudit(c, h.testRepo, "toggle_user_status", "user", userID, "", fmt.Sprintf("is_active: %v", req.IsActive))
 	c.JSON(http.StatusOK, gin.H{"success": true, "is_active": req.IsActive})
 }
 
@@ -488,7 +468,7 @@ func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 		return
 	}
 
-	h.logAudit(c, "update_user_role", "user", userID, "", fmt.Sprintf("role: %s", req.Role))
+	helpers.LogAudit(c, h.testRepo, "update_user_role", "user", userID, "", fmt.Sprintf("role: %s", req.Role))
 	c.JSON(http.StatusOK, gin.H{"success": true, "role": req.Role})
 }
 

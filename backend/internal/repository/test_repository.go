@@ -3,8 +3,11 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	"testhub/internal/database"
@@ -372,6 +375,26 @@ func (r *PostgresTestRepository) GetAnalytics(ctx context.Context, testID string
 	}, nil
 }
 
+func sanitizeJSONB(val *string) *string {
+	if val == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*val)
+	if trimmed == "" {
+		return nil
+	}
+	var js json.RawMessage
+	if json.Unmarshal([]byte(trimmed), &js) == nil {
+		return &trimmed
+	}
+	b, err := json.Marshal(map[string]string{"detail": trimmed})
+	if err != nil {
+		b, _ = json.Marshal(trimmed)
+	}
+	res := string(b)
+	return &res
+}
+
 // RecordAuditLog inserts an audit log record
 func (r *PostgresTestRepository) RecordAuditLog(ctx context.Context, item *models.AdminAuditLog) error {
 	if item.ID == "" {
@@ -380,11 +403,17 @@ func (r *PostgresTestRepository) RecordAuditLog(ctx context.Context, item *model
 	if item.CreatedAt.IsZero() {
 		item.CreatedAt = time.Now()
 	}
+	item.OldValue = sanitizeJSONB(item.OldValue)
+	item.NewValue = sanitizeJSONB(item.NewValue)
+
 	query := `
 		INSERT INTO admin_audit_log (id, admin_id, action, resource_type, resource_id, old_value, new_value, ip_address, created_at)
 		VALUES (:id, :admin_id, :action, :resource_type, :resource_id, :old_value, :new_value, :ip_address, :created_at)
 	`
 	_, err := r.db.NamedExecContext(ctx, query, item)
+	if err != nil {
+		log.Printf("[PostgresTestRepository.RecordAuditLog] DB insert error: %v", err)
+	}
 	return err
 }
 

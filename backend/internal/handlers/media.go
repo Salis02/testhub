@@ -1,18 +1,25 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"testhub/internal/helpers"
+	"testhub/internal/repository"
 	"testhub/internal/services"
 )
 
 type MediaHandler struct {
-	storage services.StorageProvider
+	storage  services.StorageProvider
+	testRepo repository.TestRepository
 }
 
-func NewMediaHandler(storage services.StorageProvider) *MediaHandler {
-	return &MediaHandler{storage: storage}
+func NewMediaHandler(storage services.StorageProvider, testRepo repository.TestRepository) *MediaHandler {
+	return &MediaHandler{
+		storage:  storage,
+		testRepo: testRepo,
+	}
 }
 
 // UploadMedia handles POST /api/admin/upload-media
@@ -35,6 +42,8 @@ func (h *MediaHandler) UploadMedia(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	helpers.LogAudit(c, h.testRepo, "upload_media", "media", publicURL, "", fmt.Sprintf(`{"filename": %q, "size_bytes": %d, "content_type": %q}`, fileHeader.Filename, fileHeader.Size, fileHeader.Header.Get("Content-Type")))
 
 	c.JSON(http.StatusCreated, gin.H{
 		"url":          publicURL,
@@ -65,6 +74,8 @@ func (h *MediaHandler) DeleteMedia(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus file: " + err.Error()})
 		return
 	}
+
+	helpers.LogAudit(c, h.testRepo, "delete_media", "media", urlParam, "", fmt.Sprintf(`{"url": %q}`, urlParam))
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }

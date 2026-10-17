@@ -814,4 +814,111 @@ func TestLeaderboardAndCertificates(t *testing.T) {
 	_ = publicHandler
 }
 
+func TestAdminAuditLogFlow(t *testing.T) {
+	_, _, router := setupTestApp(t)
+
+	adminEmail := "audit-admin-" + time.Now().Format("20060102150405.000") + "@example.com"
+	regBody, _ := json.Marshal(models.RegisterRequest{
+		Email:    adminEmail,
+		Password: "Password123!",
+		FullName: "Audit Inspector Admin",
+		Role:     "admin",
+	})
+	reqReg, _ := http.NewRequest("POST", "/api/auth/register", bytes.NewBuffer(regBody))
+	reqReg.Header.Set("Content-Type", "application/json")
+	wReg := httptest.NewRecorder()
+	router.ServeHTTP(wReg, reqReg)
+
+	var authResp models.AuthResponse
+	_ = json.Unmarshal(wReg.Body.Bytes(), &authResp)
+	token := authResp.Token
+
+	// 1. Create a test to trigger "create_test" audit log
+	isTrue := true
+	isFalse := false
+	createBody, _ := json.Marshal(map[string]interface{}{
+		"title":                    "Audit Verification Test",
+		"description":              "Checking audit logs persistence",
+		"category":                 "iq",
+		"duration_minutes":         20,
+		"passing_score_percentage": 70,
+		"published":                false,
+		"questions": []models.TestQuestion{
+			{
+				QuestionText:    "Pertanyaan audit test?",
+				QuestionType:    "multiple_choice",
+				DifficultyLevel: "easy",
+				Points:          10,
+				Options: []models.QuestionOption{
+					{OptionLetter: "A", OptionText: "Jawaban A", IsCorrect: &isTrue},
+					{OptionLetter: "B", OptionText: "Jawaban B", IsCorrect: &isFalse},
+				},
+			},
+		},
+	})
+	reqCreate, _ := http.NewRequest("POST", "/api/admin/tests", bytes.NewBuffer(createBody))
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.Header.Set("Authorization", "Bearer "+token)
+	wCreate := httptest.NewRecorder()
+	router.ServeHTTP(wCreate, reqCreate)
+
+	if wCreate.Code != http.StatusCreated {
+		t.Fatalf("Create test failed with status %d: %s", wCreate.Code, wCreate.Body.String())
+	}
+
+	var createdTest models.Test
+	_ = json.Unmarshal(wCreate.Body.Bytes(), &createdTest)
+
+	// 2. Toggle publish to trigger "publish_test" audit log
+	reqToggle, _ := http.NewRequest("POST", fmt.Sprintf("/api/admin/tests/%s/toggle-publish", createdTest.ID), nil)
+	reqToggle.Header.Set("Authorization", "Bearer "+token)
+	wToggle := httptest.NewRecorder()
+	router.ServeHTTP(wToggle, reqToggle)
+
+	if wToggle.Code != http.StatusOK {
+		t.Fatalf("Toggle publish failed with status %d: %s", wToggle.Code, wToggle.Body.String())
+	}
+
+	// Wait 100ms for background goroutine to persist audit logs
+	time.Sleep(100 * time.Millisecond)
+
+	// 3. Fetch audit logs via GET /api/admin/audit-logs
+	reqLogs, _ := http.NewRequest("GET", "/api/admin/audit-logs", nil)
+	reqLogs.Header.Set("Authorization", "Bearer "+token)
+	wLogs := httptest.NewRecorder()
+	router.ServeHTTP(wLogs, reqLogs)
+
+	if wLogs.Code != http.StatusOK {
+		t.Fatalf("Fetch audit logs failed with status %d: %s", wLogs.Code, wLogs.Body.String())
+	}
+
+	var logs []models.AdminAuditLog
+	if err := json.Unmarshal(wLogs.Body.Bytes(), &logs); err != nil {
+		t.Fatalf("Failed to parse audit logs response: %v", err)
+	}
+
+	if len(logs) == 0 {
+		t.Fatalf("Expected audit logs to not be empty, got 0 logs. Response: %s", wLogs.Body.String())
+	}
+
+	// Verify that at least one of the actions matches "publish_test" or "create_test"
+	foundCreate := false
+	foundPublish := false
+	for _, l := range logs {
+		if l.Action == "create_test" && l.ResourceID != nil && *l.ResourceID == createdTest.ID {
+			foundCreate = true
+		}
+		if l.Action == "toggle_publish" && l.ResourceID != nil && *l.ResourceID == createdTest.ID {
+			foundPublish = true
+		}
+	}
+
+	if !foundCreate {
+		t.Errorf("Expected create_test audit log for test %s, but wasn't found", createdTest.ID)
+	}
+	if !foundPublish {
+		t.Errorf("Expected toggle_publish audit log for test %s, but wasn't found", createdTest.ID)
+	}
+}
+
 

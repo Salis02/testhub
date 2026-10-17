@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"testhub/internal/helpers"
 	"testhub/internal/models"
 	"testhub/internal/repository"
 	"testhub/internal/services"
@@ -344,6 +345,7 @@ func (h *AdminSubscriptionHandler) ManualGrant(c *gin.Context) {
 		return
 	}
 
+	helpers.LogAudit(c, h.testRepo, "manual_grant_subscription", "subscription", sub.ID, "", fmt.Sprintf(`{"user": %q, "plan_type": %q, "valid_days": %d, "reason": %q}`, req.UserIdentifier, req.PlanType, req.ValidDays, req.ReasonNotes))
 	c.JSON(http.StatusCreated, sub)
 }
 
@@ -367,6 +369,7 @@ func (h *AdminSubscriptionHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
+	helpers.LogAudit(c, h.testRepo, "update_subscription_status", "subscription", subID, "", fmt.Sprintf(`{"status": %q, "extend_days": %d}`, req.Status, req.ExtendDays))
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -385,5 +388,6 @@ func (h *AdminSubscriptionHandler) Revoke(c *gin.Context) {
 		return
 	}
 
+	helpers.LogAudit(c, h.testRepo, "revoke_subscription", "subscription", subID, "", fmt.Sprintf(`{"status": "revoked", "reason": %q}`, reason))
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
