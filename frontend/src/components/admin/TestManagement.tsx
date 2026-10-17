@@ -10,14 +10,14 @@ import {
   Pencil,
   BarChart3,
   Search,
-  ChevronLeft,
-  ChevronRight,
-  Shuffle,
   Tag,
+  Filter,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useConfirm } from '@/context/ConfirmContext'
 import { useToast } from '@/context/ToastContext'
+import { useDebounce } from '@/hooks/useDebounce'
+import { Pagination } from '@/components/common/Pagination'
 
 interface TestManagementProps {
   tests: Test[]
@@ -38,9 +38,33 @@ export const TestManagement: React.FC<TestManagementProps> = ({
 }) => {
   const { confirm } = useConfirm()
   const toast = useToast()
-  const [searchQuery, setSearchQuery] = useState('')
+  
+  // Search with debounce
+  const [searchInput, setSearchInput] = useState('')
+  const debouncedSearch = useDebounce(searchInput, 250)
+  
+  // Filters
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [selectedStatus, setSelectedStatus] = useState<string>('all')
+  
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1)
-  const pageSize = 8
+  const [pageSize, setPageSize] = useState(8)
+
+  const handleTogglePublish = (test: Test) => {
+    onTogglePublish(test.id)
+    if (!test.published) {
+      toast.success(
+        'Modul Berhasil Dipublikasikan',
+        `"${test.title}" sekarang aktif dan dapat diakses peserta ujian.`
+      )
+    } else {
+      toast.info(
+        'Modul Ditarik ke Draf',
+        `"${test.title}" telah ditarik dan disembunyikan dari katalog peserta.`
+      )
+    }
+  }
 
   const handleDelete = async (test: Test) => {
     const ok = await confirm({
@@ -56,21 +80,36 @@ export const TestManagement: React.FC<TestManagementProps> = ({
     }
   }
 
-  // Filtered tests by search query
+
+  // Filtered tests by search query, category, and status
   const filteredTests = useMemo(() => {
-    if (!searchQuery.trim()) return tests
-    const query = searchQuery.toLowerCase()
-    return tests.filter(
-      (t) =>
-        t.title.toLowerCase().includes(query) ||
-        t.category.toLowerCase().includes(query) ||
-        (t.description && t.description.toLowerCase().includes(query))
-    )
-  }, [tests, searchQuery])
+    return tests.filter((t) => {
+      // Category filter
+      if (selectedCategory !== 'all' && t.category !== selectedCategory) {
+        return false
+      }
+      // Status filter
+      if (selectedStatus === 'published' && !t.published) return false
+      if (selectedStatus === 'draft' && t.published) return false
+
+      // Debounced search query
+      if (debouncedSearch.trim()) {
+        const query = debouncedSearch.toLowerCase()
+        const matchesTitle = t.title.toLowerCase().includes(query)
+        const matchesCategory = t.category.toLowerCase().includes(query)
+        const matchesDesc = t.description?.toLowerCase().includes(query)
+        if (!matchesTitle && !matchesCategory && !matchesDesc) {
+          return false
+        }
+      }
+
+      return true
+    })
+  }, [tests, debouncedSearch, selectedCategory, selectedStatus])
 
   // Pagination calculation
   const totalItems = filteredTests.length
-  const totalPages = Math.ceil(totalItems / pageSize) || 1
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
   const safePage = Math.min(Math.max(1, currentPage), totalPages)
   const startIndex = (safePage - 1) * pageSize
   const paginatedTests = filteredTests.slice(startIndex, startIndex + pageSize)
@@ -85,9 +124,9 @@ export const TestManagement: React.FC<TestManagementProps> = ({
   }
 
   return (
-    <div className="bg-surface border border-borderline rounded-lg shadow-sm overflow-hidden space-y-0">
+    <div className="bg-surface border border-borderline rounded-lg shadow-xs overflow-hidden space-y-0">
       {/* Table Header Action Bar */}
-      <div className="p-5 border-b border-borderline flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-5 border-b border-borderline flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h3 className="text-base font-semibold text-ink">Manajemen Bank Soal & Ujian</h3>
           <p className="text-xs text-ink-muted">
@@ -95,15 +134,15 @@ export const TestManagement: React.FC<TestManagementProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center space-x-2.5 self-start sm:self-auto w-full sm:w-auto">
-          {/* Quick Search in tests */}
-          <div className="relative flex-1 sm:w-64">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Quick Search */}
+          <div className="relative w-full sm:w-56">
             <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              value={searchQuery}
+              value={searchInput}
               onChange={(e) => {
-                setSearchQuery(e.target.value)
+                setSearchInput(e.target.value)
                 setCurrentPage(1)
               }}
               placeholder="Cari modul ujian..."
@@ -111,9 +150,42 @@ export const TestManagement: React.FC<TestManagementProps> = ({
             />
           </div>
 
+          {/* Category Filter */}
+          <div className="flex items-center space-x-1.5">
+            <Filter className="w-3 h-3 text-ink-muted hidden sm:inline" />
+            <select
+              value={selectedCategory}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value)
+                setCurrentPage(1)
+              }}
+              className="px-2.5 py-1.5 text-xs rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+            >
+              <option value="all">Semua Kategori</option>
+              <option value="cpns">CPNS / Kedinasan</option>
+              <option value="sbmptn">UTBK-SNBT</option>
+              <option value="iq">Raven IQ Matrix</option>
+              <option value="custom">BUMN AKHLAK / Custom</option>
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <select
+            value={selectedStatus}
+            onChange={(e) => {
+              setSelectedStatus(e.target.value)
+              setCurrentPage(1)
+            }}
+            className="px-2.5 py-1.5 text-xs rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <option value="all">Semua Status</option>
+            <option value="published">Hanya Publik</option>
+            <option value="draft">Hanya Draf</option>
+          </select>
+
           <button
             onClick={onOpenCreateModal}
-            className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity flex-shrink-0"
+            className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity ml-auto sm:ml-0"
           >
             <Plus className="w-4 h-4" />
             <span>Buat Ujian</span>
@@ -140,7 +212,7 @@ export const TestManagement: React.FC<TestManagementProps> = ({
             {paginatedTests.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-12 text-center text-ink-muted text-xs">
-                  Tidak ada modul ujian yang cocok dengan pencarian &ldquo;{searchQuery}&rdquo;.
+                  Tidak ada modul ujian yang cocok dengan kriteria pencarian / filter.
                 </td>
               </tr>
             ) : (
@@ -155,7 +227,7 @@ export const TestManagement: React.FC<TestManagementProps> = ({
                     <CategoryBadge category={test.category} />
                   </td>
 
-                  <td className="py-4 px-4 whitespace-nowrap font-mono text-ink">
+                  <td className="py-4 px-4 whitespace-nowrap font-mono tabular-nums text-ink">
                     <div>{test.duration_minutes} Menit</div>
                     <div className="text-[10px] text-ink-muted">{test.total_questions} Soal</div>
                   </td>
@@ -173,7 +245,7 @@ export const TestManagement: React.FC<TestManagementProps> = ({
                     )}
                   </td>
 
-                  <td className="py-4 px-4 whitespace-nowrap font-mono text-ink">
+                  <td className="py-4 px-4 whitespace-nowrap font-mono tabular-nums text-ink">
                     {test.passing_score_percentage}%
                   </td>
 
@@ -202,17 +274,24 @@ export const TestManagement: React.FC<TestManagementProps> = ({
                   </td>
 
                   <td className="py-4 px-4 whitespace-nowrap">
-                    {test.published ? (
-                      <span className="inline-flex items-center space-x-1 font-mono text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                        <Globe className="w-3 h-3" />
-                        <span>Publik</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center space-x-1 font-mono text-[11px] text-ink-muted bg-canvas px-2 py-0.5 rounded border border-borderline">
-                        <Lock className="w-3 h-3" />
-                        <span>Draf</span>
-                      </span>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePublish(test)}
+                      className="group inline-flex items-center focus:outline-none focus:ring-1 focus:ring-accent rounded transition-transform active:scale-95"
+                      title={test.published ? 'Status: Publik. Klik untuk menarik ke Draf.' : 'Status: Draf. Klik untuk mempublikasikan.'}
+                    >
+                      {test.published ? (
+                        <span className="inline-flex items-center space-x-1 font-mono text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 group-hover:bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/20 cursor-pointer transition-colors">
+                          <Globe className="w-3 h-3" />
+                          <span>Publik</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1 font-mono text-[11px] text-ink-muted group-hover:text-ink bg-canvas group-hover:bg-surface px-2 py-0.5 rounded border border-borderline cursor-pointer transition-colors">
+                          <Lock className="w-3 h-3" />
+                          <span>Draf</span>
+                        </span>
+                      )}
+                    </button>
                   </td>
 
                   <td className="py-4 px-4 whitespace-nowrap text-right space-x-2">
@@ -251,7 +330,7 @@ export const TestManagement: React.FC<TestManagementProps> = ({
 
                     {/* Toggle publish button */}
                     <button
-                      onClick={() => onTogglePublish(test.id)}
+                      onClick={() => handleTogglePublish(test)}
                       className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-medium border border-borderline bg-canvas text-ink hover:bg-surface-hover transition-colors"
                     >
                       {test.published ? 'Tarik Draf' : 'Publikasikan'}
@@ -273,40 +352,20 @@ export const TestManagement: React.FC<TestManagementProps> = ({
         </table>
       </div>
 
-      {/* Table Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="p-4 border-t border-borderline flex items-center justify-between text-xs text-ink-muted">
-          <span>
-            Menampilkan <strong>{startIndex + 1}</strong> –{' '}
-            <strong>{Math.min(startIndex + pageSize, totalItems)}</strong> dari{' '}
-            <strong>{totalItems}</strong> modul ujian
-          </span>
-
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={safePage <= 1}
-              className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-md border border-borderline bg-canvas text-ink hover:bg-surface-hover disabled:opacity-40 transition-colors"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-              <span>Sebelumnya</span>
-            </button>
-
-            <span className="font-mono font-semibold px-2 py-1 rounded bg-canvas border border-borderline text-ink">
-              {safePage} / {totalPages}
-            </span>
-
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={safePage >= totalPages}
-              className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-md border border-borderline bg-canvas text-ink hover:bg-surface-hover disabled:opacity-40 transition-colors"
-            >
-              <span>Berikutnya</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Shared Pagination Component */}
+      <Pagination
+        currentPage={safePage}
+        totalPages={totalPages}
+        totalItems={totalItems}
+        pageSize={pageSize}
+        pageSizeOptions={[8, 16, 24, 48]}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(newSize) => {
+          setPageSize(newSize)
+          setCurrentPage(1)
+        }}
+        className="p-4 border-t border-borderline"
+      />
     </div>
   )
 }

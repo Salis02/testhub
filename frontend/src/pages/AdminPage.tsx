@@ -147,91 +147,150 @@ export const AdminPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8">
-      {/* Dashboard Top Title Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-borderline gap-4">
+      {/* Cockpit Header Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between pb-5 border-b border-borderline gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-ink">
-            Konsol Pengajar & Administrasi Ujian
+          <div className="flex items-center space-x-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[11px] font-mono font-medium text-ink-muted uppercase tracking-wider">
+              Executive Console • Pusat Kendali
+            </span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-ink tracking-tight mt-1">
+            Dashboard Administrasi & Asesmen
           </h1>
-          <p className="text-xs text-ink-muted mt-0.5 font-mono">
-            Pusat manajemen kurikulum asesmen, moderasi soal, dan verifikasi esai peserta.
+          <p className="text-xs text-ink-muted mt-0.5">
+            Pusat manajemen kurikulum asesmen, bank soal, verifikasi lembar esai, dan monetisasi.
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2.5">
           <button
             onClick={() => {
               setAiContext('auto')
               setIsAIModalOpen(true)
             }}
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-accent/40 bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors"
+            className="btn-press inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-accent/40 bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>AI Generator</span>
+            <span>AI Question Generator</span>
           </button>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="inline-flex items-center space-x-1.5 px-4 py-1.5 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity"
+            className="btn-press inline-flex items-center space-x-1.5 px-4 py-1.5 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Buat Ujian</span>
+            <span>Buat Ujian Baru</span>
           </button>
         </div>
       </div>
 
-      {/* Tabs Navigation strictly per style.md */}
-      <div className="flex items-center space-x-1 border-b border-borderline text-xs font-mono">
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium transition-colors ${
-            activeTab === 'overview'
-              ? 'border-accent text-accent font-semibold'
-              : 'border-transparent text-ink-muted hover:text-ink'
-          }`}
-        >
-          <LayoutDashboard className="w-3.5 h-3.5" />
-          <span>Ikhtisar & Telemetri</span>
-        </button>
+      {/* Cockpit Navigation Segmented Switcher */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="inline-flex p-1 rounded-lg bg-surface border border-borderline shadow-2xs max-w-full overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+              activeTab === 'overview'
+                ? 'bg-canvas text-accent shadow-xs font-semibold border border-borderline'
+                : 'text-ink-muted hover:text-ink'
+            }`}
+          >
+            <LayoutDashboard className="w-3.5 h-3.5" />
+            <span>Ikhtisar Dashboard</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('tests')}
-          className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium transition-colors ${
-            activeTab === 'tests'
-              ? 'border-accent text-accent font-semibold'
-              : 'border-transparent text-ink-muted hover:text-ink'
-          }`}
-        >
-          <FileSpreadsheet className="w-3.5 h-3.5" />
-          <span>Kelola Modul Ujian ({tests.length})</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('tests')}
+            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+              activeTab === 'tests'
+                ? 'bg-canvas text-accent shadow-xs font-semibold border border-borderline'
+                : 'text-ink-muted hover:text-ink'
+            }`}
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Modul & Bank Soal</span>
+            <span
+              className={`px-1.5 py-0.2 rounded text-[10px] font-mono tabular-nums ${
+                activeTab === 'tests'
+                  ? 'bg-accent/15 text-accent font-bold'
+                  : 'bg-canvas border border-borderline text-ink-muted'
+              }`}
+            >
+              {tests.length}
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('essays')}
-          className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium transition-colors ${
-            activeTab === 'essays'
-              ? 'border-accent text-accent font-semibold'
-              : 'border-transparent text-ink-muted hover:text-ink'
-          }`}
-        >
-          <FileEdit className="w-3.5 h-3.5" />
-          <span>Koreksi Esai ({stats.pending_essays} Pending)</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('essays')}
+            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+              activeTab === 'essays'
+                ? 'bg-canvas text-accent shadow-xs font-semibold border border-borderline'
+                : 'text-ink-muted hover:text-ink'
+            }`}
+          >
+            <FileEdit className="w-3.5 h-3.5" />
+            <span>Koreksi Esai</span>
+            {stats.pending_essays > 0 ? (
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-mono tabular-nums bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/30">
+                {stats.pending_essays}
+              </span>
+            ) : (
+              <span
+                className={`px-1.5 py-0.2 rounded text-[10px] font-mono tabular-nums ${
+                  activeTab === 'essays'
+                    ? 'bg-accent/15 text-accent font-bold'
+                    : 'bg-canvas border border-borderline text-ink-muted'
+                }`}
+              >
+                0
+              </span>
+            )}
+          </button>
 
-        <button
-          onClick={() => setActiveTab('subscriptions')}
-          className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium transition-colors ${
-            activeTab === 'subscriptions'
-              ? 'border-accent text-accent font-semibold'
-              : 'border-transparent text-ink-muted hover:text-ink'
-          }`}
-        >
-          <CreditCard className="w-3.5 h-3.5" />
-          <span>Langganan & Akses</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('subscriptions')}
+            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+              activeTab === 'subscriptions'
+                ? 'bg-canvas text-accent shadow-xs font-semibold border border-borderline'
+                : 'text-ink-muted hover:text-ink'
+            }`}
+          >
+            <CreditCard className="w-3.5 h-3.5" />
+            <span>Paket Langganan</span>
+          </button>
+        </div>
+
+        {activeTab !== 'overview' && (
+          <button
+            onClick={() => setActiveTab('overview')}
+            className="text-xs font-medium text-ink-muted hover:text-accent flex items-center space-x-1 transition-colors"
+          >
+            <span>&larr; Kembali ke Ikhtisar</span>
+          </button>
+        )}
       </div>
 
-      {/* Tab Panels */}
-      {activeTab === 'overview' && <AdminOverview stats={stats} />}
+      {/* Dashboard View Sections */}
+      {activeTab === 'overview' && (
+        <AdminOverview
+          stats={stats}
+          tests={tests}
+          essays={essays}
+          onSelectTab={setActiveTab}
+          onOpenCreateModal={() => {
+            setAiContext('create')
+            setIsCreateModalOpen(true)
+          }}
+          onOpenAIModal={() => {
+            setAiContext('auto')
+            setIsAIModalOpen(true)
+          }}
+          onEditTest={(testId) => {
+            setEditingTestId(testId)
+          }}
+        />
+      )}
 
       {activeTab === 'tests' && (
         <TestManagement
@@ -258,6 +317,7 @@ export const AdminPage: React.FC = () => {
       {activeTab === 'subscriptions' && (
         <SubscriptionManagement tests={tests} isLoadingTests={loadingTests} />
       )}
+
 
       {/* Modals */}
       {isCreateModalOpen && (

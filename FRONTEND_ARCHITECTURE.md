@@ -202,5 +202,22 @@ Seluruh 8 temuan arsitektural dan technical debt frontend telah dieksekusi, diuj
 | 6 | [PricingPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/PricingPage.tsx) | Alur Checkout Terputus | ✅ Selesai | Mengintegrasikan tombol paket ke `PaymentModal` dengan auto-selection `season_pass` dan direct redirect ke simulasi pasca bayar. |
 | 7 | [mockData.ts](file:///home/sans/coding/quiz_app/frontend/src/services/mockData.ts) | Dead Code Asset (26.3 KB) | ✅ Selesai | Berkas lama berukuran 26.3 KB telah dihapus secara permanen dari basis kode. |
 | 8 | [payments.api.ts](file:///home/sans/coding/quiz_app/frontend/src/services/payments.api.ts) | Ketiadaan Idempotency Key | ✅ Selesai | Setiap pemanggilan `createInvoice` menyertakan header `Idempotency-Key` (UUIDv4) untuk menjamin exactly-once transaction. |
+| 9 | [AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx) & [AdminOverview.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/AdminOverview.tsx) | Flat Tabs & AI-Slop Telemetri Palsu | ✅ Selesai | Refaktor total menjadi Executive Cockpit Dashboard interaktif dengan metrik data riil, antrean esai prioritas, quick actions, dan navigasi segmented switcher ber-badge dinamis. |
+| 10 | [TestManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestManagement.tsx) & [EssayGradingView.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/EssayGradingView.tsx) | Inkonsistensi Paginasi & Debounce | ✅ Selesai | Menyatukan seluruh antarmuka admin menggunakan `useDebounce` dan komponen bersama [Pagination.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/Pagination.tsx) (Zero technical debt, native React 19). |
+
+---
+
+## 7. Pola Standardisasi Paginasi & Debouncing (Pencegahan Technical Debt)
+
+### Mengapa Zero-Dependency Custom Hook + Komponen Bersama?
+Dalam evaluasi arsitektur (Poin 4 & 5 User Request), penginstalan pustaka tabel/paginasi eksternal (seperti `rc-pagination`, `react-paginate`, atau data-grid pihak ketiga) membawa risiko tinggi:
+1. **Peer-Dependency Conflict**: Ketidaksesuaian dengan React 19 RC/final.
+2. **Bundle Bloat**: CSS bawaan pustaka eksternal merusak konsistensi token [style.md](file:///home/sans/coding/quiz_app/style.md).
+3. **Solusi TestHub**:
+   - [`useDebounce.ts`](file:///home/sans/coding/quiz_app/frontend/src/hooks/useDebounce.ts): Hook generik 250ms–600ms untuk menunda eksekusi filter input pencarian.
+   - [`usePagination.ts`](file:///home/sans/coding/quiz_app/frontend/src/hooks/usePagination.ts): Hook kalkulasi `startIndex`, `endIndex`, `totalPages`, dan boundary clamps.
+   - [`Pagination.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/Pagination.tsx): Komponen visual bersama dengan tombol *ellipsis*, selector ukuran per halaman (`pageSizeOptions`), angka `tabular-nums`, dan aksesibilitas `aria-label`.
+   - **Penerapan Terpadu**: Diimplementasikan secara konsisten di [TestManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestManagement.tsx), [EssayGradingView.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/EssayGradingView.tsx), dan [SubscriptionManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/SubscriptionManagement.tsx).
+
 
 

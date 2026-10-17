@@ -1,8 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { EssaySubmission } from '@/types'
-import { CheckCircle2, FileText, Send, Sparkles, Loader2, Award } from 'lucide-react'
+import { CheckCircle2, FileText, Send, Sparkles, Loader2, Award, Search, Filter, ChevronLeft } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
 import { adminApi } from '@/services/admin.api'
+import { useDebounce } from '@/hooks/useDebounce'
+import { Pagination } from '@/components/common/Pagination'
 
 interface EssayGradingViewProps {
   submissions: EssaySubmission[]
@@ -14,6 +16,17 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
   onGrade,
 }) => {
   const toast = useToast()
+  
+  // Search & Filter state
+  const [searchInput, setSearchInput] = useState('')
+  const debouncedSearch = useDebounce(searchInput, 250)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'graded'>('all')
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(6)
+
+  // Selection state
   const [selectedEssayId, setSelectedEssayId] = useState<string | null>(
     submissions.length > 0 ? submissions[0].id : null
   )
@@ -28,7 +41,47 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
     provider: string
   } | null>(null)
 
+  // Mobile detail view toggle
+  const [showMobileDetail, setShowMobileDetail] = useState(false)
+
+  // Filtered submissions
+  const filteredSubmissions = useMemo(() => {
+    return submissions.filter((essay) => {
+      // Status filter
+      if (statusFilter === 'pending' && essay.score !== undefined) return false
+      if (statusFilter === 'graded' && essay.score === undefined) return false
+
+      // Search filter
+      if (debouncedSearch.trim()) {
+        const query = debouncedSearch.toLowerCase()
+        const matchTitle = essay.test_title.toLowerCase().includes(query)
+        const matchQuestion = essay.question_text.toLowerCase().includes(query)
+        const matchAnswer = essay.user_answer_text.toLowerCase().includes(query)
+        if (!matchTitle && !matchQuestion && !matchAnswer) return false
+      }
+
+      return true
+    })
+  }, [submissions, debouncedSearch, statusFilter])
+
+  // Pagination calculation
+  const totalItems = filteredSubmissions.length
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
+  const safePage = Math.min(Math.max(1, currentPage), totalPages)
+  const startIndex = (safePage - 1) * pageSize
+  const paginatedSubmissions = filteredSubmissions.slice(startIndex, startIndex + pageSize)
+
   const selectedEssay = submissions.find((s) => s.id === selectedEssayId)
+
+  const handleSelectEssay = (essay: EssaySubmission) => {
+    setSelectedEssayId(essay.id)
+    setAiResult(null)
+    if (essay.score !== undefined) setScore(essay.score)
+    else setScore(85)
+    if (essay.admin_review_note) setNote(essay.admin_review_note)
+    else setNote('')
+    setShowMobileDetail(true)
+  }
 
   const handleGradeSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,57 +142,154 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
       {/* Submissions List (Left Col) */}
-      <div className="space-y-3">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-muted font-mono">
-          Antrean Pengumpulan Esai ({submissions.length})
-        </h4>
-
-        <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-          {submissions.map((essay) => {
-            const isSelected = essay.id === selectedEssayId
-            const isGraded = essay.score !== undefined
-
-            return (
-              <div
-                key={essay.id}
-                onClick={() => {
-                  setSelectedEssayId(essay.id)
-                  setAiResult(null)
-                  if (essay.score !== undefined) setScore(essay.score)
-                  if (essay.admin_review_note) setNote(essay.admin_review_note)
-                }}
-                className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                  isSelected
-                    ? 'border-accent bg-accent/10 shadow-xs'
-                    : 'border-borderline bg-surface hover:bg-surface-hover'
-                }`}
-              >
-                <div className="flex items-center justify-between text-[11px] font-mono text-ink-muted mb-1">
-                  <span>{new Date(essay.submitted_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
-                  {isGraded ? (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                      Dinilai: {essay.score}/100
-                    </span>
-                  ) : (
-                    <span className="text-amber-500 font-semibold">Pending Review</span>
-                  )}
-                </div>
-                <h5 className="text-xs font-semibold text-ink line-clamp-1">
-                  {essay.test_title}
-                </h5>
-                <p className="text-[11px] text-ink-muted line-clamp-2 mt-1">
-                  {essay.user_answer_text}
-                </p>
-              </div>
-            )
-          })}
+      <div className={`space-y-3 ${showMobileDetail ? 'hidden lg:block' : 'block'}`}>
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-muted font-mono">
+            Antrean Esai ({totalItems})
+          </h4>
         </div>
+
+        {/* Search & Filter Toolbar */}
+        <div className="space-y-2 bg-surface p-3 rounded-lg border border-borderline">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-ink-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value)
+                setCurrentPage(1)
+              }}
+              placeholder="Cari modul atau jawaban..."
+              className="w-full pl-8 pr-3 py-1.5 text-xs rounded-md border border-borderline bg-canvas text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('all')
+                setCurrentPage(1)
+              }}
+              className={`flex-1 py-1 px-2 text-[11px] rounded font-medium transition-colors ${
+                statusFilter === 'all'
+                  ? 'bg-accent text-white font-semibold'
+                  : 'bg-canvas text-ink-muted hover:text-ink border border-borderline'
+              }`}
+            >
+              Semua
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('pending')
+                setCurrentPage(1)
+              }}
+              className={`flex-1 py-1 px-2 text-[11px] rounded font-medium transition-colors ${
+                statusFilter === 'pending'
+                  ? 'bg-amber-500 text-white font-semibold'
+                  : 'bg-canvas text-ink-muted hover:text-ink border border-borderline'
+              }`}
+            >
+              Pending
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('graded')
+                setCurrentPage(1)
+              }}
+              className={`flex-1 py-1 px-2 text-[11px] rounded font-medium transition-colors ${
+                statusFilter === 'graded'
+                  ? 'bg-emerald-600 text-white font-semibold'
+                  : 'bg-canvas text-ink-muted hover:text-ink border border-borderline'
+              }`}
+            >
+              Dinilai
+            </button>
+          </div>
+        </div>
+
+        {/* Submissions Item List */}
+        <div className="space-y-2">
+          {paginatedSubmissions.length === 0 ? (
+            <div className="p-6 text-center text-xs text-ink-muted bg-surface border border-borderline rounded-lg">
+              Tidak ada jawaban esai yang cocok dengan filter pencarian.
+            </div>
+          ) : (
+            paginatedSubmissions.map((essay) => {
+              const isSelected = essay.id === selectedEssayId
+              const isGraded = essay.score !== undefined
+
+              return (
+                <div
+                  key={essay.id}
+                  onClick={() => handleSelectEssay(essay)}
+                  className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
+                    isSelected
+                      ? 'border-accent bg-accent/10 shadow-xs'
+                      : 'border-borderline bg-surface hover:bg-surface-hover'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-[11px] font-mono text-ink-muted mb-1">
+                    <span className="tabular-nums">
+                      {new Date(essay.submitted_at).toLocaleTimeString('id-ID', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                    {isGraded ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">
+                        Dinilai: {essay.score}/100
+                      </span>
+                    ) : (
+                      <span className="text-amber-500 font-semibold">Pending Review</span>
+                    )}
+                  </div>
+                  <h5 className="text-xs font-semibold text-ink line-clamp-1">
+                    {essay.test_title}
+                  </h5>
+                  <p className="text-[11px] text-ink-muted line-clamp-2 mt-1">
+                    {essay.user_answer_text}
+                  </p>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* Shared Pagination for submissions */}
+        {totalPages > 1 && (
+          <Pagination
+            currentPage={safePage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            pageSizeOptions={[6, 12, 24]}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize)
+              setCurrentPage(1)
+            }}
+            className="p-2 bg-surface border border-borderline rounded-lg"
+          />
+        )}
       </div>
 
       {/* Grading Workbench (Right Col) */}
-      <div className="md:col-span-2">
+      <div className={`lg:col-span-2 ${!showMobileDetail ? 'hidden lg:block' : 'block'}`}>
+        {/* Mobile Back Button */}
+        <button
+          onClick={() => setShowMobileDetail(false)}
+          className="lg:hidden inline-flex items-center space-x-1.5 text-xs text-ink-muted hover:text-ink mb-3 py-1 px-2 rounded border border-borderline bg-surface"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+          <span>Kembali ke Daftar Esai</span>
+        </button>
+
         {selectedEssay ? (
           <div className="p-6 rounded-lg bg-surface border border-borderline shadow-sm space-y-6">
             <div className="border-b border-borderline pb-4">
@@ -231,7 +381,7 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
               </div>
             )}
 
-            {/* Grading Form (US-103) */}
+            {/* Grading Form */}
             <form onSubmit={handleGradeSubmit} className="space-y-4 pt-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -313,3 +463,4 @@ export const EssayGradingView: React.FC<EssayGradingViewProps> = ({
     </div>
   )
 }
+
