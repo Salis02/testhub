@@ -19,7 +19,7 @@ interface AdminOverviewProps {
   stats: AdminStats
   tests: Test[]
   essays: EssaySubmission[]
-  onSelectTab: (tab: 'overview' | 'tests' | 'essays' | 'subscriptions') => void
+  onSelectTab: (tab: 'overview' | 'tests' | 'essays' | 'subscriptions' | 'users' | 'audit') => void
   onOpenCreateModal: () => void
   onOpenAIModal: () => void
   onEditTest: (testId: string) => void

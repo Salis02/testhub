@@ -8,15 +8,18 @@ import { AdminOverview } from '@/components/admin/AdminOverview'
 import { TestManagement } from '@/components/admin/TestManagement'
 import { EssayGradingView } from '@/components/admin/EssayGradingView'
 import { SubscriptionManagement } from '@/components/admin/SubscriptionManagement'
+import { UserManagement } from '@/components/admin/UserManagement'
+import { AuditLogView } from '@/components/admin/AuditLogView'
 import { TestCreatorModal } from '@/components/admin/TestCreatorModal'
 import { TestEditorModal } from '@/components/admin/TestEditorModal'
 import { AIAssistantModal } from '@/components/admin/AIAssistantModal'
 import { TestAnalyticsModal } from '@/components/admin/TestAnalyticsModal'
 import { AdminOverviewSkeleton } from '@/components/common/Skeleton'
-import { LayoutDashboard, FileSpreadsheet, FileEdit, Sparkles, Plus, CreditCard } from 'lucide-react'
+import { LayoutDashboard, FileSpreadsheet, FileEdit, Sparkles, Plus, CreditCard, Users, FileClock } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
 
-type TabType = 'overview' | 'tests' | 'essays' | 'subscriptions'
+type TabType = 'overview' | 'tests' | 'essays' | 'subscriptions' | 'users' | 'audit'
+
 
 
 export const AdminPage: React.FC = () => {
@@ -259,6 +262,30 @@ export const AdminPage: React.FC = () => {
             <CreditCard className="w-3.5 h-3.5" />
             <span>Paket Langganan</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+              activeTab === 'users'
+                ? 'bg-canvas text-accent shadow-xs font-semibold border border-borderline'
+                : 'text-ink-muted hover:text-ink'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Pengguna & Akun</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('audit')}
+            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+              activeTab === 'audit'
+                ? 'bg-canvas text-accent shadow-xs font-semibold border border-borderline'
+                : 'text-ink-muted hover:text-ink'
+            }`}
+          >
+            <FileClock className="w-3.5 h-3.5" />
+            <span>Jejak Audit</span>
+          </button>
         </div>
 
         {activeTab !== 'overview' && (
@@ -277,7 +304,7 @@ export const AdminPage: React.FC = () => {
           stats={stats}
           tests={tests}
           essays={essays}
-          onSelectTab={setActiveTab}
+          onSelectTab={(tab) => setActiveTab(tab as TabType)}
           onOpenCreateModal={() => {
             setAiContext('create')
             setIsCreateModalOpen(true)
@@ -318,10 +345,18 @@ export const AdminPage: React.FC = () => {
         <SubscriptionManagement tests={tests} isLoadingTests={loadingTests} />
       )}
 
+      {activeTab === 'users' && (
+        <UserManagement />
+      )}
+
+      {activeTab === 'audit' && (
+        <AuditLogView />
+      )}
 
       {/* Modals */}
       {isCreateModalOpen && (
         <TestCreatorModal
+
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}
           onSubmit={handleCreateTest}

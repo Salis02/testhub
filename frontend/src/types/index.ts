@@ -125,6 +125,33 @@ export interface User {
   is_active?: boolean
 }
 
+export interface UserListItem {
+  id: string
+  email: string
+  full_name: string
+  role: 'admin' | 'creator' | 'user'
+  subscription_tier: string
+  subscription_expires_at?: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface UserListResponse {
+  users: UserListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface UpdateUserRoleDTO {
+  role: 'admin' | 'creator' | 'user'
+}
+
+export interface UpdateUserStatusDTO {
+  is_active: boolean
+}
+
 export interface AuthResponse {
   user_id: string
   email: string
@@ -134,6 +161,7 @@ export interface AuthResponse {
   refresh_token?: string
   user?: User
 }
+
 
 export type SubscriptionStatus = 'active' | 'suspended' | 'revoked'
 export type SubscriptionTier = 'per_test' | 'season_pass' | 'monthly_subscription' | 'lifetime' | 'institution'

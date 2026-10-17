@@ -198,5 +198,40 @@ export const adminApi = {
     const query = searchParams.toString()
     return apiClient<import('@/types').AdminAuditLog[]>(`/admin/audit-logs${query ? `?${query}` : ''}`, { signal })
   },
+
+  async listUsers(
+    params?: { search?: string; role?: string; status?: string; limit?: number; offset?: number },
+    signal?: AbortSignal
+  ): Promise<import('@/types').UserListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params?.search) searchParams.set('search', params.search)
+    if (params?.role) searchParams.set('role', params.role)
+    if (params?.status) searchParams.set('status', params.status)
+    if (params?.limit) searchParams.set('limit', String(params.limit))
+    if (params?.offset) searchParams.set('offset', String(params.offset))
+    const query = searchParams.toString()
+    return apiClient<import('@/types').UserListResponse>(`/admin/users${query ? `?${query}` : ''}`, { signal })
+  },
+
+  async toggleUserStatus(
+    userId: string,
+    isActive: boolean
+  ): Promise<{ success: boolean; is_active: boolean }> {
+    return apiClient<{ success: boolean; is_active: boolean }>(`/admin/users/${userId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: isActive }),
+    })
+  },
+
+  async updateUserRole(
+    userId: string,
+    role: 'admin' | 'creator' | 'user'
+  ): Promise<{ success: boolean }> {
+    return apiClient<{ success: boolean }>(`/admin/users/${userId}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    })
+  },
 }
+
 

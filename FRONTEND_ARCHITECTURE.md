@@ -204,6 +204,9 @@ Seluruh 8 temuan arsitektural dan technical debt frontend telah dieksekusi, diuj
 | 8 | [payments.api.ts](file:///home/sans/coding/quiz_app/frontend/src/services/payments.api.ts) | Ketiadaan Idempotency Key | ✅ Selesai | Setiap pemanggilan `createInvoice` menyertakan header `Idempotency-Key` (UUIDv4) untuk menjamin exactly-once transaction. |
 | 9 | [AdminPage.tsx](file:///home/sans/coding/quiz_app/frontend/src/pages/AdminPage.tsx) & [AdminOverview.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/AdminOverview.tsx) | Flat Tabs & AI-Slop Telemetri Palsu | ✅ Selesai | Refaktor total menjadi Executive Cockpit Dashboard interaktif dengan metrik data riil, antrean esai prioritas, quick actions, dan navigasi segmented switcher ber-badge dinamis. |
 | 10 | [TestManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestManagement.tsx) & [EssayGradingView.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/EssayGradingView.tsx) | Inkonsistensi Paginasi & Debounce | ✅ Selesai | Menyatukan seluruh antarmuka admin menggunakan `useDebounce` dan komponen bersama [Pagination.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/common/Pagination.tsx) (Zero technical debt, native React 19). |
+| 11 | [UserManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/UserManagement.tsx) & [admin.api.ts](file:///home/sans/coding/quiz_app/frontend/src/services/admin.api.ts) | Ketiadaan Klien API & UI Manajemen Pengguna | ✅ Selesai | Mengimplementasikan klien API (`listUsers`, `toggleUserStatus`, `updateUserRole`) serta antarmuka admin pengguna interaktif dengan TanStack Query, filter role, filter status, debounced search, dan paginasi. |
+| 12 | [AuditLogView.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/AuditLogView.tsx) & [admin.api.ts](file:///home/sans/coding/quiz_app/frontend/src/services/admin.api.ts) | Ketiadaan Antarmuka Jejak Audit Keamanan | ✅ Selesai | Mengimplementasikan viewer jejak audit komprehensif (`getAuditLogs`) dengan TanStack Query, filter resource entitas, debounced search, badge aksi dinamis, detail diff lama vs baru, dan paginasi. |
+
 
 ---
 
@@ -217,7 +220,8 @@ Dalam evaluasi arsitektur (Poin 4 & 5 User Request), penginstalan pustaka tabel/
    - [`useDebounce.ts`](file:///home/sans/coding/quiz_app/frontend/src/hooks/useDebounce.ts): Hook generik 250ms–600ms untuk menunda eksekusi filter input pencarian.
    - [`usePagination.ts`](file:///home/sans/coding/quiz_app/frontend/src/hooks/usePagination.ts): Hook kalkulasi `startIndex`, `endIndex`, `totalPages`, dan boundary clamps.
    - [`Pagination.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/Pagination.tsx): Komponen visual bersama dengan tombol *ellipsis*, selector ukuran per halaman (`pageSizeOptions`), angka `tabular-nums`, dan aksesibilitas `aria-label`.
-   - **Penerapan Terpadu**: Diimplementasikan secara konsisten di [TestManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestManagement.tsx), [EssayGradingView.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/EssayGradingView.tsx), dan [SubscriptionManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/SubscriptionManagement.tsx).
+   - **Penerapan Terpadu**: Diimplementasikan secara konsisten di [TestManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestManagement.tsx), [EssayGradingView.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/EssayGradingView.tsx), [SubscriptionManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/SubscriptionManagement.tsx), dan [UserManagement.tsx](file:///home/sans/coding/quiz_app/frontend/src/components/admin/UserManagement.tsx).
+
 
 
 
