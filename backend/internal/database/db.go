@@ -22,12 +22,12 @@ func New(cfg *config.Config) (*DB, error) {
 	var dsn string
 	if cfg.DBPassword != "" {
 		dsn = fmt.Sprintf(
-			"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s timezone=Asia/Jakarta",
 			cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBSSLMode,
 		)
 	} else {
 		dsn = fmt.Sprintf(
-			"host=%s port=%d user=%s dbname=%s sslmode=%s",
+			"host=%s port=%d user=%s dbname=%s sslmode=%s timezone=Asia/Jakarta",
 			cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBName, cfg.DBSSLMode,
 		)
 	}

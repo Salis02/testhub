@@ -451,5 +451,25 @@ func (r *PostgresTestRepository) GetAuditLogs(ctx context.Context, limit, offset
 	if logs == nil {
 		logs = []models.AdminAuditLog{}
 	}
+
+	loc, errLoc := time.LoadLocation("Asia/Jakarta")
+	if errLoc == nil {
+		for i := range logs {
+			t := logs[i].CreatedAt
+			// If timestamp was stored as local wall-clock in PostgreSQL (TIMESTAMP WITHOUT TIME ZONE),
+			// lib/pq reads it as UTC. Reconstruct it with the correct Asia/Jakarta location so
+			// JSON serialization produces the correct +07:00 offset rather than shifting +7 hours in browsers.
+			if t.Location() == time.UTC {
+				logs[i].CreatedAt = time.Date(
+					t.Year(), t.Month(), t.Day(),
+					t.Hour(), t.Minute(), t.Second(), t.Nanosecond(),
+					loc,
+				)
+			} else {
+				logs[i].CreatedAt = t.In(loc)
+			}
+		}
+	}
+
 	return logs, nil
 }
