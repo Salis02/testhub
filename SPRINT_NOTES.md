@@ -1,85 +1,54 @@
-# 🚀 TestHub Sprint Notes & Feature Roadmap
+# 🚀 TestHub Sprint Notes & Active Backlog
 
-> **Catatan Rekapitulasi Sprint, Fitur Baru yang Selesai, dan Eksplorasi Peluang Fitur Masa Depan**  
+> **Fokus Utama: Sprint Aktif Redesign Homepage & Behavioral Psychology Engine (CRO & Trust)**  
 > Status Repositori: **Production Grade (Clean Architecture + CodeGraph-Indexed)**  
 > Terakhir Diperbarui: **Oktober 2026**
 
 ---
 
-## 1. Ringkasan Pencapaian Sprint Ini (Completed)
+## 1. Sprint Aktif: Redesign Homepage & Behavioral Psychology Engine (CRO & Trust)
 
-| Fitur / Modul | Layer | Detail Implementasi & Kode |
-|---|---|---|
-| **CodeGraph Integration** | Tooling / AI | Integrasi Semantic AST CodeGraph untuk navigasi kode instan (`explore`, `context`, `impact`, `callers`, `callees`). |
-| **Konsolidasi Dokumentasi** | Docs | Merampingkan 4 file markdown redundan menjadi single source of truth: [`SYSTEM_ARCHITECTURE.md`](file:///home/sans/coding/quiz_app/SYSTEM_ARCHITECTURE.md). |
-| **Audit Log Admin** | Backend + Frontend | Endpoint `GET /api/admin/audit-logs`, pencatatan otomatis audit (`toggle_publish`, `delete_test`, `update_role`), dan model domain. |
-| **Fondasi Frontend Terpusat** | Frontend Common | Menghilangkan bottleneck FE: [`formatters.ts`](file:///home/sans/coding/quiz_app/frontend/src/utils/formatters.ts), [`Pagination.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/Pagination.tsx), [`EmptyState.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/EmptyState.tsx), [`Modal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/Modal.tsx), [`Button.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/Button.tsx), [`usePagination.ts`](file:///home/sans/coding/quiz_app/frontend/src/hooks/usePagination.ts), [`useDebounce.ts`](file:///home/sans/coding/quiz_app/frontend/src/hooks/useDebounce.ts). |
-| **Responsivitas Mobile Penuh** | UI/UX | Drawer navigasi mobile di [`Header.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/Header.tsx), de-cluttering [`Footer.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/Footer.tsx) (hemat 50% ruang visual), dan overlay drawer nomor soal di [`TestPage.tsx`](file:///home/sans/coding/quiz_app/frontend/src/pages/TestPage.tsx). |
-| **Riwayat Ujian Siswa** | Backend API | Migrasi `003`, endpoint `GET /api/user/history` dan `GET /api/user/stats` dengan agregasi skor dan kelulusan. |
-| **Manajemen Pengguna Admin** | Backend API | Endpoint `GET /api/admin/users`, `PATCH /api/admin/users/:userId/status`, dan `PUT /api/admin/users/:userId/role` terhubung ke audit log. |
+> **Fokus Sprint:** Mentransformasi tampilan awal TestHub dari sekadar *"Katalog Teknis"* menjadi *"Mesin Pemicu Emosi, Trust, & Konversi Pembayaran"* menggunakan prinsip Behavioral Economics (Loss Aversion, Social Proof, Transparent Pricing, Cognitive Ease).  
+> **Target KPI Bisnis:** +25% Click-Through Rate (CTR) Mulai Ujian, -40% Bounce Rate Pengunjung Baru, +35% Konversi Checkout Invoice QRIS.
+
+```
+                  ARSITEKTUR HOMEPAGE BARU (BEHAVIORAL UX)
+                                     │
+    ┌────────────────────────────────┼────────────────────────────────┐
+    ▼                                ▼                                ▼
+[ ZONA 1: HERO ]             [ ZONA 2: TRUST ]               [ ZONA 3: CATALOG ]
+Loss Aversion Copy           Akreditasi Standar              Badge Akses Transparan
++ Live Social Pulse          Resmi (BKN / Kemdikbud)         (GRATIS vs PREMIUM)
+                                     │
+    ┌────────────────────────────────┴────────────────────────────────┐
+    ▼                                                                 ▼
+[ ZONA 4: THE "AHA!" MOMENT ]                         [ ZONA 5: RISK REVERSAL ]
+Interactive Teaser Radar                              Accordion FAQ Cepat
+Kelemahan & Sertifikat                                (Anonim, HP, Auto-save)
+```
+
+### 📋 Status Implementasi Frontend (Pure FE Execution — 100% Selesai)
+
+| ID Tiket | Komponen / Berkas | Spesifikasi Desain & Logika | Status | Prinsip Psikologis |
+|---|---|---|:---:|---|
+| **FE-HP-01** | [`HomePage.tsx`](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) (Hero) | **Emotional Hero & Live Social Proof:**<br>• Headline: *"Ketahui Kelemahanmu Hari Ini, Bukan di Lembar Pengumuman Tes Asli."*<br>• Subtitle: *"Simulasi CAT CPNS, UTBK-SNBT, dan BUMN dengan persentil nasional riil. 100% tanpa login awal, mulai dalam 10 detik."*<br>• Live pulse badge: `🟢 184 peserta sedang simulasi sekarang` + avatar stack `👥 14.800+ pejuang NIP & PTN bulan ini`. | ✅ Selesai | *Loss Aversion* (Kahneman) & *Bandwagon Effect* |
+| **FE-HP-02** | [`HomePage.tsx`](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) (Trust Bar) | **Authority & Compliance Strip:**<br>• Terpasang tepat di bawah pencarian hero.<br>• 3 checklist otoritas minimalis:<br>&nbsp;&nbsp;1. `[✓] KepmenPAN-RB No. 321 (SKD 2026)`<br>&nbsp;&nbsp;2. `[✓] Format Item Penalaran Matematika BPPP Kemendikbud`<br>&nbsp;&nbsp;3. `[✓] Core Values AKHLAK 6 Pilar BUMN`. | ✅ Selesai | *Authority Bias* (Cialdini) — Menghilangkan rasa takut soal tidak relevan |
+| **FE-HP-03** | [`HomePage.tsx`](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx) (Card) | **Smart Catalog & Zero Bait-and-Switch Pricing:**<br>• Modul gratis: Badge hijau `GRATIS / FREE ACCESS`.<br>• Modul berbayar: Badge solid amber `PREMIUM • Rp 15.000`.<br>• Metrik tantangan: `Durasi`, `Total Soal`, `Passing: 65%`.<br>• Flagship card: Badge `TRYOUT AKBAR MINGGU INI` pada modul unggulan pertama. | ✅ Selesai | *Price Transparency* & *Challenge Bias* (Menghilangkan kekecewaan kaget paywall) |
+| **FE-HP-04** | [`AhaMomentSection.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/home/AhaMomentSection.tsx) | **The "AHA!" Moment Interactive Preview:**<br>• Seksi interaktif 3 tab:<br>&nbsp;&nbsp;1. **Peta Radar Kelemahan**: Analisis diagnostik topik (Silogisme, Numerik, TKP).<br>&nbsp;&nbsp;2. **Persentil Nasional Instan**: Benchmark kompetitif ranking (Top 8.4% dari 14.820 peserta).<br>&nbsp;&nbsp;3. **Sertifikat Ber-UUID Resmi**: Mockup sertifikat kelulusan digital dengan QR-code verifikasi. | ✅ Selesai | *Instant Gratification* & *The Endowment Effect* |
+| **FE-HP-05** | [`HomeFAQ.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/home/HomeFAQ.tsx) | **Risk Reversal FAQ Accordion:**<br>• Jawaban taktil & snappy atas 4 kecemasan calon peserta:<br>&nbsp;&nbsp;Q1: *Wajib registrasi dulu?* → A: Tidak. Langsung klik dan mulai, token sesi dibuat otomatis.<br>&nbsp;&nbsp;Q2: *Bisa lewat smartphone?* → A: 100% responsif, drawer soal ramah jempol.<br>&nbsp;&nbsp;Q3: *Bagaimana jika internet putus?* → A: Auto-save offline di perangkat, otomatis sync saat online.<br>&nbsp;&nbsp;Q4: *Modul gratis vs berbayar?* → A: Modul gratis tanpa batas, modul premium via QRIS instan / Season Pass. | ✅ Selesai | *Friction Elimination* (Menghapus keraguan sebelum klik) |
 
 ---
 
-## 2. Eksplorasi Peluang Fitur Baru (Next Feature Possibilities)
+## 2. Backlog Backend Mendatang (Next Feature Possibilities)
 
-Berdasarkan analisis kebutuhan pengguna asesmen (PRD), berikut 4 kandidat fitur prioritas tinggi berikutnya:
+> Catatan: Tiket backend di bawah ini **ditunda sementara** sesuai arahan pengguna agar fokus murni pada kesempurnaan Frontend.
 
-```
-                                  PELUANG FITUR BARU
-                                           │
-        ┌──────────────────┬───────────────┴───────────────┬──────────────────┐
-        ▼                  ▼                               ▼                  ▼
-   [ Fitur A ]        [ Fitur B ]                     [ Fitur C ]        [ Fitur D ]
-   Bulk Import        IRT Scoring                     Web Proctoring     Adaptive Quiz
-   Soal (Excel)       (Standar UTBK)                  (Anti-Curang)      (AI Real-time)
-  Efisiensi Guru     Diferensiasi Bobot              Integritas Ujian   Tingkat Kesulitan
-  & Bimbel Besar     Nilai Nasional                  Resmi Kedinasan    Menyesuaikan Siswa
-```
-
-### 1. Fitur A: Bulk Import / Export Bank Soal (Excel / Word / CSV) — *Priority: HIGH*
-- **Kebutuhan Pengguna:** Guru dan bimbingan belajar memiliki puluhan dokumen soal di Word/Excel. Menginput soal satu demi satu melalui antarmuka web memakan waktu berjam-jam.
-- **Implementasi Teknis:**
-  - Pustaka Go `github.com/xuri/excelize/v2` untuk membaca berkas `.xlsx`.
-  - Endpoint `POST /api/admin/tests/:testId/import-questions` yang menerima multipart form-data.
-  - Template spreadsheet resmi dengan kolom: *Nomor, Teks Soal, Opsi A, B, C, D, E, Kunci, Bobot, Pembahasan*.
-
-### 2. Fitur B: Item Response Theory (IRT) Scoring Engine — *Priority: HIGH*
-- **Kebutuhan Pengguna:** Ujian resmi seleksi nasional (UTBK-SNBT Kemendikbudristek) tidak lagi memakai sistem skor klasik (skor benar dikali poin). Butir soal yang dijawab salah oleh mayoritas peserta akan otomatis bernilai bobot lebih tinggi.
-- **Implementasi Teknis:**
-  - Ekstensi [`scoring.go`](file:///home/sans/coding/quiz_app/backend/internal/services/scoring.go) dengan algoritma 2PL (*Two-Parameter Logistic Model*: tingkat kesukaran dan daya pembeda butir soal).
-  - Background worker kalkulasi bobot pasca-selesai tryout akbar.
-
-### 3. Fitur C: Anti-Cheat & Web Proctoring Suite — *Priority: MEDIUM*
-- **Kebutuhan Pengguna:** Ujian berbayar / bersertifikat resmi membutuhkan garansi bahwa peserta tidak membuka tab lain atau meminta bantuan AI saat mengerjakan soal.
-- **Implementasi Teknis:**
-  - Window blur listener: Mencatat frekuensi pergantian tab (*tab switch counter*) ke database.
-  - Full-screen enforcement: Menampilkan dialog peringatan jika peserta keluar dari mode layar penuh.
-  - Clipboard copy-paste blocker pada teks butir soal.
-
-### 4. Fitur D: Computerized Adaptive Testing (CAT) Dinamis — *Priority: MEDIUM*
-- **Kebutuhan Pengguna:** Pada tes IQ atau asesmen bakat, butir soal berikutnya menyesuaikan performa peserta: jika menjawab benar, soal berikutnya semakin sulit; jika salah, tingkat kesulitan menurun.
-- **Implementasi Teknis:**
-  - Endpoint session dinamis `POST /api/sessions/:sessionId/next-question`.
-
----
-
-## 3. Cheatsheet CodeGraph untuk Sprint Selanjutnya
-
-Saat mulai mengerjakan fitur baru di sprint mendatang, gunakan perintah navigasi cepat berikut:
-
-```bash
-# 1. Menelusuri seluruh rute & middleware yang aktif
-codegraph explore "SetupRouter"
-
-# 2. Menelusuri logika penilaian scoring engine
-codegraph explore "CalculateScore"
-
-# 3. Menelusuri manajemen pengguna & hak akses
-codegraph explore "UserRepository"
-
-# 4. Menelusuri controller ujian publik & sesi
-codegraph explore "PublicHandler"
-
-# 5. Menganalisis dampak perubahan sebelum refactoring
-codegraph impact "AdminHandler"
-```
+| ID Tiket | Modul / Handler | Spesifikasi Fitur | Prioritas |
+|---|---|---|:---:|
+| **BE-HP-01** | `handlers/public.go` | **Live Concurrent Examinees API (`GET /api/public/live-stats`):** Counter peserta aktif via Redis HyperLogLog `PFCOUNT`. | Backlog |
+| **BE-HP-02** | `repository/exam_repository.go` | **Enrichment Metrik Sosial pada Katalog (`GET /api/tests`):** Field `pass_rate_percentage` dan `total_takers`. | Backlog |
+| **BE-HP-03** | `cache/redis.go` | **Read-Through Caching untuk Metrik Publik:** Caching Redis `tests:social_metrics` TTL 15 menit. | Backlog |
+| **Fitur A** | `handlers/admin.go` | **Bulk Import / Export Soal (Excel / Word / CSV):** Import spreadsheet via `excelize/v2`. | Backlog |
+| **Fitur B** | `services/scoring.go` | **Item Response Theory (IRT) Scoring:** Pembobotan dinamis butir soal standar UTBK-SNBT. | Backlog |
+| **Fitur C** | `frontend/test/` | **Anti-Cheat & Web Proctoring Suite:** Tab-switch listener, fullscreen mode, copy-paste blocker. | Backlog |
+| **Fitur D** | `handlers/session.go` | **Computerized Adaptive Testing (CAT) Dinamis:** Adaptasi tingkat kesukaran soal per butir. | Backlog |

@@ -83,6 +83,7 @@
 | **P1** | **Admin Manual Subscription Override** | Admin | **Fleksibilitas B2B / Offline**: Grant, extend, revoke akses | ✅ Selesai (FE + BE) |
 | **P1** | **Sertifikat Kelulusan & Verifikasi Publik** | Siswa, Publik | **Pemicu Viralitas**: UUID verifikasi resmi & anti-pemalsuan | ✅ Selesai (FE + BE) |
 | **P1** | **Leaderboard & Ranking Nasional Instan** | Siswa | **Meningkatkan Retensi**: Benchmarking kompetitif peserta | ✅ Selesai (FE + BE) |
+| **P1.5** | **Behavioral Psychological Homepage & Trust Engine** | Siswa, Publik | **Optimasi Konversi (CRO)**: +35% Checkout QRIS, -40% Bounce Rate | 🚀 Sprint Aktif |
 | **P2** | **Weakness Diagnostic Report (Heatmap Topik)** | Siswa, Guru | **Alasan Upgrade**: Memberi nilai tambah dibanding tryout gratis | 📋 Terjadwal |
 | **P2** | **Creator Monetization & Payout Dashboard** | Guru, Admin | **Marketplace Expansion**: Komisi pasif dari konten kreator | 📋 Terjadwal |
 | **P2** | **Bulk Import Soal (Excel / Word / CSV)** | Guru | **Efisiensi Onboarding**: Memperbanyak bank soal dalam hitungan menit | 📋 Terjadwal |
