@@ -14,6 +14,8 @@
 | [FRONTEND_ARCHITECTURE.md](file:///home/sans/coding/quiz_app/FRONTEND_ARCHITECTURE.md) | **Arsitektur Frontend:** Standar React 19, TanStack Query v5, Zustand v5, Zod validation, dan UI components. |
 | [style.md](file:///home/sans/coding/quiz_app/style.md) | **Design System:** Strict Tri-Color palette per mode, tipografi tabular, CSS variables, dan standar UX ujian. |
 | [SPRINT_NOTES.md](file:///home/sans/coding/quiz_app/SPRINT_NOTES.md) | **Sprint & Roadmap:** Rekap fitur selesai, rencana sprint, dan peluang fitur baru bernilai tinggi. |
+| [HANDOVER_NOTES.md](file:///home/sans/coding/quiz_app/HANDOVER_NOTES.md) | **Transisi Sesi & Konteks AI:** Rangkuman status sistem terkini, arsitektur, dan panduan kelanjutan sesi baru. |
+
 
 ---
 
