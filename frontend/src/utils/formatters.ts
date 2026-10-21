@@ -6,13 +6,13 @@
  * Format number to Indonesian Rupiah (IDR)
  * Example: 25000 -> "Rp 25.000"
  */
-export function formatRupiah(amount: number): string {
+export function formatRupiah(amount?: number | null): string {
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount)
+  }).format(amount ?? 0)
 }
 
 /**
@@ -21,7 +21,7 @@ export function formatRupiah(amount: number): string {
  */
 export function formatDuration(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return '00:00'
-  
+
   const hrs = Math.floor(seconds / 3600)
   const mins = Math.floor((seconds % 3600) / 60)
   const secs = Math.floor(seconds % 60)
@@ -50,10 +50,10 @@ export function formatDate(
     year: 'numeric',
     ...(includeTime
       ? {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-        }
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }
       : {}),
   }).format(date)
 }

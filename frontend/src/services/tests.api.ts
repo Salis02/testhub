@@ -1,7 +1,11 @@
 import { apiClient } from './client'
-import { Test, LeaderboardResponse } from '@/types'
+import { Test, LeaderboardResponse, PublicStats } from '@/types'
 
 export const testsApi = {
+  async getPublicStats(signal?: AbortSignal): Promise<PublicStats> {
+    return apiClient<PublicStats>('/public/stats', { signal })
+  },
+
   async listTests(category?: string, query?: string, signal?: AbortSignal): Promise<Test[]> {
     const params = new URLSearchParams()
     if (category && category !== 'all') params.set('category', category)

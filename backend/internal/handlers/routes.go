@@ -84,6 +84,13 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			auth.GET("/me", middleware.AuthRequired(cfg.JWTSecret), authHandler.Me) // Backward-compatible alias
 		}
 
+		// Public System Live Stats & Social Proof (FE-HP-01, BE-HP-01)
+		public := api.Group("/public")
+		{
+			public.GET("/stats", publicHandler.GetPublicStats)
+			public.GET("/live-stats", publicHandler.GetPublicStats)
+		}
+
 		// Public Test Discovery & Leaderboard
 		tests := api.Group("/tests")
 		{

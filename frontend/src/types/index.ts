@@ -35,11 +35,21 @@ export interface Test {
   passing_score_percentage: number
   total_questions: number
   price_idr?: number
+  total_takers?: number
+  pass_rate_percentage?: number
+  is_flagship?: boolean
   shuffle_questions?: boolean
   shuffle_answers?: boolean
   published: boolean
   created_at: string
   updated_at: string
+}
+
+export interface PublicStats {
+  active_examinees: number
+  monthly_examinees: number
+  total_examinees: number
+  total_tests: number
 }
 
 export interface TestSession {

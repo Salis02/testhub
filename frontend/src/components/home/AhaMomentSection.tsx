@@ -12,7 +12,11 @@ import {
   Sparkles,
 } from 'lucide-react'
 
-export const AhaMomentSection: React.FC = () => {
+interface AhaMomentSectionProps {
+  totalExaminees?: number
+}
+
+export const AhaMomentSection: React.FC<AhaMomentSectionProps> = ({ totalExaminees }) => {
   const [activeTab, setActiveTab] = useState<'radar' | 'percentile' | 'certificate'>('radar')
 
   return (
@@ -197,7 +201,17 @@ export const AhaMomentSection: React.FC = () => {
                     428 <span className="text-base text-ink-muted font-normal font-sans">/ 550</span>
                   </div>
                   <p className="text-xs text-ink-muted">
-                    Lebih unggul dari <strong className="text-ink">13.570</strong> dari total 14.820 peserta simulasi aktif
+                    Lebih unggul dari{' '}
+                    <strong className="text-ink">
+                      {totalExaminees && totalExaminees > 0
+                        ? Math.max(1, Math.floor(totalExaminees * 0.916)).toLocaleString('id-ID')
+                        : '13.570'}
+                    </strong>{' '}
+                    dari total{' '}
+                    {totalExaminees && totalExaminees > 0
+                      ? totalExaminees.toLocaleString('id-ID')
+                      : '14.820'}{' '}
+                    peserta simulasi aktif
                   </p>
                 </div>
 

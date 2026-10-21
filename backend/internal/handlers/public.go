@@ -401,3 +401,28 @@ func (h *PublicHandler) VerifyCertificate(c *gin.Context) {
 		"issuer":                   cert.Issuer,
 	})
 }
+
+// GetPublicStats handles GET /api/public/stats and GET /api/public/live-stats (FE-HP-01, BE-HP-01)
+func (h *PublicHandler) GetPublicStats(c *gin.Context) {
+	cacheKey := "public:stats"
+	if h.cache != nil {
+		var cached models.PublicStats
+		if err := h.cache.Get(cacheKey, &cached); err == nil {
+			c.JSON(http.StatusOK, cached)
+			return
+		}
+	}
+
+	stats, err := h.examRepo.GetPublicStats(c.Request.Context())
+	if err != nil {
+		log.Printf("[PublicHandler.GetPublicStats] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil statistik publik"})
+		return
+	}
+
+	if h.cache != nil {
+		_ = h.cache.Set(cacheKey, stats, 30*time.Second) // 30s TTL
+	}
+
+	c.JSON(http.StatusOK, stats)
+}

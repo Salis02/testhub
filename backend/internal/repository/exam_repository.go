@@ -94,6 +94,7 @@ type ExamRepository interface {
 	GetCertificate(ctx context.Context, resultID string) (*models.CertificateData, error)
 	GetUserExamHistory(ctx context.Context, userID string, limit, offset int) ([]models.UserExamHistoryItem, int, error)
 	GetUserExamStats(ctx context.Context, userID string) (*models.UserExamStats, error)
+	GetPublicStats(ctx context.Context) (*models.PublicStats, error)
 }
 
 type PostgresExamRepository struct {
@@ -104,25 +105,41 @@ func NewPostgresExamRepository(db *database.DB) *PostgresExamRepository {
 	return &PostgresExamRepository{db: db}
 }
 
-// ListPublicTests retrieves active and published tests with optional category and search filters
+// ListPublicTests retrieves active and published tests enriched with real social metrics (total_takers, pass_rate, flagship badge)
 func (r *PostgresExamRepository) ListPublicTests(ctx context.Context, category string, query string) ([]models.Test, error) {
-	sqlQuery := "SELECT * FROM tests WHERE is_deleted = false AND published = true"
+	sqlQuery := `
+		SELECT 
+			t.*,
+			COALESCE(stats.total_takers, 0) as total_takers,
+			COALESCE(stats.pass_rate, 0) as pass_rate_percentage,
+			CASE WHEN ROW_NUMBER() OVER(ORDER BY COALESCE(stats.total_takers, 0) DESC, t.created_at DESC) = 1 THEN true ELSE false END as is_flagship
+		FROM tests t
+		LEFT JOIN (
+			SELECT 
+				test_id,
+				COUNT(*) as total_takers,
+				ROUND(AVG(CASE WHEN passing = true THEN 100.0 ELSE 0.0 END)) as pass_rate
+			FROM test_results
+			GROUP BY test_id
+		) stats ON stats.test_id = t.id
+		WHERE t.is_deleted = false AND t.published = true
+	`
 	var args []interface{}
 	argIdx := 1
 
 	if category != "" && category != "all" {
-		sqlQuery += fmt.Sprintf(" AND category = $%d", argIdx)
+		sqlQuery += fmt.Sprintf(" AND t.category = $%d", argIdx)
 		args = append(args, category)
 		argIdx++
 	}
 
 	if query != "" {
-		sqlQuery += fmt.Sprintf(" AND (LOWER(title) LIKE $%d OR LOWER(description) LIKE $%d)", argIdx, argIdx)
+		sqlQuery += fmt.Sprintf(" AND (LOWER(t.title) LIKE $%d OR LOWER(t.description) LIKE $%d)", argIdx, argIdx)
 		args = append(args, "%"+strings.ToLower(query)+"%")
 		argIdx++
 	}
 
-	sqlQuery += " ORDER BY created_at DESC"
+	sqlQuery += " ORDER BY t.created_at DESC"
 
 	var tests []models.Test
 	err := r.db.SelectContext(ctx, &tests, sqlQuery, args...)
@@ -136,10 +153,28 @@ func (r *PostgresExamRepository) ListPublicTests(ctx context.Context, category s
 	return tests, nil
 }
 
-// GetPublicTest retrieves a published test by ID
+// GetPublicTest retrieves a published test by ID with social statistics
 func (r *PostgresExamRepository) GetPublicTest(ctx context.Context, testID string) (*models.Test, error) {
+	sqlQuery := `
+		SELECT 
+			t.*,
+			COALESCE(stats.total_takers, 0) as total_takers,
+			COALESCE(stats.pass_rate, 0) as pass_rate_percentage,
+			false as is_flagship
+		FROM tests t
+		LEFT JOIN (
+			SELECT 
+				test_id,
+				COUNT(*) as total_takers,
+				ROUND(AVG(CASE WHEN passing = true THEN 100.0 ELSE 0.0 END)) as pass_rate
+			FROM test_results
+			WHERE test_id = $1
+			GROUP BY test_id
+		) stats ON stats.test_id = t.id
+		WHERE t.id = $1 AND t.is_deleted = false AND t.published = true
+	`
 	var test models.Test
-	err := r.db.GetContext(ctx, &test, "SELECT * FROM tests WHERE id = $1 AND is_deleted = false AND published = true", testID)
+	err := r.db.GetContext(ctx, &test, sqlQuery, testID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTestNotFound
@@ -147,6 +182,31 @@ func (r *PostgresExamRepository) GetPublicTest(ctx context.Context, testID strin
 		return nil, fmt.Errorf("get public test %s: %w", testID, err)
 	}
 	return &test, nil
+}
+
+// GetPublicStats computes live examinee and platform participation metrics
+func (r *PostgresExamRepository) GetPublicStats(ctx context.Context) (*models.PublicStats, error) {
+	var activeExaminees, monthlyExaminees, totalExaminees, totalTests int
+
+	_ = r.db.GetContext(ctx, &activeExaminees, `
+		SELECT COUNT(*) FROM test_sessions WHERE is_active = true AND expires_at > NOW()
+	`)
+	_ = r.db.GetContext(ctx, &monthlyExaminees, `
+		SELECT COUNT(*) FROM test_results WHERE created_at >= date_trunc('month', NOW())
+	`)
+	_ = r.db.GetContext(ctx, &totalExaminees, `
+		SELECT COUNT(*) FROM test_results
+	`)
+	_ = r.db.GetContext(ctx, &totalTests, `
+		SELECT COUNT(*) FROM tests WHERE is_deleted = false AND published = true
+	`)
+
+	return &models.PublicStats{
+		ActiveExaminees:  activeExaminees,
+		MonthlyExaminees: monthlyExaminees,
+		TotalExaminees:   totalExaminees,
+		TotalTests:       totalTests,
+	}, nil
 }
 
 // CreateSession persists a new exam session

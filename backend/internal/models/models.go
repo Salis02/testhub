@@ -57,6 +57,16 @@ type Test struct {
 	IsDeleted              bool      `db:"is_deleted" json:"-"`
 	CreatedAt              time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt              time.Time `db:"updated_at" json:"updated_at"`
+	TotalTakers            int       `db:"total_takers" json:"total_takers"`
+	PassRatePercentage     int       `db:"pass_rate_percentage" json:"pass_rate_percentage"`
+	IsFlagship             bool      `db:"is_flagship" json:"is_flagship"`
+}
+
+type PublicStats struct {
+	ActiveExaminees  int `json:"active_examinees"`
+	MonthlyExaminees int `json:"monthly_examinees"`
+	TotalExaminees   int `json:"total_examinees"`
+	TotalTests       int `json:"total_tests"`
 }
 
 type TestSession struct {

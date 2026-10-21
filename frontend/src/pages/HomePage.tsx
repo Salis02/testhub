@@ -50,6 +50,12 @@ export const HomePage: React.FC = () => {
     queryFn: ({ signal }) => testsApi.listTests(activeCategory, submittedQuery, signal),
   })
 
+  const { data: publicStats } = useQuery({
+    queryKey: ['publicStats'],
+    queryFn: ({ signal }) => testsApi.getPublicStats(signal),
+    refetchInterval: 30000,
+  })
+
   const tests = rawTests.filter((t) => t.published)
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -102,7 +108,11 @@ export const HomePage: React.FC = () => {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <span className="font-semibold text-emerald-600 dark:text-emerald-400">184 peserta</span>
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+              {publicStats !== undefined
+                ? `${publicStats.active_examinees.toLocaleString('id-ID')} peserta`
+                : '184 peserta'}
+            </span>
             <span className="text-ink-muted">sedang simulasi sekarang</span>
           </div>
 
@@ -111,7 +121,12 @@ export const HomePage: React.FC = () => {
           <div className="flex items-center space-x-1.5 text-ink-muted">
             <Users className="w-3.5 h-3.5 text-accent" />
             <span>
-              <strong className="text-ink font-semibold">14.800+</strong> pejuang NIP & PTN bulan ini
+              <strong className="text-ink font-semibold">
+                {publicStats !== undefined
+                  ? (publicStats.monthly_examinees || publicStats.total_examinees).toLocaleString('id-ID')
+                  : '14.800+'}
+              </strong>{' '}
+              pejuang NIP & PTN bulan ini
             </span>
           </div>
         </div>
@@ -244,7 +259,7 @@ export const HomePage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
             {tests.map((test, index) => {
               const isPremium = test.price_idr && test.price_idr > 0
-              const isFeatured = index === 0 && activeCategory === 'all' // Highlight 1st flagship module
+              const isFeatured = test.is_flagship || (index === 0 && activeCategory === 'all')
 
               return (
                 <div
@@ -302,6 +317,14 @@ export const HomePage: React.FC = () => {
                       <span className="text-ink font-semibold">
                         Passing: {test.passing_score_percentage}%
                       </span>
+                      {test.total_takers !== undefined && test.total_takers > 0 && (
+                        <>
+                          <span>•</span>
+                          <span className="text-accent font-semibold">
+                            {test.total_takers.toLocaleString('id-ID')} Peserta
+                          </span>
+                        </>
+                      )}
                     </div>
 
                     <div className="flex items-center space-x-2">
@@ -335,7 +358,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* Zona 4: The "AHA!" Moment Interactive Preview (FE-HP-04) */}
-      <AhaMomentSection />
+      <AhaMomentSection totalExaminees={publicStats?.total_examinees || publicStats?.monthly_examinees} />
 
       {/* Zona 5: Risk Reversal FAQ Accordion (FE-HP-05) */}
       <HomeFAQ />
