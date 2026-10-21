@@ -44,7 +44,7 @@ make dev
 
 ### 2. Frontend
 ```bash
-# Menjalankan dev server frontend (http://localhost:3000 / 5173)
+# Menjalankan dev server frontend (http://localhost:5173)
 make dev-frontend
 
 # Type-check & build produksi frontend

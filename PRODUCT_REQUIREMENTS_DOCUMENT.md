@@ -113,6 +113,6 @@ Untuk menjaga arsitektur bersih (*Clean Architecture*) dan mencegah eskalasi hak
 | **👤 User (Examinee)** | Pengguna terdaftar terautentikasi | `AuthRequired(JWTSecret)` | Profil Pengguna (`/api/user/me`), Riwayat Langganan & Modul Ujian Aktif (`/api/user/subscriptions`). |
 | **👑 Admin & Creator** | Pengajar & Pengelola Platform | `AuthRequired` + `RequireAdmin` | Ringkasan Statistik Platform, CRUD Modul & Bank Soal, Unggah Media Gambar, Antrean Penilaian Esai Manual, Manajemen Langganan & Manual Grant Override. |
 
-> 📖 **Kontrak Endpoint & Skema Request/Response Lengkap:** Lihat [ARCHITECTURE_AND_SCHEMA.md - Bagian 3](file:///home/sans/coding/quiz_app/ARCHITECTURE_AND_SCHEMA.md#3-spesifikasi-kontrak-api-berdasarkan-role-role-based-directory).
+> 📖 **Kontrak Endpoint & Skema Request/Response Lengkap:** Lihat [SYSTEM_ARCHITECTURE.md](file:///home/sans/coding/quiz_app/SYSTEM_ARCHITECTURE.md).
 
 

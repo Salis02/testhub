@@ -42,22 +42,26 @@
 ## 2. Skema Relasi Data & Sumber Migrasi
 
 Skema database dikelola melalui migrasi SQL versi terpusat di `backend/migrations/`:
-- `001_init.sql`: Entitas utama pengguna, ujian, butir soal, opsi jawaban, sesi, progres jawaban, dan hasil ujian.
-- `002_subscriptions_and_pricing.sql`: Skema monetisasi, pesanan (`orders`), dan langganan aktif (`subscriptions`).
+- `001_init.sql`: Entitas utama pengguna (`users`), ujian (`tests`), butir soal (`test_questions`), opsi jawaban (`question_options`), sesi (`test_sessions`), progres jawaban (`test_submissions`), dan hasil ujian (`test_results`).
+- `002_subscriptions_and_pricing.sql`: Skema monetisasi, pesanan pembayaran (`orders`), dan langganan aktif (`subscriptions`).
+- `003_user_history_and_management.sql`: Riwayat ujian terautentikasi (`user_id` pada `test_sessions` & `test_results`), serta status aktif akun (`users.is_active`).
+- `004_fix_audit_log_timezone.sql`: Tabel jejak audit keamanan (`admin_audit_log`) dengan penanganan timezone Asia/Jakarta dan JSON payload snapshot.
 
 ### Relasi Entitas Inti
 ```
-users (1) ──< tests (N) ──< questions (N) ──< options (N)
-               │    │            │
-               │    │ (1)        │ (1)
-               │    ▼ (N)        ▼ (N)
-               │  test_sessions (1) ──< test_submissions (N)
-               │    │
-               │    ▼ (1)
-               │  test_results (1)
-               │
-               ▼ (N)
-          orders (N) ────► subscriptions (N)
+users (1) ────────< tests (N) ──────< questions (N) ──< options (N)
+   │   │               │    │                 │
+   │   │               │    │ (1)             │ (1)
+   │   │               │    ▼ (N)             ▼ (N)
+   │   │               │  test_sessions (1) ──< test_submissions (N)
+   │   │               │    │
+   │   │               │    ▼ (1)
+   │   └───────────────┼──► test_results (1) (riwayat ujian persisten)
+   │                   │
+   ▼ (1)               ▼ (N)
+orders (N) ────────► subscriptions (N)
+
+admin_audit_log (N)    [Tabel jejak audit terisolasi dengan actor_user_id & payload diff]
 ```
 
 ---

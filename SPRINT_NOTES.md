@@ -49,7 +49,18 @@ Kelemahan & Sertifikat                                (Anonim, HP, Auto-save)
 
 ---
 
-## 3. Backlog Fitur Masa Depan (Future Roadmap)
+## 3. Status Implementasi AI Multi-Provider & Essay Auto-Grader (100% Selesai & Teruji)
+
+| ID Tiket | Modul / Berkas | Spesifikasi Fitur | Status | Catatan Teknis & Ketahanan |
+|---|---|---|:---:|---|
+| **BE-AI-01** | `services/ai_agent.go` | **Alokasi Token Dinamis & Thinking Buffer (8.192 Tokens):** Formula token dinamis (`count * 650 + 2500` max 8.192) untuk Gemini 2.5 Flash dan Groq. Menjamin ~2.800 thinking tokens tidak memotong output JSON. | ✅ Selesai | Mengeliminasi bug `unexpected end of JSON input` saat generate 10 soal. |
+| **BE-AI-02** | `services/ai_agent.go` | **Auto-Complement Fallback Guardrail:** Jika LLM hanya mengembalikan sebagian soal (misal 8 dari 10), backend otomatis melengkapi sisa butir soal via bank kurasi lokal deterministik. | ✅ Selesai | Menjamin integritas jumlah butir soal selalu tepat sesuai yang diminta pengajar. |
+| **BE-AI-03** | `handlers/ai.go` & `services/ai_agent.go` | **AI Essay Auto-Grader Engine (`POST /api/ai/grade-essay`):** Evaluasi lembar esai dengan 3 rubrik terkalibrasi (Substansi 40, Analisis 30, Sistematika 30), auto-grading 0-100, dan umpan balik konstruktif. | ✅ Selesai | 3-tier resilient: Gemini 2.5 Flash $\rightarrow$ Groq LLaMA $\rightarrow$ Heuristic Rubric Engine. |
+| **FE-AI-01** | `components/admin/EssayGradingView.tsx` | **Interactive AI Auto-Grader Workbench:** Tombol satu klik `✨ Nilai Otomatis dengan AI`, kartu detail rubrik 3 dimensi, dan auto-populasi skor + catatan instruktur yang tetap editable. | ✅ Selesai | Mencegah bottleneck penilaian manual instruktur pada asesmen berbasis esai. |
+
+---
+
+## 4. Backlog Fitur Masa Depan (Future Roadmap)
 
 | ID Tiket | Modul / Handler | Spesifikasi Fitur | Prioritas |
 |---|---|---|:---:|
@@ -57,3 +68,6 @@ Kelemahan & Sertifikat                                (Anonim, HP, Auto-save)
 | **Fitur B** | `services/scoring.go` | **Item Response Theory (IRT) Scoring:** Pembobotan dinamis butir soal standar UTBK-SNBT. | Backlog |
 | **Fitur C** | `frontend/test/` | **Anti-Cheat & Web Proctoring Suite:** Tab-switch listener, fullscreen mode, copy-paste blocker. | Backlog |
 | **Fitur D** | `handlers/session.go` | **Computerized Adaptive Testing (CAT) Dinamis:** Adaptasi tingkat kesukaran soal per butir. | Backlog |
+| **Fitur E** | `pages/ResultsPage.tsx` | **Tanya AI Tutor / Bedah Soal Interaktif:** Bedah detail langkah penyelesaian & konsep jebakan bagi siswa pada lembar hasil ujian. | Backlog |
+| **Fitur F** | `components/admin/QuestionFormField.tsx` | **AI Distractor Generator:** Generator 4 pilihan pengecoh rasional otomatis saat guru mengetik pertanyaan manual. | Backlog |
+
