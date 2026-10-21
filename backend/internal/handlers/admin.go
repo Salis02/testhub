@@ -90,7 +90,7 @@ func (h *AdminHandler) CreateTest(c *gin.Context) {
 		creatorID = &uid
 	}
 
-	testID := fmt.Sprintf("test-%s-%d", req.Category, time.Now().Unix())
+	testID := fmt.Sprintf("test-%s-%d-%d", req.Category, time.Now().Unix(), time.Now().UnixNano()%100000)
 	now := time.Now()
 
 	test := models.Test{
