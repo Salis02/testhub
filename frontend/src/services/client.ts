@@ -61,6 +61,9 @@ export async function apiClient<T>(
   if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`)
   }
+  if (userEmail && !headers.has('X-User-Email')) {
+    headers.set('X-User-Email', userEmail)
+  }
 
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
   const url = `${BASE_URL}${cleanEndpoint}`

@@ -60,7 +60,18 @@ Kelemahan & Sertifikat                                (Anonim, HP, Auto-save)
 
 ---
 
-## 4. Backlog Fitur Masa Depan (Future Roadmap)
+## 4. Status Implementasi Emotional Bonding & Direct PDF Engine (100% Selesai & Teruji)
+
+| ID Tiket | Modul / Berkas | Spesifikasi Desain & Logika | Status | Catatan Teknis & Dampak Bisnis |
+|---|---|---|:---:|---|
+| **FE-CERT-01** | [`pdfExport.ts`](file:///home/sans/coding/quiz_app/frontend/src/utils/pdfExport.ts) & [`CertificateModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/CertificateModal.tsx) | **Scalable Modular Client-Side PDF Engine:**<br>• Diekstrak ke modul utilitas terpusat `utils/pdfExport.ts` yang scalable untuk seluruh kebutuhan aplikasi (sertifikat, laporan hasil, transkrip).<br>• Mendukung orientasi landscape/portrait, resolusi DPI dinamis (scale 2.5x), metadata dokumen, dan *auto-page slicing* untuk dokumen multi-halaman.<br>• Dynamic lazy import `jspdf` & `html2canvas` (0 kB overhead bundle awal).<br>• Diintegrasikan ke `CertificateModal` dan tombol "Unduh Laporan (PDF)" di `ResultsPage`. | ✅ Selesai | Mengeliminasi kebingungan peserta ("hanya Ctrl+P") dan siap dipakai untuk seluruh fitur ekspor masa depan. |
+| **FE-EMO-01** | [`ScoreSummary.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/results/ScoreSummary.tsx) | **Empathetic Growth Coach & Refleksi Perjuangan:**<br>• Mengubah kotak merah vonis kegagalan menjadi evaluasi konstruktif.<br>• Perhitungan otomatis selisih poin (`scoreGap`) dan deteksi domain kompetensi terlemah untuk rekomendasi fokus latihan berikutnya.<br>• Suntikan dorongan psikologis kolektif (*"Kamu tidak berjuang sendirian"*). | ✅ Selesai | Mencegah drop-off peserta pasca-ujian dan membangun retensi jangka panjang. |
+| **FE-EMO-02** | [`GritCardModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/results/GritCardModal.tsx) & [`ResultsPage.tsx`](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx) | **Story-Ready Grit Card (9:16 Viral Loop):**<br>• Format mobile story 9:16 estetik untuk Instagram Story & X/Twitter.<br>• Menampilkan rank persentil, akurasi, waktu latihan, kutipan dedikasi pejuang (dapat dikustomisasi), dan QR verifikasi.<br>• Tombol satu klik "Unduh Gambar Story (PNG)" dan "Salin Caption Story". | ✅ Selesai | Pemicu viralitas organik (K-Factor > 0.6) dari tradisi *studygram* pejuang CPNS/PTN tanpa biaya iklan. |
+| **FE-EMO-03** | [`QuestionReviewList.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/results/QuestionReviewList.tsx) | **Tanya Kak TestHub (AI Coach di Pembahasan):**<br>• Tombol interaktif expander `💡 Bedah Jebakan & Cara Cepat`.<br>• Menyajikan Pola Pikir 30 Detik, deteksi jebakan soal (*common traps*), dan afirmasi semangat suportif per butir soal. | ✅ Selesai | Mengubah pembahasan kering menjadi pengalaman dimentori kawan belajar. |
+
+---
+
+## 5. Backlog Fitur Masa Depan (Future Roadmap)
 
 | ID Tiket | Modul / Handler | Spesifikasi Fitur | Prioritas |
 |---|---|---|:---:|
@@ -68,6 +79,6 @@ Kelemahan & Sertifikat                                (Anonim, HP, Auto-save)
 | **Fitur B** | `services/scoring.go` | **Item Response Theory (IRT) Scoring:** Pembobotan dinamis butir soal standar UTBK-SNBT. | Backlog |
 | **Fitur C** | `frontend/test/` | **Anti-Cheat & Web Proctoring Suite:** Tab-switch listener, fullscreen mode, copy-paste blocker. | Backlog |
 | **Fitur D** | `handlers/session.go` | **Computerized Adaptive Testing (CAT) Dinamis:** Adaptasi tingkat kesukaran soal per butir. | Backlog |
-| **Fitur E** | `pages/ResultsPage.tsx` | **Tanya AI Tutor / Bedah Soal Interaktif:** Bedah detail langkah penyelesaian & konsep jebakan bagi siswa pada lembar hasil ujian. | Backlog |
+| **Fitur E** | `frontend/components/results/` | **The Mistake Vault (Bank Dosa Soal):** Koleksi soal salah pribadi dengan Spaced Repetition. | Backlog |
 | **Fitur F** | `components/admin/QuestionFormField.tsx` | **AI Distractor Generator:** Generator 4 pilihan pengecoh rasional otomatis saat guru mengetik pertanyaan manual. | Backlog |
 

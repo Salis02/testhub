@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
@@ -8,13 +8,20 @@ import { QuestionReviewList } from '@/components/results/QuestionReviewList'
 import { ResultsPageSkeleton } from '@/components/common/Skeleton'
 import { CertificateModal } from '@/components/common/CertificateModal'
 import { LeaderboardModal } from '@/components/common/LeaderboardModal'
-import { ArrowLeft, RotateCcw, Share2, Printer, Check, Award, Trophy } from 'lucide-react'
+import { GritCardModal } from '@/components/results/GritCardModal'
+import { exportElementToPdf } from '@/utils/pdfExport'
+import { useToast } from '@/context/ToastContext'
+import { ArrowLeft, RotateCcw, Share2, FileDown, Check, Award, Trophy, Sparkles, Loader2 } from 'lucide-react'
 
 export const ResultsPage: React.FC = () => {
   const { resultId } = useParams<{ resultId: string }>()
+  const toast = useToast()
+  const reportRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const [isCertModalOpen, setIsCertModalOpen] = useState(false)
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false)
+  const [isGritCardOpen, setIsGritCardOpen] = useState(false)
+  const [isExportingReport, setIsExportingReport] = useState(false)
 
   const { data, isLoading: loading } = useQuery({
     queryKey: ['result', resultId],
@@ -29,8 +36,27 @@ export const ResultsPage: React.FC = () => {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handlePrint = () => {
-    window.print()
+  const handleExportReportPdf = async () => {
+    if (!reportRef.current || !data?.result) return
+    setIsExportingReport(true)
+    try {
+      await exportElementToPdf(reportRef.current, {
+        filename: `Laporan-Hasil-${data.result.test_title.replace(/\s+/g, '-').substring(0, 20)}.pdf`,
+        orientation: 'portrait',
+        format: 'a4',
+        marginMm: 12,
+        scale: 2.2,
+        backgroundColor: '#ffffff',
+        title: `Laporan Asesmen - ${data.result.test_title}`,
+        subject: `Hasil Skor & Evaluasi Kompetensi Nasional`,
+      })
+      toast.success('Laporan PDF Tersimpan', 'Ringkasan evaluasi hasil ujian berhasil diekspor ke format PDF.')
+    } catch (err) {
+      console.error(err)
+      toast.error('Gagal Ekspor Laporan', 'Terjadi kesalahan saat memproses laporan PDF.')
+    } finally {
+      setIsExportingReport(false)
+    }
   }
 
   if (loading) {
@@ -70,15 +96,39 @@ export const ResultsPage: React.FC = () => {
         </Link>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Grit Card Trigger (Viral Marketing & Emotional Milestone) */}
+          <button
+            onClick={() => setIsGritCardOpen(true)}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-semibold hover:bg-amber-500/20 transition-colors shadow-xs"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Kartu Perjuangan</span>
+          </button>
+
           {result.passing && (
             <button
               onClick={() => setIsCertModalOpen(true)}
               className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-accent/30 bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors shadow-xs"
             >
               <Award className="w-3.5 h-3.5" />
-              <span>Sertifikat</span>
+              <span>Sertifikat PDF</span>
             </button>
           )}
+
+          {/* Scalable Report PDF Export */}
+          <button
+            onClick={handleExportReportPdf}
+            disabled={isExportingReport}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-borderline bg-surface text-ink text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50"
+          >
+            {isExportingReport ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+            ) : (
+              <FileDown className="w-3.5 h-3.5 text-ink-muted" />
+            )}
+            <span>{isExportingReport ? 'Membuat PDF...' : 'Unduh Laporan (PDF)'}</span>
+          </button>
+
           <button
             onClick={() => setIsLeaderboardOpen(true)}
             className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-borderline bg-surface text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
@@ -93,13 +143,6 @@ export const ResultsPage: React.FC = () => {
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5" />}
             <span>{copied ? 'Disalin' : 'Bagikan'}</span>
           </button>
-          <button
-            onClick={handlePrint}
-            className="hidden sm:inline-flex items-center space-x-1 px-3 py-1.5 rounded-md border border-borderline bg-surface text-ink text-xs font-medium hover:bg-surface-hover transition-colors"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Cetak</span>
-          </button>
           <Link
             to={`/test/${result.test_id}`}
             className="inline-flex items-center space-x-1.5 px-4 py-1.5 rounded-md bg-accent text-white text-xs font-semibold hover:opacity-95 shadow-xs transition-opacity ml-auto sm:ml-0"
@@ -110,16 +153,19 @@ export const ResultsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Score Summary Card */}
-      <ScoreSummary result={result} />
+      {/* Target printable report container for PDF export */}
+      <div ref={reportRef} className="space-y-8 bg-canvas">
+        {/* Score Summary Card */}
+        <ScoreSummary result={result} />
 
-      {/* Category Breakdown */}
-      <CategoryBreakdown breakdown={result.category_breakdown} />
+        {/* Category Breakdown */}
+        <CategoryBreakdown breakdown={result.category_breakdown} />
+      </div>
 
       {/* Review Mode (All questions + answers + explanations) */}
       <QuestionReviewList questions={questions || []} submissions={result.submissions || {}} />
 
-      {/* Official Certificate Modal */}
+      {/* Official Certificate Modal (Direct PDF download) */}
       {resultId && (
         <CertificateModal
           isOpen={isCertModalOpen}
@@ -127,6 +173,13 @@ export const ResultsPage: React.FC = () => {
           resultId={resultId}
         />
       )}
+
+      {/* Story-Ready Grit Card Modal (9:16 PNG download) */}
+      <GritCardModal
+        isOpen={isGritCardOpen}
+        onClose={() => setIsGritCardOpen(false)}
+        result={result}
+      />
 
       {/* Test Leaderboard Modal */}
       {result.test_id && (

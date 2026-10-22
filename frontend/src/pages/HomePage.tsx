@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Test } from '@/types'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Test, Subscription } from '@/types'
 import { testsApi } from '@/services/tests.api'
 import { sessionsApi } from '@/services/sessions.api'
+import { paymentsApi } from '@/services/payments.api'
 import { CategoryBadge } from '@/components/common/Badge'
 import {
   Search,
@@ -20,6 +21,8 @@ import {
   Flame,
   Check,
   Tag,
+  Lock,
+  ShieldCheck,
 } from 'lucide-react'
 
 import { TestCardSkeleton } from '@/components/common/Skeleton'
@@ -28,8 +31,9 @@ import { LeaderboardModal } from '@/components/common/LeaderboardModal'
 import { AhaMomentSection } from '@/components/home/AhaMomentSection'
 import { HomeFAQ } from '@/components/home/HomeFAQ'
 import { formatRupiah } from '@/utils/formatters'
-import { ApiError } from '@/services/client'
+import { ApiError, getStoredUserEmail } from '@/services/client'
 import { useToast } from '@/context/ToastContext'
+import { useAuth } from '@/context/AuthContext'
 
 export const HomePage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -44,6 +48,8 @@ export const HomePage: React.FC = () => {
   const [leaderboardTest, setLeaderboardTest] = useState<{ id: string; title: string } | null>(null)
   const navigate = useNavigate()
   const toast = useToast()
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
 
   const { data: rawTests = [], isLoading: loading } = useQuery({
     queryKey: ['tests', activeCategory, submittedQuery],
@@ -56,6 +62,38 @@ export const HomePage: React.FC = () => {
     refetchInterval: 30000,
   })
 
+  // Fetch active subscriptions if user is logged in
+  const { data: userSubscriptions = [] } = useQuery<Subscription[]>({
+    queryKey: ['user-subscriptions'],
+    queryFn: () => paymentsApi.getUserSubscriptions(),
+    enabled: !!user,
+    staleTime: 60000,
+  })
+
+  const isSubActive = (sub: Subscription) => {
+    if (sub.status !== 'active') return false
+    if (!sub.valid_until) return true
+    return new Date(sub.valid_until).getTime() > Date.now()
+  }
+
+  const getTestAccess = (test: Test) => {
+    const price = test.price_idr || 0
+    if (price === 0) return { unlocked: true, reason: 'free' as const }
+    if (user?.role === 'admin' || user?.role === 'creator') return { unlocked: true, reason: 'role' as const }
+
+    const hasSeasonPass = userSubscriptions.some(
+      (s) => isSubActive(s) && (s.tier === 'season_pass' || s.tier === 'lifetime' || s.tier === 'institution')
+    )
+    if (hasSeasonPass) return { unlocked: true, reason: 'season_pass' as const }
+
+    const hasPurchased = userSubscriptions.some(
+      (s) => isSubActive(s) && s.test_id === test.id
+    )
+    if (hasPurchased) return { unlocked: true, reason: 'purchased' as const }
+
+    return { unlocked: false, reason: 'locked' as const }
+  }
+
   const tests = rawTests.filter((t) => t.published)
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -65,7 +103,8 @@ export const HomePage: React.FC = () => {
 
   const handleStartTest = async (testId: string, email?: string) => {
     try {
-      const session = await sessionsApi.startTest(testId, email)
+      const effectiveEmail = email || user?.email || getStoredUserEmail() || undefined
+      const session = await sessionsApi.startTest(testId, effectiveEmail)
       navigate(`/test/${session.test.id}?session=${session.session_id}`)
     } catch (err) {
       if (err instanceof ApiError && err.status === 402) {
@@ -258,6 +297,7 @@ export const HomePage: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
             {tests.map((test, index) => {
+              const access = getTestAccess(test)
               const isPremium = test.price_idr && test.price_idr > 0
               const isFeatured = test.is_flagship || (index === 0 && activeCategory === 'all')
 
@@ -266,6 +306,8 @@ export const HomePage: React.FC = () => {
                   key={test.id}
                   className={`bg-surface surface-card border rounded-xl p-6 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200 ease-out flex flex-col justify-between space-y-5 relative ${isFeatured
                       ? 'border-accent/60 ring-1 ring-accent/30'
+                      : access.unlocked && access.reason !== 'free'
+                      ? 'border-emerald-500/40 hover:border-emerald-500/60'
                       : 'border-borderline hover:border-accent/40'
                     }`}
                 >
@@ -278,19 +320,36 @@ export const HomePage: React.FC = () => {
                   )}
 
                   <div className="space-y-3 pt-1">
-                    {/* Header Strip: Category & Price Badge */}
+                    {/* Header Strip: Category & Dynamic Ownership / Price Badge */}
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <CategoryBadge category={test.category} />
 
-                      {/* Transparent Price Badge (Zero Bait-and-Switch) */}
-                      {isPremium ? (
+                      {/* Transparent Dynamic Status Badge */}
+                      {access.unlocked ? (
+                        access.reason === 'free' ? (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md font-mono text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            <span>GRATIS / FREE ACCESS</span>
+                          </span>
+                        ) : access.reason === 'season_pass' ? (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md font-mono text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shadow-xs">
+                            <Sparkles className="w-3 h-3 text-indigo-500 fill-current" />
+                            <span>VIP PASS • TERBUKA</span>
+                          </span>
+                        ) : access.reason === 'purchased' ? (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md font-mono text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-xs">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                            <span>SUDAH DIBELI • TERBUKA</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md font-mono text-xs font-semibold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                            <ShieldCheck className="w-3 h-3 text-sky-500" />
+                            <span>AKSES PENGUJI</span>
+                          </span>
+                        )
+                      ) : (
                         <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md font-mono text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                           <Tag className="w-3 h-3" />
                           <span>PREMIUM • {formatRupiah(test.price_idr)}</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md font-mono text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                          <span>GRATIS / FREE ACCESS</span>
                         </span>
                       )}
                     </div>
@@ -338,16 +397,23 @@ export const HomePage: React.FC = () => {
                         <span className="hidden sm:inline">Peringkat</span>
                       </button>
 
-                      <button
-                        onClick={() => handleStartTest(test.id)}
-                        className={`inline-flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-semibold btn-press focus-ring shadow-subtle transition-all cursor-pointer ${isPremium
-                            ? 'bg-amber-600 text-white hover:bg-amber-500'
-                            : 'bg-accent text-white hover:brightness-105'
-                          }`}
-                      >
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>{isPremium ? 'Ikuti Simulasi' : 'Mulai Ujian'}</span>
-                      </button>
+                      {access.unlocked ? (
+                        <button
+                          onClick={() => handleStartTest(test.id)}
+                          className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-accent text-white hover:brightness-105 btn-press focus-ring shadow-subtle transition-all cursor-pointer"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>{access.reason === 'free' ? 'Mulai Ujian' : 'Mulai / Kerjakan Ulang'}</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleStartTest(test.id)}
+                          className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-amber-600 text-white hover:bg-amber-500 btn-press focus-ring shadow-subtle transition-all cursor-pointer"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Buka Akses Tryout</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -399,6 +465,8 @@ export const HomePage: React.FC = () => {
           onPaymentSuccess={(paidEmail) => {
             const id = paywallModalData.testId
             setPaywallModalData(null)
+            queryClient.invalidateQueries({ queryKey: ['user-subscriptions'] })
+            queryClient.invalidateQueries({ queryKey: ['tests'] })
             handleStartTest(id, paidEmail)
           }}
         />

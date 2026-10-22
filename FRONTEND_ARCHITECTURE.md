@@ -27,6 +27,10 @@ frontend/src/
 │   ├── ai.api.ts               # AI Agent question generation proxy
 │   ├── auth.api.ts             # Auth service & profile fetching
 │   └── api.ts                  # Facade adapter backward-compatible
+├── utils/                      # Modular Shared Utilities
+│   ├── cn.ts                   # Tailwind class merge utility
+│   ├── formatters.ts           # Formatters mata uang Rupiah & tanggal lokal
+│   └── pdfExport.ts            # Scalable Client-side PDF Engine (jspdf + html2canvas lazy-loaded)
 ├── stores/                     # Client Session State Management
 │   └── useTestSessionStore.ts  # Zustand store: isolasi per-detik countdown timer, auto-save status
 ├── context/

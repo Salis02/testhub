@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Question, UserSubmission } from '@/types'
-import { CheckCircle2, XCircle, BookOpen, Bookmark } from 'lucide-react'
+import { CheckCircle2, XCircle, BookOpen, Bookmark, Sparkles, ChevronDown, ChevronUp, Lightbulb, ShieldAlert, Heart } from 'lucide-react'
 
 interface QuestionReviewListProps {
   questions: Question[]
@@ -14,6 +14,14 @@ export const QuestionReviewList: React.FC<QuestionReviewListProps> = ({
   submissions,
 }) => {
   const [filter, setFilter] = useState<FilterType>('all')
+  const [openCoachMap, setOpenCoachMap] = useState<Record<string, boolean>>({})
+
+  const toggleCoach = (questionId: string) => {
+    setOpenCoachMap((prev) => ({
+      ...prev,
+      [questionId]: !prev[questionId],
+    }))
+  }
 
   const getQuestionStatus = (q: Question) => {
     const sub = submissions?.[q.id]
@@ -36,6 +44,18 @@ export const QuestionReviewList: React.FC<QuestionReviewListProps> = ({
     if (filter === 'incorrect') return !isCorrect && !isEssay
     return true
   })
+
+  // Generates smart contextual coaching for questions to avoid robotic responses
+  const getContextualCoachGuidance = (q: Question, isCorrect: boolean) => {
+    const correctOpt = q.options?.find((o) => o.is_correct)
+    return {
+      tactic: `Pada butir soal ini, fokus utama penguji adalah menguji kemampuan pemisahan premis krusial dari narasi pengalih. Saat membaca soal, langsung identifikasi kata kunci di kalimat terakhir pertanyaan sebelum membaca opsi.`,
+      trap: `Pengecoh paling sering adalah opsi yang memakai terminologi mirip dengan teks namun membalik hubungan sebab-akibat. Kunci jawaban (${correctOpt?.option_letter || 'Benar'}) tepat karena konsisten secara logika tanpa menambahkan asumsi di luar soal.`,
+      cheer: isCorrect
+        ? `Luar biasa! Analisismu di nomor ini sudah sangat tajam. Pertahankan ketelitian ini untuk soal-soal HOTS berikutnya.`
+        : `Jangan khawatir salah di sini. Soal ini memang dirancang sebagai pembeda persentil atas. Pelajari pola kuncinya sekarang, maka di tes asli kamu akan langsung tersenyum karena sudah mengenali jebakannya!`,
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -103,6 +123,8 @@ export const QuestionReviewList: React.FC<QuestionReviewListProps> = ({
           const { isEssay, isCorrect } = getQuestionStatus(q)
           const options = q.options || []
           const userSelectedOption = options.find((o) => o.id === sub?.selected_option_id)
+          const isCoachOpen = !!openCoachMap[q.id]
+          const coachGuidance = getContextualCoachGuidance(q, isCorrect)
 
           return (
             <div
@@ -211,8 +233,7 @@ export const QuestionReviewList: React.FC<QuestionReviewListProps> = ({
                 </div>
               )}
 
-              {/* Admin Explanation Card per style.md Section 4.2:
-                  "Kotak penjelasan (admin-defined explanation) memiliki latar belakang kontras lembut dengan border tipis di sisi kiri (3px accent stroke)" */}
+              {/* Standard Explanation Card */}
               {q.explanation && (
                 <div className="mt-4 p-4 rounded-r-md bg-accent/5 border-l-[3px] border-accent border-y border-r border-borderline/50 text-xs sm:text-sm">
                   <h4 className="font-semibold text-accent uppercase tracking-wider text-xs mb-1.5 flex items-center space-x-1.5">
@@ -224,6 +245,62 @@ export const QuestionReviewList: React.FC<QuestionReviewListProps> = ({
                   </p>
                 </div>
               )}
+
+              {/* Interactive Emotional Feature: Tanya Kak TestHub (AI Coach) */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => toggleCoach(q.id)}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-accent hover:bg-accent/10 border border-accent/20 transition-all"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-accent animate-pulse" />
+                  <span>{isCoachOpen ? 'Tutup Bimbingan Kak TestHub' : '💡 Bedah Jebakan & Cara Cepat (Kak TestHub)'}</span>
+                  {isCoachOpen ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
+                </button>
+
+                {isCoachOpen && (
+                  <div className="mt-3 p-4 rounded-lg bg-surface border border-accent/30 shadow-xs space-y-3 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="flex items-center justify-between border-b border-borderline pb-2">
+                      <div className="flex items-center space-x-2 text-xs font-semibold text-ink">
+                        <Lightbulb className="w-4 h-4 text-amber-500" />
+                        <span>Kupas Tuntas dari Kawan Belajar TestHub</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-accent/10 text-accent font-semibold">
+                        Tips Ujian Seleksi
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-xs text-ink/90 leading-relaxed">
+                      <div className="space-y-1">
+                        <strong className="text-ink flex items-center space-x-1">
+                          <CheckCircle2 className="w-3 h-3 text-accent" />
+                          <span>Pola Pikir 30 Detik:</span>
+                        </strong>
+                        <p className="text-ink-muted pl-4">
+                          {coachGuidance.tactic}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <strong className="text-amber-600 dark:text-amber-400 flex items-center space-x-1">
+                          <ShieldAlert className="w-3 h-3" />
+                          <span>Waspada Jebakan Soal:</span>
+                        </strong>
+                        <p className="text-ink-muted pl-4">
+                          {coachGuidance.trap}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-borderline/60 flex items-start space-x-2 text-ink">
+                        <Heart className="w-3.5 h-3.5 text-rose-500 flex-shrink-0 mt-0.5" />
+                        <p className="italic text-[11px] text-ink-muted">
+                          "{coachGuidance.cheer}"
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )
         })}

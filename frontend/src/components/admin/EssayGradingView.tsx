@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { EssaySubmission } from '@/types'
-import { CheckCircle2, FileText, Send, Sparkles, Loader2, Award, Search, Filter, ChevronLeft } from 'lucide-react'
+import { CheckCircle2, FileText, Send, Sparkles, Loader2, Award, Search, ChevronLeft } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
 import { adminApi } from '@/services/admin.api'
 import { useDebounce } from '@/hooks/useDebounce'

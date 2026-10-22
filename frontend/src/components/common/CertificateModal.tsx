@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import QRCode from 'qrcode'
-import { Award, ShieldCheck, Printer, Copy, Check, X, Loader2, ExternalLink } from 'lucide-react'
+import { Award, ShieldCheck, Download, Printer, Copy, Check, X, Loader2 } from 'lucide-react'
 import { sessionsApi } from '@/services/sessions.api'
 import { useToast } from '@/context/ToastContext'
 import { CertificateData } from '@/types'
+import { exportElementToPdf } from '@/utils/pdfExport'
 
 interface CertificateModalProps {
   isOpen: boolean
@@ -19,8 +20,10 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   resultId,
 }) => {
   const toast = useToast()
+  const certContainerRef = useRef<HTMLDivElement>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
   const [copied, setCopied] = useState(false)
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
 
   const { data: cert, isLoading, error } = useQuery<CertificateData>({
     queryKey: ['certificate', resultId],
@@ -56,6 +59,38 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   }, [isOpen])
 
   if (!isOpen) return null
+
+  // Direct High-Resolution PDF Generation via Scalable Engine
+  const handleDownloadPdf = async () => {
+    if (!certContainerRef.current || !cert) return
+    setIsDownloadingPdf(true)
+
+    try {
+      await exportElementToPdf(certContainerRef.current, {
+        filename: `Sertifikat-TestHub-${cert.certificate_id.substring(0, 8)}.pdf`,
+        orientation: 'landscape',
+        format: 'a4',
+        marginMm: 12,
+        scale: 2.5,
+        backgroundColor: '#ffffff',
+        title: `Sertifikat Kelulusan - ${cert.test_title}`,
+        subject: `Sertifikat Resmi ID: ${cert.certificate_id}`,
+        author: cert.issuer || 'TestHub Certification Authority',
+        keywords: 'testhub, sertifikat, kelulusan, cpns, snbt, bumn',
+        creator: 'TestHub Examination System',
+      })
+
+      toast.success(
+        'Sertifikat PDF Berhasil Diunduh',
+        'Dokumen PDF resmi beresolusi tinggi telah tersimpan di perangkat Anda.'
+      )
+    } catch (err) {
+      console.error('PDF export error:', err)
+      toast.error('Gagal Mengunduh PDF', 'Terjadi kendala saat memproses dokumen sertifikat PDF.')
+    } finally {
+      setIsDownloadingPdf(false)
+    }
+  }
 
   const handlePrint = () => {
     window.print()
@@ -104,7 +139,10 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             Gagal menerbitkan sertifikat. Pastikan Anda telah menyelesaikan ujian dan memenuhi syarat kelulusan.
           </div>
         ) : (
-          <div className="relative border-4 border-double border-accent/30 dark:border-accent/40 rounded-lg p-6 sm:p-8 bg-surface text-center space-y-6 overflow-hidden shadow-inner print:border-slate-800">
+          <div
+            ref={certContainerRef}
+            className="relative border-4 border-double border-accent/30 dark:border-accent/40 rounded-lg p-6 sm:p-8 bg-surface text-center space-y-6 overflow-hidden shadow-inner print:border-slate-800"
+          >
             {/* Watermark / Seal Icon Background */}
             <div className="absolute right-4 bottom-4 opacity-5 pointer-events-none">
               <Award className="w-48 h-48 text-accent" />
@@ -201,14 +239,36 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             </button>
 
             <div className="flex items-center space-x-2">
+              {/* Direct PDF Download Action (Primary) */}
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={isDownloadingPdf}
+                className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-semibold text-white bg-accent hover:opacity-90 rounded-md shadow-sm transition-all disabled:opacity-50"
+              >
+                {isDownloadingPdf ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Membuat PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Unduh PDF Resmi</span>
+                  </>
+                )}
+              </button>
+
+              {/* Physical Print Action (Secondary) */}
               <button
                 type="button"
                 onClick={handlePrint}
-                className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-semibold text-white bg-accent hover:opacity-90 rounded-md shadow-sm transition-all"
+                className="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-ink bg-surface hover:bg-surface-hover border border-borderline rounded-md transition-colors"
               >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Cetak / Simpan PDF</span>
+                <Printer className="w-3.5 h-3.5 text-ink-muted" />
+                <span className="hidden sm:inline">Cetak Fisik</span>
               </button>
+
               <button
                 type="button"
                 onClick={onClose}

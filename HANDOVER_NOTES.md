@@ -77,6 +77,29 @@ Pada sesi terakhir sebelum penghapusan percakapan ini, beberapa pembenahan krusi
   3. **AI Essay Auto-Grader Engine (`POST /api/ai/grade-essay`)**: Multi-tier resilient engine (Gemini 2.5 Flash $\rightarrow$ Groq LLaMA $\rightarrow$ Heuristic Rubric Engine) menilai esai berdasarkan 3 kriteria: Substansi & Teori (40), Analisis Kritis (30), dan Sistematika Argumen (30).
   4. **Frontend Workbench Integration**: Terintegrasi pada [`EssayGradingView.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/admin/EssayGradingView.tsx) dengan tombol `✨ Nilai Otomatis dengan AI`, kartu detail rubrik 3 dimensi, dan auto-populasi skor + catatan instruktur yang tetap dapat diedit sebelum disimpan.
 
+### I. Engine PDF Biner Asli Modular (`pdfExport.ts`) & Fitur Ikatan Emosional (Emotional Bonding)
+- **Masalah Sebelumnya**:
+  - Tombol cetak sertifikat kelulusan hanya memicu `window.print()` (Ctrl + P) browser bawaan yang kaku dan tidak mengunduh berkas `.pdf` riil.
+  - Logika ekspor PDF sempat berada di dalam satu modal saja, menyulitkan jika ada fitur ekspor laporan baru di masa depan.
+  - Tampilan hasil ujian (`ResultsPage`) terkesan dingin dan transaksional tanpa empati psikologis terhadap beban perjuangan peserta ujian seleksi nasional (CPNS, SNBT, BUMN).
+- **Solusi Terpasang**:
+  1. **Scalable PDF Engine (`frontend/src/utils/pdfExport.ts`)**:
+     - Utilitas modular terpusat yang mengekspor sembarang elemen DOM ke PDF dengan lazy-loading `jspdf` dan `html2canvas`.
+     - Mendukung orientasi *landscape* (sertifikat) maupun *portrait* (laporan), custom margin, custom filename, metadata PDF resmi, serta algoritma *auto-page slicing* untuk dokumen panjang multi-halaman.
+     - Diadopsi oleh [`CertificateModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/CertificateModal.tsx) dan tombol "Unduh Laporan (PDF)" di [`ResultsPage.tsx`](file:///home/sans/coding/quiz_app/frontend/src/pages/ResultsPage.tsx).
+  2. **Empathetic Growth Coach (`ScoreSummary.tsx`)**:
+     - Mengubah kotak merah kegagalan menjadi catatan evaluasi yang membesarkan hati (*Growth Mindset*).
+     - Menghitung gap nilai menuju passing grade dan merekomendasikan prioritas sub-topik terlemah untuk perbaikan terarah.
+     - Menyisipkan pesan kebersamaan emosional (*"Kamu tidak berjuang sendirian"*).
+  3. **Story-Ready Grit Card 9:16 (`GritCardModal.tsx`)**:
+     - Format kartu vertikal 9:16 khusus Instagram Story, WhatsApp Status, dan X/Twitter.
+     - Menampilkan persentil nasional, akurasi, waktu pengerjaan, QR code verifikasi, dan kutipan dedikasi yang dapat dikustomisasi untuk orang tua/keluarga.
+     - Dilengkapi tombol satu klik unduh gambar PNG (`html2canvas`) dan salin caption media sosial.
+  4. **Tanya Kak TestHub / AI Coach di Pembahasan (`QuestionReviewList.tsx`)**:
+     - Panel expander interaktif per butir soal: Pola Pikir 30 Detik, Deteksi Jebakan Soal (*common traps*), dan Afirmasi Semangat Pejuang.
+  5. **Pembersihan Dead Code & Unused Imports**:
+     - Menghapus impor-impor tak terpakai pada `admin.api.ts`, `api.ts`, `LeaderboardModal.tsx`, `EssayGradingView.tsx`, dan `AIAssistantModal.tsx`.
+
 ---
 
 ## 2. Status Terkini Seluruh Modul Proyek (Current System State)
@@ -93,6 +116,7 @@ Pada sesi terakhir sebelum penghapusan percakapan ini, beberapa pembenahan krusi
 | **AI Question Assistant** | ✅ Selesai | [`ai_agent.go`](file:///home/sans/coding/quiz_app/backend/internal/services/ai_agent.go), [`AIAssistantModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/admin/AIAssistantModal.tsx) | 3-tier fallback engine, dukungan `CustomPrompt`, alokasi dinamis 8.192 tokens, streaming skeleton, auto-complement. |
 | **Tooling Migrasi & DB Reset** | ✅ Selesai | [`Makefile`](file:///home/sans/coding/quiz_app/Makefile), [`main.go`](file:///home/sans/coding/quiz_app/backend/cmd/migrate/main.go), [`db.go`](file:///home/sans/coding/quiz_app/backend/internal/database/db.go) | `make migrate-fresh` & `make migrate-refresh` dengan `DropAllTables()` (CASCADE) dan auto-seed. |
 | **Homepage CRO & Real Data** | ✅ Selesai | [`HomePage.tsx`](file:///home/sans/coding/quiz_app/frontend/src/pages/HomePage.tsx), [`AhaMomentSection.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/home/AhaMomentSection.tsx) | Real live social pulse (30s polling), dynamic flagship module, real participant metrics, transparent pricing badges, risk reversal FAQ. |
+| **Direct PDF & Emotional Bonding** | ✅ Selesai | [`CertificateModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/CertificateModal.tsx), [`GritCardModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/results/GritCardModal.tsx), [`ScoreSummary.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/results/ScoreSummary.tsx) | Direct A4 landscape PDF export (`jspdf`), 9:16 mobile story Grit Card PNG export, empathetic growth coach, AI study buddy. |
 | **Standard Paginasi & Debounce** | ✅ Selesai | [`usePagination.ts`](file:///home/sans/coding/quiz_app/frontend/src/hooks/usePagination.ts), [`useDebounce.ts`](file:///home/sans/coding/quiz_app/frontend/src/hooks/useDebounce.ts), [`Pagination.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/common/Pagination.tsx) | Zero-dependency, format `tabular-nums`, ukuran per halaman dinamis. |
 
 ---

@@ -1,4 +1,4 @@
-import { apiClient, AUTH_STORAGE_KEY } from './client'
+import { apiClient } from './client'
 import { Test, Question, AdminStats, EssaySubmission, TestAnalytics } from '@/types'
 
 export const adminApi = {

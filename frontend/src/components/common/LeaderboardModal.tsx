@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Trophy, Medal, Clock, Award, X, Loader2, UserCheck, Flame } from 'lucide-react'
+import { Trophy, Medal, Clock, X, Flame } from 'lucide-react'
 import { testsApi } from '@/services/tests.api'
 import { LeaderboardTableSkeleton } from '@/components/common/Skeleton'
 

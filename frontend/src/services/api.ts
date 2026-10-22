@@ -15,7 +15,6 @@ import { sessionsApi } from './sessions.api'
 import { adminApi } from './admin.api'
 import { aiApi } from './ai.api'
 import { authApi } from './auth.api'
-import { Test, Question, TestCategory, DifficultyLevel } from '@/types'
 
 // No-op for legacy startup hooks (eliminates localStorage dual-backend drift)
 export function initLocalStorage(): void {
