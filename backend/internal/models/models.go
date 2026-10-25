@@ -210,8 +210,17 @@ type AIGenerateRequest struct {
 	Category     string `json:"category" binding:"required"`
 	Subject      string `json:"subject" binding:"required"`
 	Difficulty   string `json:"difficulty" binding:"required"`
-	Count        int    `json:"count" binding:"required,min=1,max=10"`
+	Count        int    `json:"count" binding:"required,min=1,max=50"`
 	CustomPrompt string `json:"custom_prompt,omitempty" binding:"omitempty,max=400"`
+}
+
+type AIStreamChunk struct {
+	BatchIndex     int            `json:"batch_index"`
+	TotalBatches   int            `json:"total_batches"`
+	CompletedCount int            `json:"completed_count"`
+	TotalCount     int            `json:"total_count"`
+	Provider       string         `json:"provider"`
+	Questions      []TestQuestion `json:"questions"`
 }
 
 type AIEssayGradeRequest struct {

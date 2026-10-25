@@ -1,6 +1,5 @@
 import React from 'react'
 import { ChevronLeft, Check, Maximize2, Minimize2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { TestCountdownTimer } from '@/components/test/TestCountdownTimer'
 
 interface TestHeaderProps {
@@ -15,6 +14,7 @@ interface TestHeaderProps {
   isFullscreen?: boolean
   violations?: number
   onToggleFullscreen?: () => void
+  onBackToHome?: () => void
 }
 
 export const TestHeader: React.FC<TestHeaderProps> = ({
@@ -29,6 +29,7 @@ export const TestHeader: React.FC<TestHeaderProps> = ({
   isFullscreen = false,
   violations = 0,
   onToggleFullscreen,
+  onBackToHome,
 }) => {
   const progressPercent = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0
 
@@ -37,13 +38,15 @@ export const TestHeader: React.FC<TestHeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Left: Test Title & Exit confirmation */}
         <div className="flex items-center space-x-3 min-w-0">
-          <Link
-            to="/"
+          <button
+            type="button"
+            onClick={onBackToHome}
             title="Kembali ke Beranda"
-            className="p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-hover transition-colors"
+            aria-label="Kembali ke Beranda"
+            className="p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-hover btn-press focus-ring transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-5 h-5" />
-          </Link>
+          </button>
           <div className="min-w-0">
             <h1 className="text-sm sm:text-base font-semibold text-ink truncate">
               {title}

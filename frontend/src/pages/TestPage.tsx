@@ -12,6 +12,7 @@ import { ApiError } from '@/services/client'
 import { TestPageSkeleton } from '@/components/common/Skeleton'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
+import { useConfirm } from '@/context/ConfirmContext'
 import { useExamProctoring } from '@/hooks/useExamProctoring'
 
 export const TestPage: React.FC = () => {
@@ -19,6 +20,7 @@ export const TestPage: React.FC = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const toast = useToast()
+  const { confirm } = useConfirm()
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -64,6 +66,36 @@ export const TestPage: React.FC = () => {
       toast.error('Gagal Menyelesaikan Ujian Otomatis', (err as Error).message)
     }
   }, [finishSession, navigate, toast])
+
+  const handleBackToHome = useCallback(async () => {
+    const isConfirmed = await confirm({
+      title: 'Tinggalkan Halaman Ujian?',
+      message:
+        'Ujian Anda masih berlangsung. Jawaban yang telah Anda pilih sudah otomatis tersimpan ke server, namun timer ujian akan terus berjalan di latar belakang. Anda yakin ingin kembali ke beranda?',
+      confirmText: 'Ya, Kembali ke Beranda',
+      cancelText: 'Lanjutkan Ujian',
+      variant: 'warning',
+    })
+
+    if (isConfirmed) {
+      navigate('/')
+    }
+  }, [confirm, navigate])
+
+  // Prevent accidental tab closure or browser reload during an active exam
+  useEffect(() => {
+    if (!session || isSubmitting) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [session, isSubmitting])
 
   // Anti-Cheat & Web Proctoring Suite (arms only after examinee confirms pre-exam briefing)
   const proctoring = useExamProctoring({
@@ -192,6 +224,7 @@ export const TestPage: React.FC = () => {
         isFullscreen={hasProctoring ? proctoring.isFullscreen : undefined}
         violations={hasProctoring ? proctoring.violations : 0}
         onToggleFullscreen={hasProctoring ? proctoring.toggleFullscreen : undefined}
+        onBackToHome={handleBackToHome}
       />
 
       {/* Main Examination Layout */}

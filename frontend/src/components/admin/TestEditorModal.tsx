@@ -6,6 +6,7 @@ import { Question } from '@/types'
 import { TestFormSchema, TestFormValues } from '@/schemas/test.schema'
 import { QuestionFormField } from '@/components/admin/QuestionFormField'
 import { BulkQuestionImportModal } from '@/components/admin/BulkQuestionImportModal'
+import { AdminModalSize, ADMIN_MODAL_WIDTH_CLASSES } from '@/components/admin/TestCreatorModal'
 import { exportQuestionsToCsv } from '@/utils/spreadsheetParser'
 import { api } from '@/services/api'
 import { Skeleton } from '@/components/common/Skeleton'
@@ -66,6 +67,7 @@ export const TestEditorModal: React.FC<TestEditorModalProps> = ({
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState<number>(5)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
+  const [modalSize, setModalSize] = useState<AdminModalSize>('wide')
   const toast = useToast()
 
   const methods = useForm<TestFormValues>({
@@ -320,9 +322,9 @@ export const TestEditorModal: React.FC<TestEditorModalProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-surface border border-borderline rounded-lg max-w-4xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-auto max-h-[92vh] overflow-y-auto">
+      <div className={`bg-surface border border-borderline rounded-lg ${ADMIN_MODAL_WIDTH_CLASSES[modalSize]} w-full p-6 sm:p-8 shadow-2xl space-y-6 my-auto max-h-[92vh] overflow-y-auto transition-all duration-200`}>
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-borderline pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-borderline pb-4">
           <div>
             <div className="flex items-center space-x-2">
               <h3 className="text-lg font-semibold text-ink">
@@ -336,14 +338,46 @@ export const TestEditorModal: React.FC<TestEditorModalProps> = ({
               Sesuaikan seluruh parameter ujian, biaya paywall, acak soal, serta butir pertanyaan.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-hover transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2.5 self-end sm:self-auto">
+            {/* Modal Width Size Variants */}
+            <div
+              className="inline-flex items-center p-0.5 rounded-lg border border-borderline bg-canvas text-xs font-mono"
+              title="Pilih varian lebar modal"
+            >
+              {(
+                [
+                  { key: 'normal', label: 'Normal' },
+                  { key: 'wide', label: 'Lebar' },
+                  { key: 'extra', label: 'Ekstra' },
+                  { key: 'full', label: 'Penuh' },
+                ] as const
+              ).map((variant) => (
+                <button
+                  key={variant.key}
+                  type="button"
+                  onClick={() => setModalSize(variant.key)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                    modalSize === variant.key
+                      ? 'bg-accent text-white shadow-xs font-semibold'
+                      : 'text-ink-muted hover:text-ink hover:bg-surface-hover'
+                  }`}
+                  title={`Ganti lebar modal: ${variant.label}`}
+                >
+                  {variant.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-hover transition-colors cursor-pointer"
+              title="Tutup Modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {loading ? (

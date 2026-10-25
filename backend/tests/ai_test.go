@@ -36,6 +36,38 @@ func TestAIGenerator(t *testing.T) {
 	}
 }
 
+func TestAIStreamGenerator(t *testing.T) {
+	_, _, router := setupTestApp(t)
+
+	aiBody, _ := json.Marshal(models.AIGenerateRequest{
+		Category:   "cpns",
+		Subject:    "Tes Karakteristik Pribadi",
+		Difficulty: "medium",
+		Count:      7, // Expects 2 chunks: 5 + 2
+	})
+
+	req, _ := http.NewRequest("POST", "/api/ai/stream-generate-questions", bytes.NewBuffer(aiBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("AI stream generate failed with status %d: %s", w.Code, w.Body.String())
+	}
+
+	bodyStr := w.Body.String()
+	if !bytes.Contains(w.Body.Bytes(), []byte("event: init")) {
+		t.Errorf("Expected event: init in SSE stream")
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte("event: chunk")) {
+		t.Errorf("Expected event: chunk in SSE stream")
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte("event: done")) {
+		t.Errorf("Expected event: done in SSE stream")
+	}
+	_ = bodyStr
+}
+
 func TestAIEssayAutoGrader(t *testing.T) {
 	_, _, router := setupTestApp(t)
 

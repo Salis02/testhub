@@ -1,6 +1,6 @@
 // Core HTTP Client for TestHub Enterprise Architecture
 
-const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api'
+export const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api'
 export const AUTH_STORAGE_KEY = 'testhub_auth_token'
 export const REFRESH_STORAGE_KEY = 'testhub_refresh_token'
 export const LEGACY_AUTH_STORAGE_KEY = 'testhub_admin_token'

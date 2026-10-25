@@ -44,40 +44,123 @@ type AIQuestionJSON struct {
 	} `json:"options"`
 }
 
-// GenerateQuestions generates questions using Multi-Provider with auto-key failover
+// GenerateQuestions generates questions using Multi-Provider with auto-key failover and batch chunking
 func (s *AIAgentService) GenerateQuestions(ctx context.Context, req models.AIGenerateRequest) ([]models.TestQuestion, error) {
-	if req.Count <= 0 {
-		req.Count = 1
+	return s.StreamGenerateQuestions(ctx, req, nil)
+}
+
+// StreamGenerateQuestions splits requested count into 5-question batches and streams them via onChunk callback
+func (s *AIAgentService) StreamGenerateQuestions(
+	ctx context.Context,
+	req models.AIGenerateRequest,
+	onChunk func(chunk models.AIStreamChunk) error,
+) ([]models.TestQuestion, error) {
+	targetCount := req.Count
+	if targetCount <= 0 {
+		targetCount = 1
 	}
-	if req.Count > 10 {
-		req.Count = 10
+	if targetCount > 50 {
+		targetCount = 50
 	}
 
-	// 1. Try Gemini if API keys configured
-	if s.cfg != nil && len(s.cfg.GeminiAPIKeys) > 0 {
-		questions, err := s.generateWithGemini(ctx, req)
-		if err == nil && len(questions) > 0 {
-			questions = s.ensureQuestionCount(questions, req)
-			log.Printf("[AI-Agent] Successfully generated %d questions using Google Gemini (%s)", len(questions), s.cfg.GeminiModel)
-			return questions, nil
+	const chunkSize = 5
+	totalBatches := (targetCount + chunkSize - 1) / chunkSize
+
+	var allQuestions []models.TestQuestion
+
+	for batchIdx := 0; batchIdx < totalBatches; batchIdx++ {
+		// Check context cancellation (client disconnected or user clicked abort)
+		select {
+		case <-ctx.Done():
+			return allQuestions, ctx.Err()
+		default:
 		}
-		log.Printf("[AI-Agent] Gemini generation failed: %v. Attempting Groq fallback...", err)
-	}
 
-	// 2. Try Groq if API keys configured
-	if s.cfg != nil && len(s.cfg.GroqAPIKeys) > 0 {
-		questions, err := s.generateWithGroq(ctx, req)
-		if err == nil && len(questions) > 0 {
-			questions = s.ensureQuestionCount(questions, req)
-			log.Printf("[AI-Agent] Successfully generated %d questions using Groq (%s)", len(questions), s.cfg.GroqModel)
-			return questions, nil
+		remaining := targetCount - len(allQuestions)
+		currentChunkSize := chunkSize
+		if remaining < currentChunkSize {
+			currentChunkSize = remaining
 		}
-		log.Printf("[AI-Agent] Groq generation failed: %v. Falling back to local generator...", err)
+
+		chunkReq := req
+		chunkReq.Count = currentChunkSize
+
+		// Alternate between Gemini and Groq as primary provider across batches
+		preferGroq := (batchIdx % 2 == 1)
+
+		questions, provider, err := s.GenerateQuestionsChunk(ctx, chunkReq, preferGroq)
+		if err != nil && len(questions) == 0 {
+			return allQuestions, err
+		}
+
+		// Re-number questions accurately according to overall sequence
+		for i := range questions {
+			questions[i].QuestionNumber = len(allQuestions) + i + 1
+		}
+
+		allQuestions = append(allQuestions, questions...)
+
+		chunkData := models.AIStreamChunk{
+			BatchIndex:     batchIdx + 1,
+			TotalBatches:   totalBatches,
+			CompletedCount: len(allQuestions),
+			TotalCount:     targetCount,
+			Provider:       provider,
+			Questions:      questions,
+		}
+
+		if onChunk != nil {
+			if err := onChunk(chunkData); err != nil {
+				// Client aborted / stream write failed
+				return allQuestions, err
+			}
+		}
 	}
 
-	// 3. Fallback to Local Deterministic Generator (Zero Downtime guarantee)
-	log.Printf("[AI-Agent] Using local deterministic generator for category %s, subject %s", req.Category, req.Subject)
-	return s.generateLocalDeterministic(req)
+	return allQuestions, nil
+}
+
+// GenerateQuestionsChunk executes a single chunk (<=5 questions) using failover across Gemini, Groq, and Local
+func (s *AIAgentService) GenerateQuestionsChunk(ctx context.Context, req models.AIGenerateRequest, preferGroq bool) ([]models.TestQuestion, string, error) {
+	if preferGroq {
+		if s.cfg != nil && len(s.cfg.GroqAPIKeys) > 0 {
+			questions, provider, err := s.generateWithGroq(ctx, req)
+			if err == nil && len(questions) > 0 {
+				questions = s.ensureQuestionCount(questions, req)
+				return questions, provider, nil
+			}
+			log.Printf("[AI-Agent] Groq primary chunk failed: %v. Attempting Gemini fallback...", err)
+		}
+		if s.cfg != nil && len(s.cfg.GeminiAPIKeys) > 0 {
+			questions, provider, err := s.generateWithGemini(ctx, req)
+			if err == nil && len(questions) > 0 {
+				questions = s.ensureQuestionCount(questions, req)
+				return questions, provider, nil
+			}
+			log.Printf("[AI-Agent] Gemini fallback chunk failed: %v. Falling back to local generator...", err)
+		}
+	} else {
+		if s.cfg != nil && len(s.cfg.GeminiAPIKeys) > 0 {
+			questions, provider, err := s.generateWithGemini(ctx, req)
+			if err == nil && len(questions) > 0 {
+				questions = s.ensureQuestionCount(questions, req)
+				return questions, provider, nil
+			}
+			log.Printf("[AI-Agent] Gemini primary chunk failed: %v. Attempting Groq fallback...", err)
+		}
+		if s.cfg != nil && len(s.cfg.GroqAPIKeys) > 0 {
+			questions, provider, err := s.generateWithGroq(ctx, req)
+			if err == nil && len(questions) > 0 {
+				questions = s.ensureQuestionCount(questions, req)
+				return questions, provider, nil
+			}
+			log.Printf("[AI-Agent] Groq fallback chunk failed: %v. Falling back to local generator...", err)
+		}
+	}
+
+	// Fallback to Local Deterministic Generator (Zero Downtime guarantee)
+	questions, err := s.generateLocalDeterministic(req)
+	return questions, "Local Generator (Fallback)", err
 }
 
 func (s *AIAgentService) ensureQuestionCount(questions []models.TestQuestion, req models.AIGenerateRequest) []models.TestQuestion {
@@ -99,11 +182,11 @@ func (s *AIAgentService) ensureQuestionCount(questions []models.TestQuestion, re
 // -------------------------------------------------------------
 // GOOGLE GEMINI PROVIDER WITH MULTI-KEY ROTATION
 // -------------------------------------------------------------
-func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGenerateRequest) ([]models.TestQuestion, error) {
+func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGenerateRequest) ([]models.TestQuestion, string, error) {
 	keys := s.cfg.GeminiAPIKeys
 	totalKeys := len(keys)
 	if totalKeys == 0 {
-		return nil, fmt.Errorf("no gemini api keys configured")
+		return nil, "", fmt.Errorf("no gemini api keys configured")
 	}
 
 	prompt := s.buildPrompt(req)
@@ -112,12 +195,12 @@ func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGe
 		model = "gemini-1.5-flash"
 	}
 
-	maxTokens := req.Count*650 + 2500
+	maxTokens := req.Count*1000 + 3000
 	if maxTokens > 8192 {
 		maxTokens = 8192
 	}
-	if maxTokens < 2048 {
-		maxTokens = 2048
+	if maxTokens < 3000 {
+		maxTokens = 3000
 	}
 
 	startIndex := int(atomic.AddUint64(&s.geminiKeyIdx, 1) % uint64(totalKeys))
@@ -206,20 +289,21 @@ func (s *AIAgentService) generateWithGemini(ctx context.Context, req models.AIGe
 			continue
 		}
 
-		return questions, nil
+		providerName := fmt.Sprintf("Google Gemini Key %d (%s)", keyIndex+1, model)
+		return questions, providerName, nil
 	}
 
-	return nil, fmt.Errorf("all gemini keys failed: %w", lastErr)
+	return nil, "", fmt.Errorf("all gemini keys failed: %w", lastErr)
 }
 
 // -------------------------------------------------------------
 // GROQ PROVIDER WITH MULTI-KEY ROTATION
 // -------------------------------------------------------------
-func (s *AIAgentService) generateWithGroq(ctx context.Context, req models.AIGenerateRequest) ([]models.TestQuestion, error) {
+func (s *AIAgentService) generateWithGroq(ctx context.Context, req models.AIGenerateRequest) ([]models.TestQuestion, string, error) {
 	keys := s.cfg.GroqAPIKeys
 	totalKeys := len(keys)
 	if totalKeys == 0 {
-		return nil, fmt.Errorf("no groq api keys configured")
+		return nil, "", fmt.Errorf("no groq api keys configured")
 	}
 
 	prompt := s.buildPrompt(req)
@@ -318,10 +402,11 @@ func (s *AIAgentService) generateWithGroq(ctx context.Context, req models.AIGene
 			continue
 		}
 
-		return questions, nil
+		providerName := fmt.Sprintf("Groq Key %d (%s)", keyIndex+1, model)
+		return questions, providerName, nil
 	}
 
-	return nil, fmt.Errorf("all groq keys failed: %w", lastErr)
+	return nil, "", fmt.Errorf("all groq keys failed: %w", lastErr)
 }
 
 // -------------------------------------------------------------

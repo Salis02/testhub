@@ -59,6 +59,7 @@ export const api = {
 
   // 5. AI Assistant
   generateQuestionsAI: aiApi.generateQuestions,
+  streamGenerateQuestionsAI: aiApi.streamGenerateQuestions,
 }
 
 export default api

@@ -2,13 +2,28 @@ import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTheme } from '@/context/ThemeContext'
 import { useAuth } from '@/context/AuthContext'
+import { useConfirm } from '@/context/ConfirmContext'
 import { Sun, Moon, ShieldCheck, LogOut, Menu, X } from 'lucide-react'
 
 export const Header: React.FC = () => {
   const { theme, toggleTheme } = useTheme()
   const { isAuthenticated, logout } = useAuth()
+  const { confirm } = useConfirm()
   const location = useLocation()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+
+  const handleLogout = async () => {
+    const isConfirmed = await confirm({
+      title: 'Konfirmasi Keluar',
+      message: 'Anda yakin ingin keluar dari akun Anda?',
+      confirmText: 'Ya, Keluar',
+      cancelText: 'Batal',
+      variant: 'danger',
+    })
+    if (isConfirmed) {
+      await logout()
+    }
+  }
 
   // Close mobile menu whenever route changes
   useEffect(() => {
@@ -109,7 +124,7 @@ export const Header: React.FC = () => {
                   <span>Akun & Langganan</span>
                 </Link>
                 <button
-                  onClick={logout}
+                  onClick={handleLogout}
                   title="Keluar Akun"
                   className="p-2 rounded-md border border-borderline bg-surface text-ink-muted hover:text-red-500 hover:bg-surface-hover transition-colors"
                 >
@@ -203,8 +218,8 @@ export const Header: React.FC = () => {
                 </Link>
                 <button
                   onClick={() => {
-                    logout()
                     setIsMobileMenuOpen(false)
+                    handleLogout()
                   }}
                   className="inline-flex items-center space-x-1 text-xs text-red-500 hover:text-red-600 font-medium"
                 >

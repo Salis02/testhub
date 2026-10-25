@@ -3,13 +3,15 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
+export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl' | '7xl' | 'full'
+
 export interface ModalProps {
   isOpen: boolean
   onClose: () => void
   title?: React.ReactNode
   description?: string
   children: React.ReactNode
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl'
+  maxWidth?: ModalSize
   className?: string
   showCloseButton?: boolean
 }
@@ -68,7 +70,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   if (!isRendered) return null
 
-  const maxWidthClasses = {
+  const maxWidthClasses: Record<ModalSize, string> = {
     sm: 'max-w-sm',
     md: 'max-w-md',
     lg: 'max-w-lg',
@@ -76,7 +78,11 @@ export const Modal: React.FC<ModalProps> = ({
     '2xl': 'max-w-2xl',
     '3xl': 'max-w-3xl',
     '4xl': 'max-w-4xl',
-  }[maxWidth]
+    '5xl': 'max-w-5xl',
+    '6xl': 'max-w-6xl',
+    '7xl': 'max-w-7xl',
+    full: 'max-w-[97vw]',
+  }
 
   return createPortal(
     <div
@@ -99,7 +105,7 @@ export const Modal: React.FC<ModalProps> = ({
         ref={modalRef}
         className={cn(
           'relative w-full rounded-lg bg-surface surface-card border border-borderline shadow-modal z-10 my-8 overflow-hidden transform transition-all duration-200 ease-out',
-          maxWidthClasses,
+          maxWidthClasses[maxWidth],
           isVisible
             ? 'opacity-100 scale-100 translate-y-0'
             : 'opacity-0 scale-95 translate-y-3 pointer-events-none',

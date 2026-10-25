@@ -136,6 +136,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		ai := api.Group("/ai")
 		{
 			ai.POST("/generate-questions", aiHandler.GenerateQuestions)
+			ai.POST("/stream-generate-questions", aiHandler.StreamGenerateQuestions)
 			ai.POST("/grade-essay", aiHandler.GradeEssay)
 		}
 

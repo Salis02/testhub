@@ -88,68 +88,60 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
     setErrorMsg(null)
     setGeneratedList([])
     setLoading(true)
-    setProgressPercent(5)
+    setProgressPercent(2)
     setElapsedSeconds(0)
-    setCurrentStageText(PROGRESS_STAGES[0].text)
+    setCurrentStageText('Menginisialisasi Multi-Provider SSE Stream (Gemini & Groq)...')
 
     const abortController = new AbortController()
     abortControllerRef.current = abortController
 
-    // 1. Elapsed timer
     const startTime = Date.now()
     elapsedTimerRef.current = window.setInterval(() => {
       setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000))
     }, 1000)
 
-    // 2. Realistic progressing curve
-    progressTimerRef.current = window.setInterval(() => {
-      setProgressPercent((prev) => {
-        if (prev >= 95) return 95
-        const step = prev < 50 ? Math.floor(Math.random() * 8) + 4 : Math.floor(Math.random() * 4) + 1
-        const next = Math.min(95, prev + step)
-
-        // Update stage text dynamically
-        const stage = PROGRESS_STAGES.find((s) => next >= s.min && next < s.max)
-        if (stage) setCurrentStageText(stage.text)
-
-        return next
-      })
-    }, 450)
-
     try {
-      const list = await api.generateQuestionsAI(
+      const targetCount = Math.min(50, Math.max(1, count))
+      let liveQuestions: Question[] = []
+
+      await api.streamGenerateQuestionsAI(
         {
           category,
           subject: subject.trim(),
           difficulty,
-          count: Math.min(10, Math.max(1, count)),
+          count: targetCount,
           custom_prompt: customPrompt.trim() || undefined,
+        },
+        (chunk) => {
+          liveQuestions = [...liveQuestions, ...chunk.questions]
+          setGeneratedList([...liveQuestions])
+
+          const percent = Math.min(100, Math.round((chunk.completed_count / chunk.total_count) * 100))
+          setProgressPercent(percent)
+          setCurrentStageText(
+            `Batch ${chunk.batch_index}/${chunk.total_batches} selesai via ${chunk.provider} (${chunk.completed_count}/${chunk.total_count} soal)`
+          )
         },
         abortController.signal
       )
 
       clearTimers()
       setProgressPercent(100)
-      setCurrentStageText('Selesai! Butir soal berhasil dibuat dan divalidasi.')
-
-      setTimeout(() => {
-        setGeneratedList(list)
-        setLoading(false)
-        setExpandedIndex(0)
-        toast.success(
-          'Generasi AI Berhasil',
-          `${list.length} butir butir soal baru telah dibuat dan siap ditinjau.`
-        )
-      }, 400)
+      setCurrentStageText(`Selesai! ${liveQuestions.length} butir soal berhasil dibuat dan divalidasi.`)
+      setLoading(false)
+      setExpandedIndex(0)
+      toast.success(
+        'Generasi AI Berhasil',
+        `${liveQuestions.length} butir soal telah berhasil dibuat dan siap disisipkan.`
+      )
     } catch (err: unknown) {
       clearTimers()
       setLoading(false)
       const error = err as Error
-      if (error.name === 'AbortError') {
-        setErrorMsg('Generasi soal dibatalkan oleh pengguna.')
-        toast.info('Dibatalkan', 'Proses generasi soal dibatalkan.')
+      if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+        // Discontinued by user
       } else {
-        setErrorMsg(error.message || 'Gagal menghubungi layanan AI.')
+        setErrorMsg(error.message || 'Gagal menghubungi layanan AI streaming.')
         toast.error('Gagal Generasi AI', error.message || 'Layanan AI mengalami kendala.')
       }
     }
@@ -162,9 +154,15 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
     }
     clearTimers()
     setLoading(false)
-    setProgressPercent(0)
-    setErrorMsg('Proses generasi dibatalkan.')
-    toast.info('Dibatalkan', 'Proses generasi soal dibatalkan.')
+    if (generatedList.length > 0) {
+      toast.info(
+        'Generasi Dihentikan',
+        `${generatedList.length} butir soal yang sudah selesai tetap tersimpan dan siap disisipkan ke draf.`
+      )
+    } else {
+      setErrorMsg('Proses generasi dibatalkan.')
+      toast.info('Dibatalkan', 'Proses generasi soal dibatalkan.')
+    }
   }
 
   const handleInsertAll = () => {
@@ -183,7 +181,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/60 dark:bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-surface border border-borderline rounded-lg max-w-3xl w-full p-6 sm:p-7 shadow-2xl space-y-6 my-auto max-h-[90vh] overflow-y-auto">
+      <div className="bg-surface border border-borderline rounded-lg max-w-4xl xl:max-w-5xl w-full p-6 sm:p-7 shadow-2xl space-y-6 my-auto max-h-[92vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-borderline pb-4">
           <div className="flex items-center space-x-2.5">
@@ -316,18 +314,49 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           </div>
 
           <div>
-            <label className="block font-semibold text-ink uppercase tracking-wider mb-1">
-              Jumlah Butir Soal (1 - 10 Soal)
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={10}
-              disabled={loading}
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value))}
-              className="w-full p-2.5 rounded-md border border-borderline bg-canvas text-ink font-mono focus:outline-none focus:ring-2 focus:ring-accent"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-semibold text-ink uppercase tracking-wider">
+                Target Jumlah Soal (1 - 50 Soal)
+              </label>
+              <span className="text-[10px] text-ink-muted font-mono font-bold text-accent">
+                {count} Butir Soal
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="number"
+                min={1}
+                max={50}
+                disabled={loading}
+                value={count}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10)
+                  if (isNaN(val)) setCount(1)
+                  else setCount(Math.min(50, Math.max(1, val)))
+                }}
+                className="w-20 p-2.5 rounded-md border border-borderline bg-canvas text-ink font-mono focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+              <div className="flex items-center space-x-1.5 flex-1 flex-wrap gap-y-1">
+                {[5, 10, 15, 20, 30, 40].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => setCount(preset)}
+                    className={`px-2.5 py-1.5 text-xs font-mono font-medium rounded-md border transition-colors cursor-pointer ${
+                      count === preset
+                        ? 'bg-accent text-white border-accent font-semibold shadow-xs'
+                        : 'border-borderline bg-surface text-ink-muted hover:text-ink hover:bg-surface-hover'
+                    }`}
+                  >
+                    {preset} Soal
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="text-[10px] text-ink-muted mt-1.5">
+              ⚡ <strong>SSE Multi-Key Chunking:</strong> Soal otomatis dipecah per batch 5 butir dan dialirkan live bergantian via 4 API Key (Gemini & Groq). Bebas batas token & timeout!
+            </p>
           </div>
 
           <div className="flex items-end">
@@ -335,7 +364,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
               <button
                 type="button"
                 onClick={handleCancelGeneration}
-                className="w-full py-2.5 px-4 rounded-md border border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400 font-semibold hover:bg-red-500/20 transition-colors flex items-center justify-center space-x-2 text-xs"
+                className="w-full py-2.5 px-4 rounded-md border border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400 font-semibold hover:bg-red-500/20 transition-colors flex items-center justify-center space-x-2 text-xs cursor-pointer"
               >
                 <X className="w-4 h-4" />
                 <span>Batalkan Proses</span>
@@ -345,20 +374,20 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                 type="button"
                 onClick={handleGenerate}
                 disabled={!subject.trim()}
-                className="w-full py-2.5 px-4 rounded-md bg-accent text-white font-semibold hover:opacity-95 shadow-xs transition-opacity flex items-center justify-center space-x-2 disabled:opacity-50 text-xs"
+                className="w-full py-2.5 px-4 rounded-md bg-accent text-white font-semibold hover:opacity-95 shadow-xs transition-opacity flex items-center justify-center space-x-2 disabled:opacity-50 text-xs cursor-pointer"
               >
                 <Sparkles className="w-4 h-4" />
-                <span>Mulai Buat Soal AI</span>
+                <span>Mulai Stream Soal AI</span>
               </button>
             )}
           </div>
 
-          {/* Token Guardrail Indicator */}
+          {/* Multi-Key SSE Architecture Banner */}
           <div className="sm:col-span-2 flex items-center justify-between p-2.5 rounded border border-accent/20 bg-accent/5 text-[11px] text-ink-muted">
             <div className="flex items-center space-x-2">
               <Sparkles className="w-3.5 h-3.5 text-accent shrink-0" />
               <span>
-                <strong>Token Guardrail Aktif:</strong> Kuota dialokasikan dinamis (<strong>{Math.min(8192, count * 650 + 2500)} tokens</strong>) dengan proteksi penalaran (thinking buffer) & anti-truncation.
+                <strong>Multi-Provider Load Balancer:</strong> Permintaan <strong>{count} soal</strong> dibagi menjadi <strong>{Math.ceil(count / 5)} batch</strong> (@ 5 butir) berotasi otomatis ke Gemini 1 & 2 dan Groq 1 & 2.
               </span>
             </div>
           </div>
@@ -411,60 +440,58 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
               />
             </div>
 
-            {/* SKELETON PREVIEW CARDS (Shows structure of incoming questions) */}
-            <div className="space-y-3 pt-2">
-              <p className="text-[11px] font-mono text-ink-muted uppercase tracking-wider">
-                Menyusun {count} butir soal pilihan ganda...
-              </p>
-              {Array.from({ length: Math.min(3, count) }).map((_, i) => (
-                <div
-                  key={i}
-                  className="p-4 rounded-md bg-surface border border-borderline space-y-3 animate-pulse"
-                >
-                  <div className="flex justify-between items-center">
-                    <Skeleton className="h-4 w-20 rounded" />
-                    <Skeleton className="h-4 w-16 rounded" />
+            {/* SKELETON PREVIEW CARDS (only shown when waiting for first batch) */}
+            {generatedList.length === 0 && (
+              <div className="space-y-3 pt-2">
+                <p className="text-[11px] font-mono text-ink-muted uppercase tracking-wider">
+                  Menyiapkan batch pertama ({Math.min(5, count)} butir soal) via multi-key provider...
+                </p>
+                {Array.from({ length: Math.min(2, count) }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="p-4 rounded-md bg-surface border border-borderline space-y-3 animate-pulse"
+                  >
+                    <div className="flex justify-between items-center">
+                      <Skeleton className="h-4 w-20 rounded" />
+                      <Skeleton className="h-4 w-16 rounded" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Skeleton className="h-4 w-full rounded" />
+                      <Skeleton className="h-4 w-3/4 rounded" />
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Skeleton className="h-4 w-full rounded" />
-                    <Skeleton className="h-4 w-3/4 rounded" />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    {[1, 2, 3, 4, 5].map((opt) => (
-                      <div key={opt} className="flex items-center space-x-2">
-                        <Skeleton className="h-6 w-6 rounded flex-shrink-0" />
-                        <Skeleton className="h-3.5 w-4/5 rounded" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* GENERATED RESULTS PREVIEW */}
-        {!loading && generatedList.length > 0 && (
+        {/* GENERATED RESULTS PREVIEW (Live Stream or Done) */}
+        {generatedList.length > 0 && (
           <div className="space-y-4 pt-3 border-t border-borderline animate-in fade-in duration-300">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center space-x-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                {loading ? (
+                  <div className="w-4 h-4 rounded-full border-2 border-accent border-t-transparent animate-spin shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                )}
                 <span className="text-xs font-semibold text-ink">
-                  {generatedList.length} Butir Soal Terverifikasi & Siap Digunakan
+                  {generatedList.length} Butir Soal {loading ? 'Telah Masuk (Mengalir Live...)' : 'Terverifikasi & Siap Digunakan'}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={handleInsertAll}
-                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 shadow-xs transition-colors"
+                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 shadow-xs transition-colors cursor-pointer"
               >
                 <PlusCircle className="w-4 h-4" />
-                <span>Sisipkan Semua ke Bank Ujian</span>
+                <span>Sisipkan Semua ({generatedList.length} Soal) ke Bank Ujian</span>
               </button>
             </div>
 
             {/* Accordion / Card List of Generated Questions */}
-            <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
               {generatedList.map((q, idx) => {
                 const isExpanded = expandedIndex === idx
 
@@ -547,6 +574,14 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                   </div>
                 )
               })}
+
+              {/* Streaming next batch placeholder */}
+              {loading && (
+                <div className="p-3.5 rounded-lg border border-dashed border-accent/40 bg-accent/5 flex items-center justify-center space-x-2 text-xs font-mono text-accent animate-pulse">
+                  <Cpu className="w-4 h-4 animate-spin shrink-0" />
+                  <span>Sedang merotasi API key & mengalirkan batch butir berikutnya... ({generatedList.length}/{count} butir)</span>
+                </div>
+              )}
             </div>
           </div>
         )}
