@@ -6,8 +6,8 @@ import { Lock, Mail, ArrowRight, KeyRound, ShieldAlert, User as UserIcon, UserCh
 
 export const LoginPage: React.FC = () => {
   const [isRegister, setIsRegister] = useState(false)
-  const [email, setEmail] = useState('admin@testhub.com')
-  const [password, setPassword] = useState('AdminPassword123!')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
   const [role, setRole] = useState<'creator' | 'user'>('creator')
   const [loading, setLoading] = useState(false)

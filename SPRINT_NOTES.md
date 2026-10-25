@@ -89,7 +89,8 @@ Kelemahan & Sertifikat                                (Anonim, HP, Auto-save)
 
 ## 7. Status Penguatan Keamanan & Audit Kerentanan (Ponytail Review — 100% Remediated)
 
-> Dokumentasi audit lengkap tersimpan di [`VULNERABILITY_REVIEW.md`](file:///home/sans/coding/quiz_app/VULNERABILITY_REVIEW.md).
+> Dokumentasi audit umum tersimpan di [`VULNERABILITY_REVIEW.md`](file:///home/sans/coding/quiz_app/VULNERABILITY_REVIEW.md).  
+> Dokumentasi audit autentikasi & session lifecycle tersimpan di [`AUTH_AUDIT_REVIEW.md`](file:///home/sans/coding/quiz_app/AUTH_AUDIT_REVIEW.md).
 
 | No | Modul & Lokasi | Kerentanan yang Diatasi | Status | Solusi Teknis |
 |:---:|---|---|:---:|---|
@@ -102,6 +103,14 @@ Kelemahan & Sertifikat                                (Anonim, HP, Auto-save)
 | **7** | [`useExamProctoring.ts`](file:///home/sans/coding/quiz_app/frontend/src/hooks/useExamProctoring.ts) | Listener clipboard tidak memblokir penempelan teks (`paste`) | ✅ Selesai | Tambahkan listener `paste`, blokir `Ctrl+V`, dan masukkan `blockCopyPaste` ke dependency array. |
 | **8** | [`TestCreatorModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestCreatorModal.tsx) & [`TestEditorModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestEditorModal.tsx) | Impor soal menghasilkan duplikasi ID opsi pada batch yang sama | ✅ Selesai | Sisipkan indeks soal ke ID opsi (`opt-${Date.now()}-${idx}-${letter}`). |
 | **9** | [`spreadsheetParser.ts`](file:///home/sans/coding/quiz_app/frontend/src/utils/spreadsheetParser.ts) | Inisialisasi ganda kolom mapping yang redundant | ✅ Selesai | Refaktor pemetaan kolom langsung dengan percabangan tunggal. |
+| **10** | [`auth.go`](file:///home/sans/coding/quiz_app/backend/internal/handlers/auth.go) & [`middleware/auth.go`](file:///home/sans/coding/quiz_app/backend/internal/middleware/auth.go) | Akun suspended (`is_active = false`) tetap bisa login dan akses API | ✅ Selesai | Validasi `!user.IsActive` di `Login`, `RefreshToken`, dan `Me` dengan status HTTP 403 Forbidden. |
+| **11** | [`client.ts`](file:///home/sans/coding/quiz_app/frontend/src/services/client.ts) | Interceptor 401 membajak peserta ujian publik ke layar login | ✅ Selesai | Batasi auto-redirect 401 hanya jika URL aktif berada di rute privat (`/admin`, `/my-subscriptions`, `/profile`). |
+| **12** | [`auth.api.ts`](file:///home/sans/coding/quiz_app/frontend/src/services/auth.api.ts) | Mismatch field `/auth/me` menyebabkan `user.id` bernilai `undefined` | ✅ Selesai | Normalisasi mapping `id: res.id || res.user_id || ''` di `auth.api.ts`. |
+| **13** | [`LoginPage.tsx`](file:///home/sans/coding/quiz_app/frontend/src/pages/LoginPage.tsx) | Input form login terisi otomatis dengan kredensial default admin di produksi | ✅ Selesai | Kosongkan initial state form (`useState('')`) dan simpan demo login di tombol eksplisit. |
+| **14** | [`middleware/auth.go`](file:///home/sans/coding/quiz_app/backend/internal/middleware/auth.go) & [`routes.go`](file:///home/sans/coding/quiz_app/backend/internal/handlers/routes.go) | Refresh token tanpa klaim `token_type` bertindak sebagai bearer token 7 hari | ✅ Selesai | Tambah klaim `TokenType` (`"access"` vs `"refresh"`), cegah refresh token di `AuthRequired`, dan buat `POST /api/auth/refresh`. |
+| **15** | [`auth.go`](file:///home/sans/coding/quiz_app/backend/internal/handlers/auth.go) | Case-sensitivity email menggagalkan login dari perangkat mobile | ✅ Selesai | Normalisasi seluruh email masuk menggunakan `strings.ToLower(strings.TrimSpace(email))`. |
+| **16** | [`main.go`](file:///home/sans/coding/quiz_app/backend/cmd/server/main.go) | Lingkungan produksi boot dengan fallback JWT secret publik | ✅ Selesai | Startup assertion mematikan server (`log.Fatal`) jika `JWT_SECRET` default di mode produksi. |
+| **17** | [`auth.go`](file:///home/sans/coding/quiz_app/backend/internal/handlers/auth.go) | Timing side-channel membocorkan status registrasi email pengguna | ✅ Selesai | Komparasi bcrypt tiruan (dummy compare) dijalankan jika user tidak ditemukan untuk menyamakan respon CPU. |
 
 ---
 

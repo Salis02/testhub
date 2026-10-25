@@ -1,4 +1,10 @@
-import { apiClient, setStoredToken, clearStoredToken } from './client'
+import {
+  apiClient,
+  setStoredToken,
+  setStoredRefreshToken,
+  getStoredRefreshToken,
+  clearStoredToken,
+} from './client'
 import { AuthResponse, User } from '@/types'
 
 export const authApi = {
@@ -25,6 +31,9 @@ export const authApi = {
 
     if (data.token) {
       setStoredToken(data.token)
+    }
+    if (data.refresh_token) {
+      setStoredRefreshToken(data.refresh_token)
     }
 
     return {
@@ -64,6 +73,9 @@ export const authApi = {
     if (data.token) {
       setStoredToken(data.token)
     }
+    if (data.refresh_token) {
+      setStoredRefreshToken(data.refresh_token)
+    }
 
     return {
       ...data,
@@ -73,17 +85,41 @@ export const authApi = {
 
   async me(signal?: AbortSignal): Promise<User> {
     const res = await apiClient<{
-      user_id: string
+      id?: string
+      user_id?: string
       email: string
       full_name: string
       role: 'admin' | 'creator' | 'user'
     }>('/auth/me', { signal })
 
     return {
-      id: res.user_id,
+      id: res.id || res.user_id || '',
       email: res.email,
       fullName: res.full_name,
       role: res.role,
+    }
+  },
+
+  async refreshToken(): Promise<AuthResponse | null> {
+    const token = getStoredRefreshToken()
+    if (!token) return null
+
+    try {
+      const data = await apiClient<AuthResponse>('/auth/refresh', {
+        method: 'POST',
+        body: JSON.stringify({ refresh_token: token }),
+      })
+
+      if (data.token) {
+        setStoredToken(data.token)
+      }
+      if (data.refresh_token) {
+        setStoredRefreshToken(data.refresh_token)
+      }
+      return data
+    } catch {
+      clearStoredToken()
+      return null
     }
   },
 

@@ -81,6 +81,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		{
 			auth.POST("/register", middleware.RateLimit(cacheClient, 20, time.Minute, "register"), authHandler.Register)
 			auth.POST("/login", middleware.RateLimit(cacheClient, 30, time.Minute, "login"), authHandler.Login)
+			auth.POST("/refresh", middleware.RateLimit(cacheClient, 30, time.Minute, "refresh_token"), authHandler.RefreshToken)
 			auth.GET("/me", middleware.AuthRequired(cfg.JWTSecret), authHandler.Me) // Backward-compatible alias
 		}
 

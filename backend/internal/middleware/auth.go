@@ -11,17 +11,23 @@ import (
 )
 
 type Claims struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
-	Role   string `json:"role"`
+	UserID    string `json:"user_id"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	TokenType string `json:"token_type,omitempty"` // "access" or "refresh"
 	jwt.RegisteredClaims
 }
 
-func GenerateToken(userID, email, role, secret string, expiry time.Duration) (string, error) {
+func GenerateToken(userID, email, role, secret string, expiry time.Duration, tokenType ...string) (string, error) {
+	tType := "access"
+	if len(tokenType) > 0 && tokenType[0] != "" {
+		tType = tokenType[0]
+	}
 	claims := Claims{
-		UserID: userID,
-		Email:  email,
-		Role:   role,
+		UserID:    userID,
+		Email:     email,
+		Role:      role,
+		TokenType: tType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -61,6 +67,12 @@ func AuthRequired(secret string) gin.HandlerFunc {
 
 		if err != nil || !token.Valid {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired authorization token"})
+			c.Abort()
+			return
+		}
+
+		if claims.TokenType == "refresh" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token cannot be used for API access"})
 			c.Abort()
 			return
 		}
@@ -110,7 +122,7 @@ func OptionalAuth(secret string) gin.HandlerFunc {
 			return []byte(secret), nil
 		})
 
-		if err == nil && token.Valid {
+		if err == nil && token.Valid && claims.TokenType != "refresh" {
 			c.Set("user_id", claims.UserID)
 			c.Set("email", claims.Email)
 			c.Set("role", claims.Role)

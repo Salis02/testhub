@@ -29,6 +29,11 @@ func main() {
 
 	cfg := config.LoadConfig()
 
+	// Guard against unconfigured or fallback JWT secrets in production
+	if cfg.Environment == "production" && (cfg.JWTSecret == "" || cfg.JWTSecret == "testhub-super-secret-jwt-key-production-ready-min-32-chars") {
+		log.Fatal("[Server] FATAL: Production environment requires a securely configured JWT_SECRET! Refusing to boot with default secret.")
+	}
+
 	log.Printf("[Server] Initializing TestHub backend in %s environment...", cfg.Environment)
 
 	// Set Gin mode

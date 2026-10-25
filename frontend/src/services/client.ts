@@ -2,6 +2,7 @@
 
 const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api'
 export const AUTH_STORAGE_KEY = 'testhub_auth_token'
+export const REFRESH_STORAGE_KEY = 'testhub_refresh_token'
 export const LEGACY_AUTH_STORAGE_KEY = 'testhub_admin_token'
 export const USER_EMAIL_KEY = 'testhub_user_email'
 
@@ -28,9 +29,24 @@ export function setStoredToken(token: string): void {
   localStorage.setItem(LEGACY_AUTH_STORAGE_KEY, token)
 }
 
+export function getStoredRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_STORAGE_KEY)
+}
+
+export function setStoredRefreshToken(token: string): void {
+  if (token) {
+    localStorage.setItem(REFRESH_STORAGE_KEY, token)
+  }
+}
+
+export function clearStoredRefreshToken(): void {
+  localStorage.removeItem(REFRESH_STORAGE_KEY)
+}
+
 export function clearStoredToken(): void {
   localStorage.removeItem(AUTH_STORAGE_KEY)
   localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY)
+  clearStoredRefreshToken()
 }
 
 export class ApiError extends Error {
@@ -76,9 +92,16 @@ export async function apiClient<T>(
   // Handle 401 Unauthorized centrally
   if (res.status === 401) {
     clearStoredToken()
-    if (!window.location.pathname.startsWith('/login')) {
+    if (typeof window !== 'undefined') {
       const current = window.location.pathname
-      window.location.href = `/login?from=${encodeURIComponent(current)}&reason=expired`
+      const isProtectedRoute =
+        current.startsWith('/admin') ||
+        current.startsWith('/my-subscriptions') ||
+        current.startsWith('/profile')
+
+      if (isProtectedRoute && !current.startsWith('/login')) {
+        window.location.href = `/login?from=${encodeURIComponent(current)}&reason=expired`
+      }
     }
     throw new ApiError(401, 'Sesi Anda telah berakhir. Silakan login kembali.')
   }
