@@ -97,10 +97,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false
   }
 
-  const logout = () => {
-    clearStoredToken()
-    clearStoredUserEmail()
-    setUser(null)
+  const logout = async () => {
+    try {
+      await api.logout()
+    } catch {
+      // Ignore errors on logout
+    } finally {
+      clearStoredToken()
+      clearStoredUserEmail()
+      setUser(null)
+    }
   }
 
   return (

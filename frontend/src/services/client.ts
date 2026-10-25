@@ -62,6 +62,53 @@ export class ApiError extends Error {
   }
 }
 
+// Single-flight promise queue to prevent simultaneous multiple refresh requests
+let refreshPromise: Promise<string | null> | null = null
+
+async function requestTokenRefresh(): Promise<string | null> {
+  if (refreshPromise) {
+    return refreshPromise
+  }
+
+  refreshPromise = (async () => {
+    const refreshToken = getStoredRefreshToken()
+    if (!refreshToken) {
+      return null
+    }
+
+    try {
+      const resp = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      })
+
+      if (!resp.ok) {
+        clearStoredToken()
+        return null
+      }
+
+      const data = await resp.json()
+      if (data && data.token) {
+        setStoredToken(data.token)
+        if (data.refresh_token) {
+          setStoredRefreshToken(data.refresh_token)
+        }
+        return data.token as string
+      }
+      clearStoredToken()
+      return null
+    } catch {
+      clearStoredToken()
+      return null
+    } finally {
+      refreshPromise = null
+    }
+  })()
+
+  return refreshPromise
+}
+
 export async function apiClient<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -89,8 +136,40 @@ export async function apiClient<T>(
     headers,
   })
 
-  // Handle 401 Unauthorized centrally
+  // Handle 401 Unauthorized with Silent Auto-Refresh Interceptor
   if (res.status === 401) {
+    const isAuthEndpoint =
+      cleanEndpoint === '/auth/login' ||
+      cleanEndpoint === '/auth/register' ||
+      cleanEndpoint === '/auth/refresh'
+
+    if (!isAuthEndpoint) {
+      const newToken = await requestTokenRefresh()
+      if (newToken) {
+        // Retry the original request with the fresh access token
+        const retryHeaders = new Headers(options.headers || {})
+        if (!isFormData && !retryHeaders.has('Content-Type')) {
+          retryHeaders.set('Content-Type', 'application/json')
+        }
+        retryHeaders.set('Authorization', `Bearer ${newToken}`)
+        if (userEmail && !retryHeaders.has('X-User-Email')) {
+          retryHeaders.set('X-User-Email', userEmail)
+        }
+
+        const retryRes = await fetch(url, {
+          ...options,
+          headers: retryHeaders,
+        })
+
+        if (retryRes.ok) {
+          if (retryRes.status === 204) {
+            return {} as T
+          }
+          return retryRes.json()
+        }
+      }
+    }
+
     clearStoredToken()
     if (typeof window !== 'undefined') {
       const current = window.location.pathname

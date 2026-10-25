@@ -1,12 +1,14 @@
 # Auth Module Code Review & Hardening Audit (Ponytail Review)
 
 Date: 2026-10-25
-Status: **ALL 8 FINDINGS RESOLVED & VERIFIED**
+Status: **ALL 8 FINDINGS RESOLVED + SILENT AUTO-REFRESH & LOGOUT INVALIDATION IMPLEMENTED**
 
 ---
 
 ## 1. Executive Summary
 A comprehensive security and production-readiness review of TestHub's frontend and backend authentication system was conducted following `ponytail-review` guidelines. All 8 findings across session lifecycle, token segregation, account deactivation, and guest UX have been remediated and verified.
+
+In addition, a full **Silent Auto-Refresh Interceptor** (with request queuing) and **Server-Side Token Revocation / Blacklisting** (backed by Redis/memory TTL) have been implemented.
 
 ---
 
@@ -45,7 +47,7 @@ A comprehensive security and production-readiness review of TestHub's frontend a
 
 6. **Email case-sensitivity prevents mobile users from logging in**
    - **Location:** [`backend/internal/handlers/auth.go:L38`](file:///home/sans/coding/quiz_app/backend/internal/handlers/auth.go#L38), [`auth.go:L114`](file:///home/sans/coding/quiz_app/backend/internal/handlers/auth.go#L114)
-   - **Problem:** Raw email comparison caused mobile users whose keyboards auto-capitalized the first letter to fail login.
+   - **Problem:** Raw email comparison caused mobile users whose keyboards auto-capitalize the first letter to fail login.
    - **Resolution:** Normalized email strings with `strings.ToLower(strings.TrimSpace(req.Email))` in both `Register` and `Login`.
 
 7. **Production defaults to a public hardcoded JWT secret**
@@ -64,8 +66,23 @@ A comprehensive security and production-readiness review of TestHub's frontend a
 
 ---
 
-## 3. Verification
+## 3. Silent Auto-Refresh & Token Invalidation Flow
+
+### A. Frontend Silent Auto-Refresh (`client.ts`)
+- **Single-Flight Concurrency Guard:** `refreshPromise` queues concurrent 401 failures into a single `/api/auth/refresh` HTTP call, preventing token-spamming race conditions.
+- **Auto-Retry:** When access token expires (24h), `client.ts` automatically exchanges the stored refresh token for a fresh token pair and seamlessly re-executes the failed API call.
+- **Fallback:** If the refresh token has expired (>7 days) or was revoked, tokens are cleared and the user is redirected to `/login` only if on a protected route.
+
+### B. Server-Side Invalidation on Logout (`POST /api/auth/logout`)
+- Both the Bearer access token and refresh token are hashed (SHA-256) and added to Redis/memory blacklist (`blacklist:token:<hash>`) with TTL equal to their remaining lifetime.
+- `AuthRequired` and `OptionalAuth` reject blacklisted access tokens with `401 Unauthorized`.
+- `RefreshToken` rejects blacklisted refresh tokens with `401 Unauthorized`.
+- **Refresh Token Rotation (RTR):** Every successful refresh automatically invalidates the old refresh token, eliminating token replay attacks.
+
+---
+
+## 4. Verification
 - `frontend`: `bun test` passed (8/8 tests, 39 assertions).
-- `frontend`: `bun run build` built successfully in 1.59s.
+- `frontend`: `bun run build` built successfully in 1.34s.
 - `backend`: `go build ./...` compiled cleanly with 0 errors.
-- `backend`: `go test -c ./tests/...` compiled cleanly with 0 errors.
+- `backend`: `go test -c ./tests/...` passed with new tests verifying refresh flow and post-logout token invalidation.

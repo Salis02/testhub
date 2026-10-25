@@ -123,7 +123,17 @@ export const authApi = {
     }
   },
 
-  logout(): void {
-    clearStoredToken()
+  async logout(): Promise<void> {
+    const refreshToken = getStoredRefreshToken()
+    try {
+      await apiClient('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refresh_token: refreshToken || '' }),
+      })
+    } catch {
+      // Ignore network errors during logout
+    } finally {
+      clearStoredToken()
+    }
   },
 }

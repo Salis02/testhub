@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
+	"testhub/internal/cache"
 	"testhub/internal/config"
 	"testhub/internal/database"
 	"testhub/internal/helpers"
@@ -25,10 +26,15 @@ type AuthHandler struct {
 	db       *database.DB
 	cfg      *config.Config
 	testRepo repository.TestRepository
+	cache    *cache.Client
 }
 
-func NewAuthHandler(db *database.DB, cfg *config.Config, testRepo repository.TestRepository) *AuthHandler {
-	return &AuthHandler{db: db, cfg: cfg, testRepo: testRepo}
+func NewAuthHandler(db *database.DB, cfg *config.Config, testRepo repository.TestRepository, cacheClient ...*cache.Client) *AuthHandler {
+	var cClient *cache.Client
+	if len(cacheClient) > 0 {
+		cClient = cacheClient[0]
+	}
+	return &AuthHandler{db: db, cfg: cfg, testRepo: testRepo, cache: cClient}
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -166,6 +172,12 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
+	// Check if refresh token has been revoked
+	if middleware.IsTokenBlacklisted(c.Request.Context(), h.cache, req.RefreshToken) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token telah dicabut atau sudah digunakan"})
+		return
+	}
+
 	claims := &middleware.Claims{}
 	token, err := jwt.ParseWithClaims(req.RefreshToken, claims, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -194,6 +206,11 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 
 	newRefreshToken, _ := middleware.GenerateToken(user.ID, user.Email, user.Role, h.cfg.JWTSecret, h.cfg.RefreshTokenExpiry, "refresh")
 
+	// Refresh Token Rotation: invalidate previous refresh token
+	if claims.ExpiresAt != nil {
+		_ = middleware.BlacklistToken(c.Request.Context(), h.cache, req.RefreshToken, claims.ExpiresAt.Time)
+	}
+
 	c.JSON(http.StatusOK, models.AuthResponse{
 		UserID:       user.ID,
 		Email:        user.Email,
@@ -202,6 +219,40 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		Token:        newToken,
 		RefreshToken: newRefreshToken,
 	})
+}
+
+// Logout invalidates the active access token and refresh token in Redis
+func (h *AuthHandler) Logout(c *gin.Context) {
+	// 1. Blacklist current Bearer access token
+	authHeader := c.GetHeader("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+		claims := &middleware.Claims{}
+		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+			return []byte(h.cfg.JWTSecret), nil
+		})
+		if err == nil && token.Valid && claims.ExpiresAt != nil {
+			_ = middleware.BlacklistToken(c.Request.Context(), h.cache, tokenStr, claims.ExpiresAt.Time)
+		}
+	}
+
+	// 2. Blacklist refresh token if provided
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	if req.RefreshToken != "" {
+		claims := &middleware.Claims{}
+		token, err := jwt.ParseWithClaims(req.RefreshToken, claims, func(t *jwt.Token) (interface{}, error) {
+			return []byte(h.cfg.JWTSecret), nil
+		})
+		if err == nil && token.Valid && claims.ExpiresAt != nil {
+			_ = middleware.BlacklistToken(c.Request.Context(), h.cache, req.RefreshToken, claims.ExpiresAt.Time)
+		}
+	}
+
+	helpers.LogAudit(c, h.testRepo, "auth_logout", "user", "", "", `{"action": "token_invalidated"}`)
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Berhasil logout, token telah dinonaktifkan."})
 }
 
 func (h *AuthHandler) Me(c *gin.Context) {

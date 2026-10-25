@@ -56,7 +56,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 	subRepo := repository.NewPostgresSubscriptionRepository(db)
 	userRepo := repository.NewPostgresUserRepository(db)
 
-	authHandler := NewAuthHandler(db, cfg, testRepo)
+	authHandler := NewAuthHandler(db, cfg, testRepo, cacheClient)
 	publicHandler := NewPublicHandler(examRepo, subRepo, testRepo, cacheClient)
 	adminHandler := NewAdminHandler(db, testRepo, userRepo, cacheClient)
 	userHandler := NewUserHandler(examRepo)
@@ -82,7 +82,8 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			auth.POST("/register", middleware.RateLimit(cacheClient, 20, time.Minute, "register"), authHandler.Register)
 			auth.POST("/login", middleware.RateLimit(cacheClient, 30, time.Minute, "login"), authHandler.Login)
 			auth.POST("/refresh", middleware.RateLimit(cacheClient, 30, time.Minute, "refresh_token"), authHandler.RefreshToken)
-			auth.GET("/me", middleware.AuthRequired(cfg.JWTSecret), authHandler.Me) // Backward-compatible alias
+			auth.POST("/logout", authHandler.Logout)
+			auth.GET("/me", middleware.AuthRequired(cfg.JWTSecret, cacheClient), authHandler.Me) // Backward-compatible alias
 		}
 
 		// Public System Live Stats & Social Proof (FE-HP-01, BE-HP-01)
@@ -142,7 +143,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		// 2. USER ROLE ENDPOINTS (Authenticated Examinees / Students)
 		// =========================================================================
 		user := api.Group("/user")
-		user.Use(middleware.AuthRequired(cfg.JWTSecret))
+		user.Use(middleware.AuthRequired(cfg.JWTSecret, cacheClient))
 		{
 			user.GET("/me", authHandler.Me)
 			user.GET("/subscriptions", paymentHandler.GetUserSubscriptions)
@@ -154,7 +155,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		// 3. ADMIN & CREATOR ROLE ENDPOINTS (Admin & Platform Managers)
 		// =========================================================================
 		admin := api.Group("/admin")
-		admin.Use(middleware.AuthRequired(cfg.JWTSecret))
+		admin.Use(middleware.AuthRequired(cfg.JWTSecret, cacheClient))
 		admin.Use(middleware.RequireAdmin())
 		{
 			// Dashboard & Analytics

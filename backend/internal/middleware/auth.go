@@ -1,6 +1,9 @@
 package middleware
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
@@ -8,6 +11,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+
+	"testhub/internal/cache"
 )
 
 type Claims struct {
@@ -16,6 +21,33 @@ type Claims struct {
 	Role      string `json:"role"`
 	TokenType string `json:"token_type,omitempty"` // "access" or "refresh"
 	jwt.RegisteredClaims
+}
+
+func TokenHash(tokenStr string) string {
+	hash := sha256.Sum256([]byte(tokenStr))
+	return hex.EncodeToString(hash[:])
+}
+
+func IsTokenBlacklisted(ctx context.Context, cc *cache.Client, tokenStr string) bool {
+	if cc == nil || tokenStr == "" {
+		return false
+	}
+	key := "blacklist:token:" + TokenHash(tokenStr)
+	var dummy string
+	err := cc.Get(key, &dummy)
+	return err == nil
+}
+
+func BlacklistToken(ctx context.Context, cc *cache.Client, tokenStr string, expiresAt time.Time) error {
+	if cc == nil || tokenStr == "" {
+		return nil
+	}
+	ttl := time.Until(expiresAt)
+	if ttl <= 0 {
+		return nil
+	}
+	key := "blacklist:token:" + TokenHash(tokenStr)
+	return cc.Set(key, "revoked", ttl)
 }
 
 func GenerateToken(userID, email, role, secret string, expiry time.Duration, tokenType ...string) (string, error) {
@@ -39,7 +71,7 @@ func GenerateToken(userID, email, role, secret string, expiry time.Duration, tok
 	return token.SignedString([]byte(secret))
 }
 
-func AuthRequired(secret string) gin.HandlerFunc {
+func AuthRequired(secret string, cacheClient ...*cache.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -56,8 +88,17 @@ func AuthRequired(secret string) gin.HandlerFunc {
 		}
 
 		tokenStr := parts[1]
-		claims := &Claims{}
 
+		// Check if token was revoked via logout
+		if len(cacheClient) > 0 && cacheClient[0] != nil {
+			if IsTokenBlacklisted(c.Request.Context(), cacheClient[0], tokenStr) {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Sesi telah berakhir (token telah di-logout)"})
+				c.Abort()
+				return
+			}
+		}
+
+		claims := &Claims{}
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, errors.New("unexpected signing method")
@@ -98,7 +139,7 @@ func RequireAdmin() gin.HandlerFunc {
 
 // OptionalAuth extracts JWT claims if the Authorization header is present and valid.
 // If the token is absent or invalid, it does not abort, allowing guests to proceed.
-func OptionalAuth(secret string) gin.HandlerFunc {
+func OptionalAuth(secret string, cacheClient ...*cache.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -113,8 +154,15 @@ func OptionalAuth(secret string) gin.HandlerFunc {
 		}
 
 		tokenStr := parts[1]
-		claims := &Claims{}
 
+		if len(cacheClient) > 0 && cacheClient[0] != nil {
+			if IsTokenBlacklisted(c.Request.Context(), cacheClient[0], tokenStr) {
+				c.Next()
+				return
+			}
+		}
+
+		claims := &Claims{}
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, errors.New("unexpected signing method")

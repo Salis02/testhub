@@ -68,4 +68,63 @@ func TestAuthFlow(t *testing.T) {
 	if wLogin.Code != http.StatusOK {
 		t.Fatalf("Login failed with status %d: %s", wLogin.Code, wLogin.Body.String())
 	}
+
+	var loginResp models.AuthResponse
+	_ = json.Unmarshal(wLogin.Body.Bytes(), &loginResp)
+	if loginResp.RefreshToken == "" {
+		t.Fatalf("Expected refresh_token to be returned in login")
+	}
+
+	// Test Refresh Token
+	refreshBody, _ := json.Marshal(map[string]string{
+		"refresh_token": loginResp.RefreshToken,
+	})
+	reqRefresh, _ := http.NewRequest("POST", "/api/auth/refresh", bytes.NewBuffer(refreshBody))
+	reqRefresh.Header.Set("Content-Type", "application/json")
+	wRefresh := httptest.NewRecorder()
+	router.ServeHTTP(wRefresh, reqRefresh)
+
+	if wRefresh.Code != http.StatusOK {
+		t.Fatalf("Refresh token failed with status %d: %s", wRefresh.Code, wRefresh.Body.String())
+	}
+
+	var refreshResp models.AuthResponse
+	_ = json.Unmarshal(wRefresh.Body.Bytes(), &refreshResp)
+	if refreshResp.Token == "" {
+		t.Fatalf("Expected new access token after refresh")
+	}
+
+	// Test Logout & Invalidation
+	logoutBody, _ := json.Marshal(map[string]string{
+		"refresh_token": refreshResp.RefreshToken,
+	})
+	reqLogout, _ := http.NewRequest("POST", "/api/auth/logout", bytes.NewBuffer(logoutBody))
+	reqLogout.Header.Set("Content-Type", "application/json")
+	reqLogout.Header.Set("Authorization", "Bearer "+refreshResp.Token)
+	wLogout := httptest.NewRecorder()
+	router.ServeHTTP(wLogout, reqLogout)
+
+	if wLogout.Code != http.StatusOK {
+		t.Fatalf("Logout failed with status %d: %s", wLogout.Code, wLogout.Body.String())
+	}
+
+	// Verify logged-out access token is rejected
+	reqMe, _ := http.NewRequest("GET", "/api/user/me", nil)
+	reqMe.Header.Set("Authorization", "Bearer "+refreshResp.Token)
+	wMe := httptest.NewRecorder()
+	router.ServeHTTP(wMe, reqMe)
+
+	if wMe.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected HTTP 401 for invalidated access token after logout, got %d", wMe.Code)
+	}
+
+	// Verify logged-out refresh token is rejected
+	reqBadRefresh, _ := http.NewRequest("POST", "/api/auth/refresh", bytes.NewBuffer(logoutBody))
+	reqBadRefresh.Header.Set("Content-Type", "application/json")
+	wBadRefresh := httptest.NewRecorder()
+	router.ServeHTTP(wBadRefresh, reqBadRefresh)
+
+	if wBadRefresh.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected HTTP 401 for invalidated refresh token after logout, got %d", wBadRefresh.Code)
+	}
 }
