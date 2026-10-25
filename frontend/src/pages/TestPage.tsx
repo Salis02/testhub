@@ -6,6 +6,7 @@ import { QuestionCard } from '@/components/test/QuestionCard'
 import { QuestionNav } from '@/components/test/QuestionNav'
 import { FinishConfirmModal } from '@/components/test/FinishConfirmModal'
 import { ProctoringWarningModal } from '@/components/test/ProctoringWarningModal'
+import { ProctoringPreExamModal } from '@/components/test/ProctoringPreExamModal'
 import { PaymentModal } from '@/components/common/PaymentModal'
 import { ApiError } from '@/services/client'
 import { TestPageSkeleton } from '@/components/common/Skeleton'
@@ -45,10 +46,24 @@ export const TestPage: React.FC = () => {
   const finishSession = useTestSessionStore((s) => s.finishSession)
   const resetSession = useTestSessionStore((s) => s.resetSession)
 
-  // Anti-Cheat & Web Proctoring Suite (tab-switch listener, fullscreen focus mode, copy blocker)
+  // Granular proctoring flags configured by admin on this test
+  const requireFullscreen = Boolean(session?.test?.require_fullscreen)
+  const detectTabSwitch = Boolean(session?.test?.detect_tab_switch)
+  const blockCopyPaste = Boolean(session?.test?.block_copy_paste)
+  const maxViolations = session?.test?.max_violations || 3
+  const hasProctoring = requireFullscreen || detectTabSwitch || blockCopyPaste
+
+  // Examinee pre-exam confirmation state (pra-melanggar)
+  const [isPreExamConfirmed, setIsPreExamConfirmed] = useState(false)
+
+  // Anti-Cheat & Web Proctoring Suite (arms only after examinee confirms pre-exam briefing)
   const proctoring = useExamProctoring({
-    enabled: !loading && !!session && !paywallModalData,
-    maxViolations: 3,
+    enabled: !loading && !!session && !paywallModalData && hasProctoring,
+    requireFullscreen,
+    detectTabSwitch,
+    blockCopyPaste,
+    maxViolations,
+    isArmed: isPreExamConfirmed,
   })
 
   const handleAutoFinish = useCallback(async () => {
@@ -84,9 +99,9 @@ export const TestPage: React.FC = () => {
     }
   }, [testId, searchParams, initSession, resetSession, navigate, toast])
 
-  // Countdown timer: decrementTimer() updates store without re-rendering TestPage!
+  // Countdown timer: timer is paused until examinee confirms pre-exam briefing!
   useEffect(() => {
-    if (loading || !session) return
+    if (loading || !session || (hasProctoring && !isPreExamConfirmed)) return
 
     const timer = window.setInterval(() => {
       const isFinished = decrementTimer()
@@ -99,7 +114,7 @@ export const TestPage: React.FC = () => {
     return () => {
       clearInterval(timer)
     }
-  }, [loading, session, decrementTimer, handleAutoFinish])
+  }, [loading, session, hasProctoring, isPreExamConfirmed, decrementTimer, handleAutoFinish])
 
   // Auto-scroll ke paling atas pertanyaan saat berpindah butir soal (UX optimal)
   useEffect(() => {
@@ -167,9 +182,9 @@ export const TestPage: React.FC = () => {
         onFinishClick={() => setIsModalOpen(true)}
         onToggleDrawer={() => setIsDrawerOpen(!isDrawerOpen)}
         isDrawerOpen={isDrawerOpen}
-        isFullscreen={proctoring.isFullscreen}
-        violations={proctoring.violations}
-        onToggleFullscreen={proctoring.toggleFullscreen}
+        isFullscreen={hasProctoring ? proctoring.isFullscreen : undefined}
+        violations={hasProctoring ? proctoring.violations : 0}
+        onToggleFullscreen={hasProctoring ? proctoring.toggleFullscreen : undefined}
       />
 
       {/* Main Examination Layout */}
@@ -184,6 +199,7 @@ export const TestPage: React.FC = () => {
                 onSelectOption={selectOption}
                 onChangeEssay={setEssayAnswer}
                 onToggleFlag={toggleFlag}
+                blockCopyPaste={blockCopyPaste}
               />
             )}
 
@@ -271,16 +287,34 @@ export const TestPage: React.FC = () => {
         isSubmitting={isSubmitting}
       />
 
-      {/* Anti-Cheat & Integrity Warning Modal */}
-      <ProctoringWarningModal
-        isOpen={proctoring.warningModalOpen}
-        violations={proctoring.violations}
-        maxViolations={3}
-        warningReason={proctoring.warningReason}
-        isFullscreen={proctoring.isFullscreen}
-        onDismiss={proctoring.dismissWarning}
-        onEnterFullscreen={proctoring.enterFullscreen}
+      {/* Pre-Exam Integrity Briefing Modal (Pra-Melanggar: Konfirmasi Sebelum Mulai) */}
+      <ProctoringPreExamModal
+        isOpen={hasProctoring && !isPreExamConfirmed && !loading && !!session && !paywallModalData}
+        requireFullscreen={requireFullscreen}
+        detectTabSwitch={detectTabSwitch}
+        blockCopyPaste={blockCopyPaste}
+        maxViolations={maxViolations}
+        testTitle={session.test.title}
+        onConfirmAndStart={async () => {
+          if (requireFullscreen) {
+            await proctoring.enterFullscreen()
+          }
+          setIsPreExamConfirmed(true)
+        }}
       />
+
+      {/* Anti-Cheat & Integrity Warning Modal (Hanya muncul jika sudah briefing & melanggar) */}
+      {hasProctoring && isPreExamConfirmed && (
+        <ProctoringWarningModal
+          isOpen={proctoring.warningModalOpen}
+          violations={proctoring.violations}
+          maxViolations={maxViolations}
+          warningReason={proctoring.warningReason}
+          isFullscreen={proctoring.isFullscreen}
+          onDismiss={proctoring.dismissWarning}
+          onEnterFullscreen={proctoring.enterFullscreen}
+        />
+      )}
     </div>
   )
 }

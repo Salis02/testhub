@@ -9,6 +9,7 @@ interface QuestionCardProps {
   onSelectOption: (optionId: string) => void
   onChangeEssay: (text: string) => void
   onToggleFlag: () => void
+  blockCopyPaste?: boolean
 }
 
 export const QuestionCard: React.FC<QuestionCardProps> = ({
@@ -17,6 +18,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   onSelectOption,
   onChangeEssay,
   onToggleFlag,
+  blockCopyPaste = false,
 }) => {
   const isFlagged = !!submission?.is_flagged
   const selectedOptionId = submission?.selected_option_id
@@ -82,7 +84,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 
       {/* Question Text (Heading 2 per style.md) */}
       <div className="mb-8">
-        <h2 className="text-lg sm:text-xl font-medium text-ink leading-relaxed tracking-normal select-none">
+        <h2 className={`text-lg sm:text-xl font-medium text-ink leading-relaxed tracking-normal ${blockCopyPaste ? 'select-none' : 'select-text'}`}>
           {question.question_text}
         </h2>
       </div>

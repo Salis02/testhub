@@ -113,6 +113,10 @@ export const useTestSessionStore = create<TestSessionState>((set, get) => ({
             duration_minutes: testDetail.duration_minutes,
             total_questions: testDetail.total_questions,
             passing_score_percentage: testDetail.passing_score_percentage,
+            require_fullscreen: testDetail.require_fullscreen,
+            detect_tab_switch: testDetail.detect_tab_switch,
+            block_copy_paste: testDetail.block_copy_paste,
+            max_violations: testDetail.max_violations,
           }
         } catch {
           // ignore error to allow fallback below

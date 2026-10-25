@@ -41,6 +41,10 @@ export interface Test {
   shuffle_questions?: boolean
   shuffle_answers?: boolean
   published: boolean
+  require_fullscreen?: boolean
+  detect_tab_switch?: boolean
+  block_copy_paste?: boolean
+  max_violations?: number
   created_at: string
   updated_at: string
 }
@@ -61,6 +65,10 @@ export interface TestSession {
     duration_minutes: number
     total_questions: number
     passing_score_percentage: number
+    require_fullscreen?: boolean
+    detect_tab_switch?: boolean
+    block_copy_paste?: boolean
+    max_violations?: number
   }
   expires_at: string
   started_at: string

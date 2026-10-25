@@ -64,6 +64,10 @@ export const TestFormSchema = z.object({
   shuffle_questions: z.boolean().default(false),
   shuffle_answers: z.boolean().default(false),
   published: z.boolean().default(true),
+  require_fullscreen: z.boolean().default(false),
+  detect_tab_switch: z.boolean().default(false),
+  block_copy_paste: z.boolean().default(false),
+  max_violations: z.number().min(1, 'Minimal 1 kali pelanggaran').max(10, 'Maksimal 10 kali pelanggaran').default(3),
   questions: z
     .array(QuestionSchema)
     .min(1, 'Modul ujian harus memiliki minimal 1 butir soal'),

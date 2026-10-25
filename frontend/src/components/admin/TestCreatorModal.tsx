@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Loader2,
   FileSpreadsheet,
+  ShieldCheck,
 } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
 
@@ -38,6 +39,10 @@ const DEFAULT_FORM_VALUES: TestFormValues = {
   shuffle_questions: false,
   shuffle_answers: false,
   published: true,
+  require_fullscreen: false,
+  detect_tab_switch: false,
+  block_copy_paste: false,
+  max_violations: 3,
   questions: [
     {
       question_number: 1,
@@ -452,6 +457,80 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
                       Publikasikan Langsung ke Bank Ujian
                     </span>
                   </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Proctoring & Anti-Cheat Settings Section */}
+            <div className="space-y-4 bg-canvas/60 p-4 rounded-lg border border-borderline">
+              <div className="flex items-center space-x-2">
+                <ShieldCheck className="w-4 h-4 text-accent" />
+                <h4 className="text-xs font-bold text-ink uppercase tracking-wider">
+                  Protokol Pengawasan Ujian (Web Proctoring & Anti-Cheat)
+                </h4>
+              </div>
+              <p className="text-[11px] text-ink-muted -mt-2">
+                Kontrol integritas ujian di level admin. Peserta akan melihat instruksi konfirmasi sebelum ujian dimulai sesuai pengaturan yang Anda aktifkan.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                <label className="flex items-start space-x-2.5 p-2.5 rounded-md border border-borderline bg-surface hover:border-accent/40 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    {...register('require_fullscreen')}
+                    className="rounded border-borderline text-accent focus:ring-accent w-4 h-4 mt-0.5 shrink-0"
+                  />
+                  <div>
+                    <span className="block text-xs font-semibold text-ink">Wajib Layar Penuh (Fokus CAT)</span>
+                    <span className="block text-[11px] text-ink-muted leading-tight">
+                      Peserta diwajibkan masuk mode full screen (mensimulasikan CAT BKN/PTN resmi).
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start space-x-2.5 p-2.5 rounded-md border border-borderline bg-surface hover:border-accent/40 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    {...register('detect_tab_switch')}
+                    className="rounded border-borderline text-accent focus:ring-accent w-4 h-4 mt-0.5 shrink-0"
+                  />
+                  <div>
+                    <span className="block text-xs font-semibold text-ink">Deteksi Pindah Tab & Jendela</span>
+                    <span className="block text-[11px] text-ink-muted leading-tight">
+                      Catat peringatan jika peserta beralih tab peramban atau membuka jendela aplikasi lain.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start space-x-2.5 p-2.5 rounded-md border border-borderline bg-surface hover:border-accent/40 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    {...register('block_copy_paste')}
+                    className="rounded border-borderline text-accent focus:ring-accent w-4 h-4 mt-0.5 shrink-0"
+                  />
+                  <div>
+                    <span className="block text-xs font-semibold text-ink">Blokir Salin-Tempel (Anti-Copy)</span>
+                    <span className="block text-[11px] text-ink-muted leading-tight">
+                      Kunci teks soal dari aksi copy, cut, inspect, dan klik kanan.
+                    </span>
+                  </div>
+                </label>
+
+                <div className="p-2.5 rounded-md border border-borderline bg-surface flex items-center justify-between gap-2">
+                  <div>
+                    <span className="block text-xs font-semibold text-ink">Batas Toleransi Pelanggaran</span>
+                    <span className="block text-[11px] text-ink-muted">Maksimal peringatan sebelum evaluasi</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5 shrink-0">
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      {...register('max_violations', { valueAsNumber: true })}
+                      className="w-14 px-2 py-1 text-xs rounded border border-borderline bg-canvas text-ink font-mono text-center focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                    <span className="text-xs text-ink-muted font-mono">kali</span>
+                  </div>
                 </div>
               </div>
             </div>

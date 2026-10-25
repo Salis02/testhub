@@ -40,6 +40,25 @@ describe('useExamProctoring logic', () => {
     expect(violations >= maxViolations).toBe(true)
   })
 
+  it('does not record violations if proctoring is not armed (pra-melanggar safety)', () => {
+    let isArmed = false
+    let violations = 0
+
+    const tryRecordViolation = () => {
+      if (!isArmed) return
+      violations += 1
+    }
+
+    // Examinee is still on pre-exam briefing modal
+    tryRecordViolation()
+    expect(violations).toBe(0)
+
+    // Examinee clicks "Saya Paham & Siap Mulai Ujian"
+    isArmed = true
+    tryRecordViolation()
+    expect(violations).toBe(1)
+  })
+
   it('correctly reports proctoring hotkey detection', () => {
     const isProctoringBlockedKey = (e: { key: string; ctrlKey?: boolean; metaKey?: boolean }) => {
       const isCtrlOrMeta = !!e.ctrlKey || !!e.metaKey

@@ -198,6 +198,10 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 	resp.Test.DurationMinutes = test.DurationMinutes
 	resp.Test.TotalQuestions = test.TotalQuestions
 	resp.Test.PassingScorePercentage = test.PassingScorePercentage
+	resp.Test.RequireFullscreen = test.RequireFullscreen
+	resp.Test.DetectTabSwitch = test.DetectTabSwitch
+	resp.Test.BlockCopyPaste = test.BlockCopyPaste
+	resp.Test.MaxViolations = test.MaxViolations
 
 	c.JSON(http.StatusOK, resp)
 }
@@ -230,6 +234,10 @@ func (h *PublicHandler) GetQuestions(c *gin.Context) {
 			"total_questions":          test.TotalQuestions,
 			"passing_score_percentage": test.PassingScorePercentage,
 			"published":                test.Published,
+			"require_fullscreen":      test.RequireFullscreen,
+			"detect_tab_switch":        test.DetectTabSwitch,
+			"block_copy_paste":         test.BlockCopyPaste,
+			"max_violations":          test.MaxViolations,
 		},
 	})
 }

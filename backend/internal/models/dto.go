@@ -36,6 +36,10 @@ type SaveTestDTO struct {
 	ShuffleQuestions       bool          `json:"shuffle_questions"`
 	ShuffleAnswers         bool          `json:"shuffle_answers"`
 	Published              bool          `json:"published"`
+	RequireFullscreen      bool          `json:"require_fullscreen"`
+	DetectTabSwitch        bool          `json:"detect_tab_switch"`
+	BlockCopyPaste         bool          `json:"block_copy_paste"`
+	MaxViolations          int           `json:"max_violations"`
 	Questions              []QuestionDTO `json:"questions" binding:"required,min=1,dive"`
 }
 

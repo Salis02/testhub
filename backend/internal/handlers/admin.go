@@ -93,6 +93,11 @@ func (h *AdminHandler) CreateTest(c *gin.Context) {
 	testID := fmt.Sprintf("test-%s-%d-%d", req.Category, time.Now().Unix(), time.Now().UnixNano()%100000)
 	now := time.Now()
 
+	maxViolations := req.MaxViolations
+	if maxViolations <= 0 {
+		maxViolations = 3
+	}
+
 	test := models.Test{
 		ID:                     testID,
 		CreatorID:              creatorID,
@@ -106,6 +111,10 @@ func (h *AdminHandler) CreateTest(c *gin.Context) {
 		ShuffleQuestions:       req.ShuffleQuestions,
 		ShuffleAnswers:         req.ShuffleAnswers,
 		Published:              req.Published,
+		RequireFullscreen:      req.RequireFullscreen,
+		DetectTabSwitch:        req.DetectTabSwitch,
+		BlockCopyPaste:         req.BlockCopyPaste,
+		MaxViolations:          maxViolations,
 		IsDeleted:              false,
 		CreatedAt:              now,
 		UpdatedAt:              now,
@@ -173,6 +182,11 @@ func (h *AdminHandler) UpdateTest(c *gin.Context) {
 		return
 	}
 
+	maxViolations := req.MaxViolations
+	if maxViolations <= 0 {
+		maxViolations = 3
+	}
+
 	now := time.Now()
 	test := models.Test{
 		ID:                     testID,
@@ -186,6 +200,10 @@ func (h *AdminHandler) UpdateTest(c *gin.Context) {
 		ShuffleQuestions:       req.ShuffleQuestions,
 		ShuffleAnswers:         req.ShuffleAnswers,
 		Published:              req.Published,
+		RequireFullscreen:      req.RequireFullscreen,
+		DetectTabSwitch:        req.DetectTabSwitch,
+		BlockCopyPaste:         req.BlockCopyPaste,
+		MaxViolations:          maxViolations,
 		UpdatedAt:              now,
 	}
 

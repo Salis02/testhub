@@ -51,8 +51,8 @@ func (r *PostgresTestRepository) CreateTestTx(ctx context.Context, test *models.
 	defer tx.Rollback()
 
 	insertTestSQL := `
-		INSERT INTO tests (id, creator_id, title, description, category, duration_minutes, passing_score_percentage, total_questions, price_idr, shuffle_questions, shuffle_answers, published, is_deleted, created_at, updated_at)
-		VALUES (:id, :creator_id, :title, :description, :category, :duration_minutes, :passing_score_percentage, :total_questions, :price_idr, :shuffle_questions, :shuffle_answers, :published, :is_deleted, :created_at, :updated_at)
+		INSERT INTO tests (id, creator_id, title, description, category, duration_minutes, passing_score_percentage, total_questions, price_idr, shuffle_questions, shuffle_answers, published, require_fullscreen, detect_tab_switch, block_copy_paste, max_violations, is_deleted, created_at, updated_at)
+		VALUES (:id, :creator_id, :title, :description, :category, :duration_minutes, :passing_score_percentage, :total_questions, :price_idr, :shuffle_questions, :shuffle_answers, :published, :require_fullscreen, :detect_tab_switch, :block_copy_paste, :max_violations, :is_deleted, :created_at, :updated_at)
 	`
 	_, err = tx.NamedExecContext(ctx, insertTestSQL, test)
 	if err != nil {
@@ -105,13 +105,16 @@ func (r *PostgresTestRepository) UpdateTestTx(ctx context.Context, test *models.
 		UPDATE tests 
 		SET title = $1, description = $2, category = $3, duration_minutes = $4,
 		    passing_score_percentage = $5, total_questions = $6, price_idr = $7,
-		    shuffle_questions = $8, shuffle_answers = $9, published = $10, updated_at = $11
-		WHERE id = $12 AND is_deleted = false
+		    shuffle_questions = $8, shuffle_answers = $9, published = $10,
+		    require_fullscreen = $11, detect_tab_switch = $12, block_copy_paste = $13,
+		    max_violations = $14, updated_at = $15
+		WHERE id = $16 AND is_deleted = false
 	`
 	res, err := tx.ExecContext(ctx, updateTestSQL,
 		test.Title, test.Description, test.Category, test.DurationMinutes,
 		test.PassingScorePercentage, test.TotalQuestions, test.PriceIDR, test.ShuffleQuestions,
-		test.ShuffleAnswers, test.Published, test.UpdatedAt, test.ID,
+		test.ShuffleAnswers, test.Published, test.RequireFullscreen, test.DetectTabSwitch,
+		test.BlockCopyPaste, test.MaxViolations, test.UpdatedAt, test.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update tests: %w", err)

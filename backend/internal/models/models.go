@@ -54,6 +54,10 @@ type Test struct {
 	ShuffleQuestions       bool      `db:"shuffle_questions" json:"shuffle_questions"`
 	ShuffleAnswers         bool      `db:"shuffle_answers" json:"shuffle_answers"`
 	Published              bool      `db:"published" json:"published"`
+	RequireFullscreen      bool      `db:"require_fullscreen" json:"require_fullscreen"`
+	DetectTabSwitch        bool      `db:"detect_tab_switch" json:"detect_tab_switch"`
+	BlockCopyPaste         bool      `db:"block_copy_paste" json:"block_copy_paste"`
+	MaxViolations          int       `db:"max_violations" json:"max_violations"`
 	IsDeleted              bool      `db:"is_deleted" json:"-"`
 	CreatedAt              time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt              time.Time `db:"updated_at" json:"updated_at"`
@@ -92,6 +96,10 @@ type TestSessionResponse struct {
 		DurationMinutes        int    `json:"duration_minutes"`
 		TotalQuestions         int    `json:"total_questions"`
 		PassingScorePercentage int    `json:"passing_score_percentage"`
+		RequireFullscreen      bool   `json:"require_fullscreen"`
+		DetectTabSwitch        bool   `json:"detect_tab_switch"`
+		BlockCopyPaste         bool   `json:"block_copy_paste"`
+		MaxViolations          int    `json:"max_violations"`
 	} `json:"test"`
 	StartedAt string `json:"started_at"`
 	ExpiresAt string `json:"expires_at"`

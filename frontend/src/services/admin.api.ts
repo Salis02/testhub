@@ -27,6 +27,10 @@ export const adminApi = {
         shuffle_questions: Boolean(testData.shuffle_questions),
         shuffle_answers: Boolean(testData.shuffle_answers),
         published: testData.published,
+        require_fullscreen: Boolean(testData.require_fullscreen),
+        detect_tab_switch: Boolean(testData.detect_tab_switch),
+        block_copy_paste: Boolean(testData.block_copy_paste),
+        max_violations: testData.max_violations ?? 3,
         questions: questions.map((q, idx) => ({
           question_number: idx + 1,
           question_text: q.question_text,
@@ -62,6 +66,10 @@ export const adminApi = {
         shuffle_questions: Boolean(testData.shuffle_questions),
         shuffle_answers: Boolean(testData.shuffle_answers),
         published: testData.published,
+        require_fullscreen: Boolean(testData.require_fullscreen),
+        detect_tab_switch: Boolean(testData.detect_tab_switch),
+        block_copy_paste: Boolean(testData.block_copy_paste),
+        max_violations: testData.max_violations ?? 3,
         questions: questions?.map((q, idx) => ({
           question_number: idx + 1,
           question_text: q.question_text,

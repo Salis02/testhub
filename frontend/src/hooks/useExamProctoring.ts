@@ -3,7 +3,11 @@ import { useToast } from '@/context/ToastContext'
 
 export interface ProctoringOptions {
   enabled?: boolean
+  requireFullscreen?: boolean
+  detectTabSwitch?: boolean
+  blockCopyPaste?: boolean
   maxViolations?: number
+  isArmed?: boolean
   onViolation?: (violationCount: number, reason: string) => void
   onMaxViolationsReached?: () => void
 }
@@ -29,7 +33,11 @@ export interface UseExamProctoringReturn {
  */
 export function useExamProctoring({
   enabled = true,
+  requireFullscreen = false,
+  detectTabSwitch = false,
+  blockCopyPaste = false,
   maxViolations = 3,
+  isArmed = false,
   onViolation,
   onMaxViolationsReached,
 }: ProctoringOptions = {}): UseExamProctoringReturn {
@@ -53,7 +61,7 @@ export function useExamProctoring({
 
   const recordViolation = useCallback(
     (reason: string) => {
-      if (!enabled) return
+      if (!enabled || !isArmed) return
 
       // Cooldown 1.2s to prevent dual-triggering between visibilitychange and window blur
       const now = Date.now()
@@ -78,7 +86,7 @@ export function useExamProctoring({
         return next
       })
     },
-    [enabled, maxViolations]
+    [enabled, isArmed, maxViolations]
   )
 
   const enterFullscreen = useCallback(async () => {
@@ -119,7 +127,7 @@ export function useExamProctoring({
 
   // 1. Tab-switch & Visibility Listener
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || !isArmed || !detectTabSwitch) return
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -141,7 +149,7 @@ export function useExamProctoring({
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('blur', handleWindowBlur)
     }
-  }, [enabled, recordViolation])
+  }, [enabled, isArmed, detectTabSwitch, recordViolation])
 
   // 2. Fullscreen State & Exit Detection
   useEffect(() => {
@@ -151,8 +159,8 @@ export function useExamProctoring({
       const isNowFullscreen = !!document.fullscreenElement
       setIsFullscreen(isNowFullscreen)
 
-      // If user was previously in fullscreen mode during the exam and unexpectedly exits
-      if (wasFullscreenRef.current && !isNowFullscreen) {
+      // Only flag violation if armed AND requireFullscreen is active
+      if (isArmed && requireFullscreen && wasFullscreenRef.current && !isNowFullscreen) {
         recordViolation('Terdeteksi keluar dari Mode Layar Penuh (Fokus Ujian).')
         wasFullscreenRef.current = false
       } else if (isNowFullscreen) {
@@ -164,11 +172,11 @@ export function useExamProctoring({
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
-  }, [enabled, recordViolation])
+  }, [enabled, isArmed, requireFullscreen, recordViolation])
 
   // 3. Copy, Cut, ContextMenu & Developer Tools Hotkey Blocking
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || !blockCopyPaste) return
 
     let lastToastTime = 0
     const notifyBlocked = (action: string) => {
