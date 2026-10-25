@@ -5,11 +5,13 @@ import { TestHeader } from '@/components/test/TestHeader'
 import { QuestionCard } from '@/components/test/QuestionCard'
 import { QuestionNav } from '@/components/test/QuestionNav'
 import { FinishConfirmModal } from '@/components/test/FinishConfirmModal'
+import { ProctoringWarningModal } from '@/components/test/ProctoringWarningModal'
 import { PaymentModal } from '@/components/common/PaymentModal'
 import { ApiError } from '@/services/client'
 import { TestPageSkeleton } from '@/components/common/Skeleton'
-import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
+import { useExamProctoring } from '@/hooks/useExamProctoring'
 
 export const TestPage: React.FC = () => {
   const { testId } = useParams<{ testId: string }>()
@@ -42,6 +44,12 @@ export const TestPage: React.FC = () => {
   const toggleFlag = useTestSessionStore((s) => s.toggleFlag)
   const finishSession = useTestSessionStore((s) => s.finishSession)
   const resetSession = useTestSessionStore((s) => s.resetSession)
+
+  // Anti-Cheat & Web Proctoring Suite (tab-switch listener, fullscreen focus mode, copy blocker)
+  const proctoring = useExamProctoring({
+    enabled: !loading && !!session && !paywallModalData,
+    maxViolations: 3,
+  })
 
   const handleAutoFinish = useCallback(async () => {
     try {
@@ -159,6 +167,9 @@ export const TestPage: React.FC = () => {
         onFinishClick={() => setIsModalOpen(true)}
         onToggleDrawer={() => setIsDrawerOpen(!isDrawerOpen)}
         isDrawerOpen={isDrawerOpen}
+        isFullscreen={proctoring.isFullscreen}
+        violations={proctoring.violations}
+        onToggleFullscreen={proctoring.toggleFullscreen}
       />
 
       {/* Main Examination Layout */}
@@ -258,6 +269,17 @@ export const TestPage: React.FC = () => {
         onConfirm={handleFinalSubmit}
         onCancel={() => setIsModalOpen(false)}
         isSubmitting={isSubmitting}
+      />
+
+      {/* Anti-Cheat & Integrity Warning Modal */}
+      <ProctoringWarningModal
+        isOpen={proctoring.warningModalOpen}
+        violations={proctoring.violations}
+        maxViolations={3}
+        warningReason={proctoring.warningReason}
+        isFullscreen={proctoring.isFullscreen}
+        onDismiss={proctoring.dismissWarning}
+        onEnterFullscreen={proctoring.enterFullscreen}
       />
     </div>
   )

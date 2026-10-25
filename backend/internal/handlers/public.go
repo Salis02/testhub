@@ -140,7 +140,7 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 		}
 
 		if !hasAccess {
-			helpers.LogAudit(c, h.testRepo, "test_paywall_blocked", "test", test.ID, "", fmt.Sprintf(`{"user": %q, "price_idr": %d}`, userIdentifier, test.PriceIDR))
+			helpers.LogAudit(c, h.testRepo, "test_paywall_blocked", "test", test.ID, "", fmt.Sprintf(`{"user": %q, "price_idr": %.0f}`, userIdentifier, test.PriceIDR))
 			c.JSON(http.StatusPaymentRequired, gin.H{
 				"error":     "Modul ujian ini berbayar. Silakan selesaikan pembayaran invoice terlebih dahulu.",
 				"paywall":   true,

@@ -82,7 +82,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 
       {/* Question Text (Heading 2 per style.md) */}
       <div className="mb-8">
-        <h2 className="text-lg sm:text-xl font-medium text-ink leading-relaxed tracking-normal select-text">
+        <h2 className="text-lg sm:text-xl font-medium text-ink leading-relaxed tracking-normal select-none">
           {question.question_text}
         </h2>
       </div>

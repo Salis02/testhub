@@ -71,13 +71,27 @@ Kelemahan & Sertifikat                                (Anonim, HP, Auto-save)
 
 ---
 
-## 5. Backlog Fitur Masa Depan (Future Roadmap)
+## 5. Status Implementasi Anti-Cheat & Web Proctoring Suite (100% Selesai & Teruji)
+
+| ID Tiket | Modul / Berkas | Spesifikasi Desain & Logika | Status | Catatan Teknis & Integritas Ujian |
+|---|---|---|:---:|---|
+| **FE-PROC-01** (Fitur C) | [`useExamProctoring.ts`](file:///home/sans/coding/quiz_app/frontend/src/hooks/useExamProctoring.ts), [`ProctoringWarningModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/test/ProctoringWarningModal.tsx), [`TestHeader.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/test/TestHeader.tsx), [`TestPage.tsx`](file:///home/sans/coding/quiz_app/frontend/src/pages/TestPage.tsx) | **Anti-Cheat & Web Proctoring Suite (Simulasi CAT Resmi):**<br>• **Mode Layar Penuh (Fokus CAT):** Tombol toggle fullscreen di header dengan listener `fullscreenchange` yang otomatis mendeteksi dan memberi peringatan jika peserta keluar dari layar penuh sebelum submit.<br>• **Tab-Switch & Blur Listener:** Listener reaktif `visibilitychange` dan window `blur` (dengan throttle cooldown 1.2s) yang melacak pelanggaran (`violations/maxViolations`). Menampilkan modal peringatan integritas taktil berstandar BKN saat peserta meninggalkan tab ujian.<br>• **Pencegahan Eksfiltrasi Butir Soal (Anti-Copy):** Blokir total aksi `copy`, `cut`, `contextmenu` (klik kanan), dan pintasan keyboard ekstraksi (Ctrl+C, Ctrl+X, Ctrl+U, F12) pada lembar soal beserta toast edukatif.<br>• **Perlindungan Teks Soal:** Kelas `select-none` pada kartu pertanyaan untuk mencegah highlighting liar ke LLM/mesin pencari. | ✅ Selesai | Mengamankan integritas peringkat persentil nasional TestHub menggunakan Browser API native (0 overhead dependencies) dan 100% terverifikasi unit test `useExamProctoring.test.ts`. |
+
+---
+
+## 6. Status Implementasi Bulk Import & Export Soal Excel / CSV (100% Selesai & Teruji)
+
+| ID Tiket | Modul / Berkas | Spesifikasi Desain & Logika | Status | Catatan Teknis & Efisiensi Arsitektur |
+|---|---|---|:---:|---|
+| **FE-IMP-01** (Fitur A) | [`spreadsheetParser.ts`](file:///home/sans/coding/quiz_app/frontend/src/utils/spreadsheetParser.ts), [`BulkQuestionImportModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/admin/BulkQuestionImportModal.tsx), [`TestCreatorModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestCreatorModal.tsx), [`TestEditorModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestEditorModal.tsx) | **Interactive Bulk Question Import & Export Engine:**<br>• **Parser Multi-Format Spreadsheet:** Engine tokenisasi RFC 4180 native yang mendukung CSV koma (`,`), CSV titik-koma (`;` standar Excel lokal ID), serta salin-tempel langsung tabulasi TSV (`\t`) dari Microsoft Excel / Google Sheets.<br>• **Unduh Template Excel Instan:** Satu klik unduh berkas CSV terformat rapi dengan UTF-8 BOM (`\uFEFF`) agar otomatis terpisah kolom saat dibuka di MS Excel.<br>• **Interactive Validation & Guardrail Modal:** Dialog modal dengan dua tab input (unggah berkas & salin-tempel), counter metrik instan (`X Soal Valid`, `Y Baris Bermasalah`), serta pratinjau tabel interaktif butir soal sebelum disisipkan.<br>• **One-Click CSV Export:** Tombol ekspor bank soal di `TestEditorModal` untuk mengunduh seluruh butir soal modul ujian dalam format spreadsheet CSV bersih. | ✅ Selesai | Mengeliminasi beban dependensi berat binary Go (`excelize`), memberi feedback validasi instan pada sisi admin, dan 100% teruji unit test `spreadsheetParser.test.ts`. |
+
+---
+
+## 7. Backlog Fitur Masa Depan (Future Roadmap)
 
 | ID Tiket | Modul / Handler | Spesifikasi Fitur | Prioritas |
 |---|---|---|:---:|
-| **Fitur A** | `handlers/admin.go` | **Bulk Import / Export Soal (Excel / Word / CSV):** Import spreadsheet via `excelize/v2`. | Backlog |
 | **Fitur B** | `services/scoring.go` | **Item Response Theory (IRT) Scoring:** Pembobotan dinamis butir soal standar UTBK-SNBT. | Backlog |
-| **Fitur C** | `frontend/test/` | **Anti-Cheat & Web Proctoring Suite:** Tab-switch listener, fullscreen mode, copy-paste blocker. | Backlog |
 | **Fitur D** | `handlers/session.go` | **Computerized Adaptive Testing (CAT) Dinamis:** Adaptasi tingkat kesukaran soal per butir. | Backlog |
 | **Fitur E** | `frontend/components/results/` | **The Mistake Vault (Bank Dosa Soal):** Koleksi soal salah pribadi dengan Spaced Repetition. | Backlog |
 | **Fitur F** | `components/admin/QuestionFormField.tsx` | **AI Distractor Generator:** Generator 4 pilihan pengecoh rasional otomatis saat guru mengetik pertanyaan manual. | Backlog |

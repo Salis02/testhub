@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Question } from '@/types'
 import { TestFormSchema, TestFormValues } from '@/schemas/test.schema'
 import { QuestionFormField } from '@/components/admin/QuestionFormField'
+import { BulkQuestionImportModal } from '@/components/admin/BulkQuestionImportModal'
+import { exportQuestionsToCsv } from '@/utils/spreadsheetParser'
 import { api } from '@/services/api'
 import { Skeleton } from '@/components/common/Skeleton'
 import {
@@ -18,6 +20,8 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  FileSpreadsheet,
+  Download,
 } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
 
@@ -56,6 +60,7 @@ export const TestEditorModal: React.FC<TestEditorModalProps> = ({
   const [loading, setLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState<number>(5)
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const toast = useToast()
 
   const methods = useForm<TestFormValues>({
@@ -160,6 +165,33 @@ export const TestEditorModal: React.FC<TestEditorModalProps> = ({
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleImportQuestions = (imported: Question[]) => {
+    imported.forEach((q, idx) => {
+      append({
+        id: `q-import-${Date.now()}-${idx}`,
+        test_id: testId || '',
+        question_number: fields.length + idx + 1,
+        question_text: q.question_text,
+        question_type: q.question_type || 'multiple_choice',
+        difficulty_level: q.difficulty_level || 'medium',
+        points: q.points || 5,
+        explanation: q.explanation || '',
+        media_url: q.media_url || null,
+        options: (q.options || []).map((opt) => ({
+          id: opt.id || `opt-${Date.now()}-${opt.option_letter}`,
+          option_letter: (opt.option_letter || 'A').toUpperCase() as any,
+          option_text: opt.option_text,
+          is_correct: Boolean(opt.is_correct),
+        })),
+      })
+    })
+
+    toast.success(
+      'Soal Berhasil Diimpor',
+      `${imported.length} butir soal hasil impor spreadsheet telah ditambahkan.`
+    )
   }
 
   const handleAddQuestion = () => {
@@ -484,6 +516,31 @@ export const TestEditorModal: React.FC<TestEditorModalProps> = ({
                   </div>
 
                   <div className="flex items-center space-x-2">
+                    {fields.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          exportQuestionsToCsv(
+                            watch('title') || 'ujian',
+                            (watchedQuestions as Question[]) || []
+                          )
+                        }
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-borderline bg-canvas text-ink text-xs font-semibold hover:bg-surface-hover transition-colors shadow-xs"
+                        title="Ekspor seluruh butir soal ke berkas spreadsheet CSV"
+                      >
+                        <Download className="w-3.5 h-3.5 text-accent" />
+                        <span>Ekspor CSV</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsImportModalOpen(true)}
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-colors shadow-xs"
+                      title="Impor butir soal dari spreadsheet Excel atau CSV"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      <span>Impor Excel/CSV</span>
+                    </button>
                     <button
                       type="button"
                       onClick={onOpenAIAssistant}
@@ -650,6 +707,14 @@ export const TestEditorModal: React.FC<TestEditorModalProps> = ({
           </FormProvider>
         )}
       </div>
+
+      {/* Bulk Excel/CSV Import Modal */}
+      <BulkQuestionImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportQuestions={handleImportQuestions}
+        existingQuestionsCount={fields.length}
+      />
     </div>,
     document.body
   )

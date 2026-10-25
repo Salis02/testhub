@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Test, Question } from '@/types'
 import { TestFormSchema, TestFormValues } from '@/schemas/test.schema'
 import { QuestionFormField } from '@/components/admin/QuestionFormField'
+import { BulkQuestionImportModal } from '@/components/admin/BulkQuestionImportModal'
 import {
   X,
   Plus,
@@ -14,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  FileSpreadsheet,
 } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
 
@@ -65,6 +67,7 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
 }) => {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState<number>(5)
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const toast = useToast()
 
   const methods = useForm<TestFormValues>({
@@ -151,6 +154,42 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
       document.body.style.overflow = prevOverflow
     }
   }, [isOpen])
+
+  const handleImportQuestions = (imported: Question[]) => {
+    const isInitialPlaceholder =
+      fields.length === 1 &&
+      !fields[0].question_text?.trim() &&
+      fields[0].options?.every((o) => !o.option_text?.trim())
+
+    if (isInitialPlaceholder) {
+      remove(0)
+    }
+
+    imported.forEach((q, idx) => {
+      append({
+        id: `q-import-${Date.now()}-${idx}`,
+        test_id: '',
+        question_number: (isInitialPlaceholder ? 0 : fields.length) + idx + 1,
+        question_text: q.question_text,
+        question_type: q.question_type || 'multiple_choice',
+        difficulty_level: q.difficulty_level || 'medium',
+        points: q.points || 5,
+        explanation: q.explanation || '',
+        media_url: q.media_url || null,
+        options: (q.options || []).map((opt) => ({
+          id: opt.id || `opt-${Date.now()}-${opt.option_letter}`,
+          option_letter: (opt.option_letter || 'A').toUpperCase() as any,
+          option_text: opt.option_text,
+          is_correct: Boolean(opt.is_correct),
+        })),
+      })
+    })
+
+    toast.success(
+      'Soal Berhasil Diimpor',
+      `${imported.length} butir soal hasil impor spreadsheet telah ditambahkan.`
+    )
+  }
 
   const handleAddQuestion = () => {
     append({
@@ -438,6 +477,15 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
                 <div className="flex items-center space-x-2">
                   <button
                     type="button"
+                    onClick={() => setIsImportModalOpen(true)}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-colors shadow-xs"
+                    title="Impor butir soal dari spreadsheet Excel atau CSV"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>Impor Excel/CSV</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={onOpenAIAssistant}
                     className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md border border-accent/40 bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors"
                   >
@@ -601,6 +649,14 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
           </form>
         </FormProvider>
       </div>
+
+      {/* Bulk Excel/CSV Import Modal */}
+      <BulkQuestionImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportQuestions={handleImportQuestions}
+        existingQuestionsCount={fields.length}
+      />
     </div>,
     document.body
   )

@@ -128,7 +128,7 @@ func (h *PaymentHandler) CreateInvoice(c *gin.Context) {
 	})
 	if err != nil {
 		log.Printf("[PaymentHandler.CreateInvoice] gateway error: %v", err)
-		helpers.LogAudit(c, h.testRepo, "payment_invoice_failed", "payment_order", orderID, "", fmt.Sprintf(`{"error": %q, "amount": %d, "user_email": %q, "plan_type": %q}`, err.Error(), amount, req.UserEmail, req.PlanType))
+		helpers.LogAudit(c, h.testRepo, "payment_invoice_failed", "payment_order", orderID, "", fmt.Sprintf(`{"error": %q, "amount": %.0f, "user_email": %q, "plan_type": %q}`, err.Error(), amount, req.UserEmail, req.PlanType))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghubungkan ke gateway pembayaran."})
 		return
 	}
@@ -155,7 +155,7 @@ func (h *PaymentHandler) CreateInvoice(c *gin.Context) {
 		return
 	}
 
-	helpers.LogAudit(c, h.testRepo, "payment_invoice_created", "payment_order", order.ID, "", fmt.Sprintf(`{"amount": %d, "plan_type": %q, "user_email": %q, "provider": %q, "has_snap_token": %v}`, order.Amount, order.PlanType, order.UserEmail, gwResp.Provider, order.SnapToken != ""))
+	helpers.LogAudit(c, h.testRepo, "payment_invoice_created", "payment_order", order.ID, "", fmt.Sprintf(`{"amount": %.0f, "plan_type": %q, "user_email": %q, "provider": %q, "has_snap_token": %v}`, order.Amount, order.PlanType, order.UserEmail, gwResp.Provider, order.SnapToken != ""))
 
 	c.JSON(http.StatusCreated, gin.H{
 		"order_id":         order.ID,

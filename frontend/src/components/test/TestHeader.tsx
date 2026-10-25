@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronLeft, Check } from 'lucide-react'
+import { ChevronLeft, Check, Maximize2, Minimize2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { TestCountdownTimer } from '@/components/test/TestCountdownTimer'
 
@@ -12,6 +12,9 @@ interface TestHeaderProps {
   onFinishClick: () => void
   onToggleDrawer: () => void
   isDrawerOpen: boolean
+  isFullscreen?: boolean
+  violations?: number
+  onToggleFullscreen?: () => void
 }
 
 export const TestHeader: React.FC<TestHeaderProps> = ({
@@ -23,6 +26,9 @@ export const TestHeader: React.FC<TestHeaderProps> = ({
   onFinishClick,
   onToggleDrawer,
   isDrawerOpen,
+  isFullscreen = false,
+  violations = 0,
+  onToggleFullscreen,
 }) => {
   const progressPercent = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0
 
@@ -65,6 +71,42 @@ export const TestHeader: React.FC<TestHeaderProps> = ({
 
           {/* Isolated Tabular Numerals Countdown Timer */}
           <TestCountdownTimer />
+
+          {/* Fullscreen Focus Mode Button */}
+          {onToggleFullscreen && (
+            <button
+              type="button"
+              onClick={onToggleFullscreen}
+              className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-md border text-xs font-medium inline-flex items-center space-x-1.5 btn-press focus-ring transition-colors cursor-pointer ${
+                isFullscreen
+                  ? 'bg-accent/10 border-accent/30 text-accent hover:bg-accent/20'
+                  : 'bg-surface border-borderline text-ink-muted hover:text-ink hover:bg-surface-hover'
+              }`}
+              title={isFullscreen ? 'Keluar dari Layar Penuh' : 'Masuk Mode Layar Penuh (Fokus CAT)'}
+            >
+              {isFullscreen ? (
+                <>
+                  <Minimize2 className="w-4 h-4 shrink-0" />
+                  <span className="hidden md:inline">Keluar Fokus</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-4 h-4 shrink-0" />
+                  <span className="hidden md:inline">Layar Penuh</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Violations Warning Pill */}
+          {violations > 0 && (
+            <span
+              className="hidden lg:inline-flex items-center px-2 py-0.5 text-[10px] font-mono rounded bg-warning-subtle text-warning border border-warning-border"
+              title="Peringatan integritas ujian terdeteksi"
+            >
+              ⚠️ {violations} Peringatan
+            </span>
+          )}
 
           {/* Finish Button - The SINGLE prominent submit button in navbar */}
           <button
