@@ -56,16 +56,6 @@ export const TestPage: React.FC = () => {
   // Examinee pre-exam confirmation state (pra-melanggar)
   const [isPreExamConfirmed, setIsPreExamConfirmed] = useState(false)
 
-  // Anti-Cheat & Web Proctoring Suite (arms only after examinee confirms pre-exam briefing)
-  const proctoring = useExamProctoring({
-    enabled: !loading && !!session && !paywallModalData && hasProctoring,
-    requireFullscreen,
-    detectTabSwitch,
-    blockCopyPaste,
-    maxViolations,
-    isArmed: isPreExamConfirmed,
-  })
-
   const handleAutoFinish = useCallback(async () => {
     try {
       const resultId = await finishSession()
@@ -74,6 +64,23 @@ export const TestPage: React.FC = () => {
       toast.error('Gagal Menyelesaikan Ujian Otomatis', (err as Error).message)
     }
   }, [finishSession, navigate, toast])
+
+  // Anti-Cheat & Web Proctoring Suite (arms only after examinee confirms pre-exam briefing)
+  const proctoring = useExamProctoring({
+    enabled: !loading && !!session && !paywallModalData && hasProctoring,
+    requireFullscreen,
+    detectTabSwitch,
+    blockCopyPaste,
+    maxViolations,
+    isArmed: isPreExamConfirmed,
+    onMaxViolationsReached: () => {
+      toast.error(
+        'Batas Pelanggaran Terlampaui',
+        'Ujian otomatis dihentikan dan jawaban dikirim karena batas pelanggaran telah terlampaui.'
+      )
+      handleAutoFinish()
+    },
+  })
 
   // Initialize session
   useEffect(() => {

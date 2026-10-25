@@ -179,24 +179,41 @@ func (r *PostgresTestRepository) UpdateTestTx(ctx context.Context, test *models.
 				}
 			}
 
-			// Clean and replace options for this specific question
-			_, err = tx.ExecContext(ctx, "DELETE FROM question_options WHERE question_id = $1", q.ID)
-			if err != nil {
-				return fmt.Errorf("delete old options for question %s: %w", q.ID, err)
+			// Fetch existing options for this question to preserve historical user submissions
+			var existingOptIDs []string
+			_ = tx.SelectContext(ctx, &existingOptIDs, "SELECT id FROM question_options WHERE question_id = $1", q.ID)
+			incomingOptMap := make(map[string]bool)
+			for _, opt := range q.Options {
+				incomingOptMap[opt.ID] = true
 			}
 
+			// Only delete options that were explicitly removed from the incoming payload
+			for _, optID := range existingOptIDs {
+				if !incomingOptMap[optID] {
+					_, err = tx.ExecContext(ctx, "DELETE FROM question_options WHERE id = $1", optID)
+					if err != nil {
+						return fmt.Errorf("delete removed option %s: %w", optID, err)
+					}
+				}
+			}
+
+			// Upsert incoming options: updates in place without triggering ON DELETE SET NULL on test_submissions
+			upsertOptSQL := `
+				INSERT INTO question_options (id, question_id, option_text, option_letter, is_correct, created_at)
+				VALUES ($1, $2, $3, $4, $5, $6)
+				ON CONFLICT (id) DO UPDATE 
+				SET option_text = EXCLUDED.option_text,
+				    option_letter = EXCLUDED.option_letter,
+				    is_correct = EXCLUDED.is_correct
+			`
 			for _, opt := range q.Options {
 				isCorrect := false
 				if opt.IsCorrect != nil {
 					isCorrect = *opt.IsCorrect
 				}
-				insertOptSQL := `
-					INSERT INTO question_options (id, question_id, option_text, option_letter, is_correct, created_at)
-					VALUES ($1, $2, $3, $4, $5, $6)
-				`
-				_, err = tx.ExecContext(ctx, insertOptSQL, opt.ID, q.ID, opt.OptionText, opt.OptionLetter, isCorrect, now)
+				_, err = tx.ExecContext(ctx, upsertOptSQL, opt.ID, q.ID, opt.OptionText, opt.OptionLetter, isCorrect, now)
 				if err != nil {
-					return fmt.Errorf("insert updated option %s: %w", opt.ID, err)
+					return fmt.Errorf("upsert option %s: %w", opt.ID, err)
 				}
 			}
 		}

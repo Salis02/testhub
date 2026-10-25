@@ -87,7 +87,25 @@ Kelemahan & Sertifikat                                (Anonim, HP, Auto-save)
 
 ---
 
-## 7. Backlog Fitur Masa Depan (Future Roadmap)
+## 7. Status Penguatan Keamanan & Audit Kerentanan (Ponytail Review — 100% Remediated)
+
+> Dokumentasi audit lengkap tersimpan di [`VULNERABILITY_REVIEW.md`](file:///home/sans/coding/quiz_app/VULNERABILITY_REVIEW.md).
+
+| No | Modul & Lokasi | Kerentanan yang Diatasi | Status | Solusi Teknis |
+|:---:|---|---|:---:|---|
+| **1** | [`auth.go`](file:///home/sans/coding/quiz_app/backend/internal/handlers/auth.go) | Self-assignment role `admin` pada registrasi publik | ✅ Selesai | Hardcode role pendaftaran publik ke `creator`. Admin hanya melalui database seed. |
+| **2** | [`test_repository.go`](file:///home/sans/coding/quiz_app/backend/internal/repository/test_repository.go) | `DELETE FROM question_options` menghapus riwayat jawaban siswa via `ON DELETE SET NULL` | ✅ Selesai | Opsi diperbarui via `INSERT ... ON CONFLICT (id) DO UPDATE` dan diffing ID opsi. |
+| **3** | [`exam_repository.go`](file:///home/sans/coding/quiz_app/backend/internal/repository/exam_repository.go) | Leaderboard membocorkan raw `session_id` peserta | ✅ Selesai | `session_id` disamarkan dengan SHA-256 hash prefix (`rank-N-xxxx`). |
+| **4** | [`TestPage.tsx`](file:///home/sans/coding/quiz_app/frontend/src/pages/TestPage.tsx) & [`ProctoringWarningModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/test/ProctoringWarningModal.tsx) | Melebihi `max_violations` tidak menghentikan ujian | ✅ Selesai | Pasang `onMaxViolationsReached: handleAutoFinish` & nonaktifkan dismiss modal saat batas pelanggaran habis. |
+| **5** | [`public.go`](file:///home/sans/coding/quiz_app/backend/internal/handlers/public.go) & [`exam_repository.go`](file:///home/sans/coding/quiz_app/backend/internal/repository/exam_repository.go) | Durasi ujian dan kedaluwarsa sesi tidak divalidasi server | ✅ Selesai | Hitung `expiresAt` berdasar `duration_minutes` + buffer 20m; tolak submit jawaban jika sesi lewat `expiresAt`. |
+| **6** | [`public.go`](file:///home/sans/coding/quiz_app/backend/internal/handlers/public.go) | Parameter query `?email=` membocorkan email di server log | ✅ Selesai | Hapus fallback query param `?email=`; validasi email via JWT claims atau payload eksplisit. |
+| **7** | [`useExamProctoring.ts`](file:///home/sans/coding/quiz_app/frontend/src/hooks/useExamProctoring.ts) | Listener clipboard tidak memblokir penempelan teks (`paste`) | ✅ Selesai | Tambahkan listener `paste`, blokir `Ctrl+V`, dan masukkan `blockCopyPaste` ke dependency array. |
+| **8** | [`TestCreatorModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestCreatorModal.tsx) & [`TestEditorModal.tsx`](file:///home/sans/coding/quiz_app/frontend/src/components/admin/TestEditorModal.tsx) | Impor soal menghasilkan duplikasi ID opsi pada batch yang sama | ✅ Selesai | Sisipkan indeks soal ke ID opsi (`opt-${Date.now()}-${idx}-${letter}`). |
+| **9** | [`spreadsheetParser.ts`](file:///home/sans/coding/quiz_app/frontend/src/utils/spreadsheetParser.ts) | Inisialisasi ganda kolom mapping yang redundant | ✅ Selesai | Refaktor pemetaan kolom langsung dengan percabangan tunggal. |
+
+---
+
+## 8. Backlog Fitur Masa Depan (Future Roadmap)
 
 | ID Tiket | Modul / Handler | Spesifikasi Fitur | Prioritas |
 |---|---|---|:---:|

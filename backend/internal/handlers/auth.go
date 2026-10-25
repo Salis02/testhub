@@ -53,10 +53,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// Public registration only allows "creator" role; admin privileges cannot be self-assigned
 	role := "creator"
-	if req.Role == "admin" || req.Role == "creator" {
-		role = req.Role
-	}
 
 	userID := uuid.New().String()
 	user := models.User{

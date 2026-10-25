@@ -115,9 +115,6 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 	if userIdentifier == "" {
 		userIdentifier = c.GetHeader("X-User-Email")
 	}
-	if userIdentifier == "" {
-		userIdentifier = c.Query("email")
-	}
 
 	var startDTO models.StartSessionDTO
 	if err := c.ShouldBindJSON(&startDTO); err == nil && startDTO.Email != "" && userIdentifier == "" {
@@ -152,9 +149,14 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 		}
 	}
 
+	durationMins := test.DurationMinutes
+	if durationMins <= 0 {
+		durationMins = 60
+	}
 	sessionID := "sess-" + uuid.New().String()[:8] + "-" + fmt.Sprintf("%d", time.Now().Unix())
 	startedAt := time.Now()
-	expiresAt := startedAt.Add(24 * time.Hour)
+	// Allow duration plus 20 minutes buffer for pre-exam modal briefing, clock skew, and network latency
+	expiresAt := startedAt.Add(time.Duration(durationMins)*time.Minute + 20*time.Minute)
 
 	clientIP := c.ClientIP()
 	userAgent := c.GetHeader("User-Agent")

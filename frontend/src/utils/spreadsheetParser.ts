@@ -111,16 +111,16 @@ export function parseSpreadsheetToQuestions(
 
   let dataRows = isHeaderRow ? rows.slice(1) : rows
   let colMap = {
-    soal: 1,
-    optA: 2,
-    optB: 3,
-    optC: 4,
-    optD: 5,
-    optE: 6,
-    kunci: 7,
-    pembahasan: 8,
-    poin: 9,
-    tingkat: 10,
+    soal: 0,
+    optA: 1,
+    optB: 2,
+    optC: 3,
+    optD: 4,
+    optE: 5,
+    kunci: 6,
+    pembahasan: 7,
+    poin: 8,
+    tingkat: 9,
   }
 
   if (isHeaderRow) {
@@ -150,22 +150,19 @@ export function parseSpreadsheetToQuestions(
       else if (/^(poin|bobot|points)$/.test(h)) colMap.poin = idx
       else if (/^(tingkat|tingkat kesulitan|difficulty)$/.test(h)) colMap.tingkat = idx
     })
-  } else {
-    // Positional fallback: check if first col is number or text
-    const firstColIsNum = !isNaN(Number(firstRow[0]))
-    if (!firstColIsNum) {
-      colMap = {
-        soal: 0,
-        optA: 1,
-        optB: 2,
-        optC: 3,
-        optD: 4,
-        optE: 5,
-        kunci: 6,
-        pembahasan: 7,
-        poin: 8,
-        tingkat: 9,
-      }
+  } else if (!isNaN(Number(firstRow[0]))) {
+    // Positional fallback with leading row number column (1-indexed options)
+    colMap = {
+      soal: 1,
+      optA: 2,
+      optB: 3,
+      optC: 4,
+      optD: 5,
+      optE: 6,
+      kunci: 7,
+      pembahasan: 8,
+      poin: 9,
+      tingkat: 10,
     }
   }
 

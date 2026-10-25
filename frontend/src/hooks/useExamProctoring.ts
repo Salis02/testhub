@@ -195,6 +195,11 @@ export function useExamProctoring({
       notifyBlocked('Penyalinan soal')
     }
 
+    const handlePaste = (e: ClipboardEvent) => {
+      e.preventDefault()
+      notifyBlocked('Penempelan teks')
+    }
+
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault()
       notifyBlocked('Klik kanan')
@@ -204,9 +209,9 @@ export function useExamProctoring({
       const isCtrlOrMeta = e.ctrlKey || e.metaKey
       const key = e.key.toLowerCase()
 
-      // Block Ctrl+C (copy), Ctrl+X (cut), Ctrl+U (view source), F12 (dev tools)
+      // Block Ctrl+C (copy), Ctrl+X (cut), Ctrl+V (paste), Ctrl+U (view source), Ctrl+P (print), F12 (dev tools)
       if (
-        (isCtrlOrMeta && (key === 'c' || key === 'x' || key === 'u' || key === 'p')) ||
+        (isCtrlOrMeta && (key === 'c' || key === 'x' || key === 'v' || key === 'u' || key === 'p')) ||
         e.key === 'F12'
       ) {
         e.preventDefault()
@@ -216,16 +221,18 @@ export function useExamProctoring({
 
     document.addEventListener('copy', handleCopyCut)
     document.addEventListener('cut', handleCopyCut)
+    document.addEventListener('paste', handlePaste)
     document.addEventListener('contextmenu', handleContextMenu)
     document.addEventListener('keydown', handleKeyDown)
 
     return () => {
       document.removeEventListener('copy', handleCopyCut)
       document.removeEventListener('cut', handleCopyCut)
+      document.removeEventListener('paste', handlePaste)
       document.removeEventListener('contextmenu', handleContextMenu)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [enabled, toast])
+  }, [enabled, blockCopyPaste, toast])
 
   return {
     isFullscreen,

@@ -132,7 +132,7 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
           explanation: q.explanation || '',
           media_url: q.media_url || null,
           options: (q.options || []).map((opt) => ({
-            id: opt.id || `opt-${Date.now()}-${opt.option_letter}`,
+            id: opt.id || `opt-${Date.now()}-${idx}-${opt.option_letter}`,
             option_letter: (opt.option_letter || 'A').toUpperCase() as any,
             option_text: opt.option_text,
             is_correct: Boolean(opt.is_correct),
@@ -182,7 +182,7 @@ export const TestCreatorModal: React.FC<TestCreatorModalProps> = ({
         explanation: q.explanation || '',
         media_url: q.media_url || null,
         options: (q.options || []).map((opt) => ({
-          id: opt.id || `opt-${Date.now()}-${opt.option_letter}`,
+          id: opt.id || `opt-${Date.now()}-${idx}-${opt.option_letter}`,
           option_letter: (opt.option_letter || 'A').toUpperCase() as any,
           option_text: opt.option_text,
           is_correct: Boolean(opt.is_correct),

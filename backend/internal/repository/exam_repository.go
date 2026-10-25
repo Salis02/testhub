@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -349,7 +350,7 @@ func (r *PostgresExamRepository) SaveSubmission(ctx context.Context, sessionID s
 	if err != nil {
 		return nil, err
 	}
-	if !session.IsActive {
+	if !session.IsActive || time.Now().After(session.ExpiresAt) {
 		return nil, ErrSessionInactive
 	}
 
@@ -479,10 +480,12 @@ func (r *PostgresExamRepository) FinishExamTx(ctx context.Context, sessionID str
 	scoring := services.CalculateScore(questions, submissions, test.PassingScorePercentage)
 
 	timeSpent := timeSpentSeconds
-	if timeSpent <= 0 {
-		timeSpent = int(time.Since(session.StartedAt).Seconds())
-	}
+	realElapsed := int(time.Since(session.StartedAt).Seconds())
 	maxDurationSec := test.DurationMinutes * 60
+
+	if timeSpent <= 0 || timeSpent > realElapsed {
+		timeSpent = realElapsed
+	}
 	if timeSpent > maxDurationSec {
 		timeSpent = maxDurationSec
 	}
@@ -601,13 +604,15 @@ func (r *PostgresExamRepository) GetLeaderboard(ctx context.Context, testID stri
 	var entries []models.LeaderboardEntry
 	for i, row := range rows {
 		displayName := fmt.Sprintf("Peserta #%d", i+1)
+		hash := sha256.Sum256([]byte(row.SessionID))
+		maskedSessionID := fmt.Sprintf("rank-%d-%x", i+1, hash[:4])
 		if len(row.SessionID) > 8 {
 			displayName = fmt.Sprintf("Peserta %s", row.SessionID[len(row.SessionID)-4:])
 		}
 
 		entries = append(entries, models.LeaderboardEntry{
 			Rank:             i + 1,
-			SessionID:        row.SessionID,
+			SessionID:        maskedSessionID,
 			UserIdentifier:   displayName,
 			Score:            row.TotalScore,
 			PercentageScore:  row.PercentageScore,
