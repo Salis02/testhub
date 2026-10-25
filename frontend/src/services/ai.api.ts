@@ -59,6 +59,21 @@ export const aiApi = {
       signal,
     })
 
+    if (response.status === 404) {
+      // Graceful fallback if backend server hasn't been restarted with the stream endpoint
+      console.warn('[AI] Streaming endpoint 404, falling back to standard endpoint...')
+      const fallbackQuestions = await aiApi.generateQuestions(params, signal)
+      onChunk({
+        batch_index: 1,
+        total_batches: 1,
+        completed_count: fallbackQuestions.length,
+        total_count: fallbackQuestions.length,
+        provider: 'Standard AI Generation (Fallback)',
+        questions: fallbackQuestions,
+      })
+      return fallbackQuestions
+    }
+
     if (!response.ok) {
       let errorMsg = `Server error ${response.status}`
       try {
