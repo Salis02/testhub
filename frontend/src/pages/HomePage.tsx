@@ -49,7 +49,7 @@ export const HomePage: React.FC = () => {
   const navigate = useNavigate()
   const toast = useToast()
   const queryClient = useQueryClient()
-  const { user } = useAuth()
+  const { user, isAuthenticated } = useAuth()
 
   const { data: rawTests = [], isLoading: loading } = useQuery({
     queryKey: ['tests', activeCategory, submittedQuery],
@@ -103,10 +103,29 @@ export const HomePage: React.FC = () => {
 
   const handleStartTest = async (testId: string, email?: string) => {
     try {
+      const targetTest = tests.find((t) => t.id === testId)
+      // Strict Paywall: Paid tests require authenticated session
+      if (targetTest?.price_idr && targetTest.price_idr > 0 && !isAuthenticated) {
+        toast.info(
+          'Login Diperlukan',
+          'Silakan masuk atau mendaftar terlebih dahulu untuk mengakses tryout berbayar ini.'
+        )
+        navigate('/login', { state: { from: `/?start=${testId}` } })
+        return
+      }
+
       const effectiveEmail = email || user?.email || getStoredUserEmail() || undefined
       const session = await sessionsApi.startTest(testId, effectiveEmail)
       navigate(`/test/${session.test.id}?session=${session.session_id}`)
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        toast.info(
+          'Login Diperlukan',
+          'Sesi login Anda diperlukan untuk mengakses modul ujian ini.'
+        )
+        navigate('/login', { state: { from: `/?start=${testId}` } })
+        return
+      }
       if (err instanceof ApiError && err.status === 402) {
         const targetTest = tests.find((t) => t.id === testId)
         const details = (err.details as Record<string, unknown>) || {}

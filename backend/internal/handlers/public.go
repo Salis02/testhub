@@ -98,7 +98,7 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 		return
 	}
 
-	// Resolve user role and identifier from JWT context, headers, query, or body DTO
+	// Resolve user role and identifier from JWT context
 	userRole := ""
 	if rVal, exists := c.Get("role"); exists {
 		if r, ok := rVal.(string); ok {
@@ -112,21 +112,39 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 			userIdentifier = s
 		}
 	}
-	if userIdentifier == "" {
-		userIdentifier = c.GetHeader("X-User-Email")
+
+	var userIDPtr *string
+	if uidVal, exists := c.Get("userID"); exists {
+		if uidStr, ok := uidVal.(string); ok && uidStr != "" {
+			userIDPtr = &uidStr
+		}
+	} else if uidVal, exists := c.Get("user_id"); exists {
+		if uidStr, ok := uidVal.(string); ok && uidStr != "" {
+			userIDPtr = &uidStr
+		}
 	}
 
 	var startDTO models.StartSessionDTO
-	if err := c.ShouldBindJSON(&startDTO); err == nil && startDTO.Email != "" && userIdentifier == "" {
-		userIdentifier = startDTO.Email
-	}
+	_ = c.ShouldBindJSON(&startDTO)
 
 	// Paywall Enforcement: Cek akses langganan jika modul ujian berbayar
 	if test.PriceIDR > 0 {
+		// Strict Security: Modul berbayar memerlukan akun terverifikasi (login via JWT)
+		// untuk mencegah identity spoofing via header atau body DTO.
+		if userRole == "" && userIdentifier == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":         "Autentikasi akun diperlukan untuk mengakses ujian berbayar. Silakan masuk terlebih dahulu.",
+				"require_login": true,
+				"paywall":       true,
+				"test_id":       test.ID,
+			})
+			return
+		}
+
 		hasAccess := false
 
-		// Admin & Creator role automatically bypass paywall for preview, testing, and grading
-		if userRole == "admin" || userRole == "creator" {
+		// Admin can preview all tests. Creator can preview tests they created.
+		if userRole == "admin" || (userRole == "creator" && test.CreatorID != nil && userIDPtr != nil && *test.CreatorID == *userIDPtr) {
 			hasAccess = true
 		} else if userIdentifier != "" && h.subRepo != nil {
 			var errAccess error
@@ -147,6 +165,9 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 			})
 			return
 		}
+	} else if userIdentifier == "" && startDTO.Email != "" {
+		// Untuk tryout gratis, izinkan email dari form jika ada
+		userIdentifier = startDTO.Email
 	}
 
 	durationMins := test.DurationMinutes
@@ -160,12 +181,6 @@ func (h *PublicHandler) StartTest(c *gin.Context) {
 
 	clientIP := c.ClientIP()
 	userAgent := c.GetHeader("User-Agent")
-	var userIDPtr *string
-	if uidVal, exists := c.Get("user_id"); exists {
-		if uidStr, ok := uidVal.(string); ok && uidStr != "" {
-			userIDPtr = &uidStr
-		}
-	}
 
 	session := models.TestSession{
 		ID:        sessionID,

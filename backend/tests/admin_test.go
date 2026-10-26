@@ -351,3 +351,130 @@ func TestAdminPendingEssaysAndGrading(t *testing.T) {
 	}
 }
 
+func TestRBACAndCreatorIsolation(t *testing.T) {
+	_, _, router := setupTestApp(t)
+	creatorAToken := getCreatorToken(t, router)
+	creatorBToken := getCreatorToken(t, router)
+	adminToken := getAdminToken(t, router)
+
+	// 1. Creator cannot access strict admin endpoints (users & subscriptions)
+	usersReq, _ := http.NewRequest("GET", "/api/admin/users", nil)
+	usersReq.Header.Set("Authorization", "Bearer "+creatorAToken)
+	usersW := httptest.NewRecorder()
+	router.ServeHTTP(usersW, usersReq)
+	if usersW.Code != http.StatusForbidden {
+		t.Fatalf("Expected 403 Forbidden for creator accessing /api/admin/users, got %d", usersW.Code)
+	}
+
+	subsReq, _ := http.NewRequest("GET", "/api/admin/subscriptions", nil)
+	subsReq.Header.Set("Authorization", "Bearer "+creatorAToken)
+	subsW := httptest.NewRecorder()
+	router.ServeHTTP(subsW, subsReq)
+	if subsW.Code != http.StatusForbidden {
+		t.Fatalf("Expected 403 Forbidden for creator accessing /api/admin/subscriptions, got %d", subsW.Code)
+	}
+
+	// 2. Creator A creates a test
+	isTrue := true
+	isFalse := false
+	createBody, _ := json.Marshal(map[string]interface{}{
+		"title":                    "Modul Ujian Guru A",
+		"description":              "Deskripsi Ujian Guru A",
+		"category":                 "cpns",
+		"duration_minutes":         45,
+		"passing_score_percentage": 70,
+		"published":                false,
+		"questions": []models.TestQuestion{
+			{
+				QuestionText:    "Soal kepunyaan Guru A",
+				QuestionType:    "multiple_choice",
+				DifficultyLevel: "easy",
+				Points:          5,
+				Options: []models.QuestionOption{
+					{OptionLetter: "A", OptionText: "Pilihan A", IsCorrect: &isTrue},
+					{OptionLetter: "B", OptionText: "Pilihan B", IsCorrect: &isFalse},
+				},
+			},
+		},
+	})
+	createReq, _ := http.NewRequest("POST", "/api/admin/tests", bytes.NewBuffer(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer "+creatorAToken)
+	createW := httptest.NewRecorder()
+	router.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("Creator A failed to create test: %d: %s", createW.Code, createW.Body.String())
+	}
+
+	var created models.Test
+	_ = json.Unmarshal(createW.Body.Bytes(), &created)
+	testID := created.ID
+
+	// 3. Creator B attempts to update Creator A's test -> 403 Forbidden
+	updateBody, _ := json.Marshal(map[string]interface{}{
+		"title":                    "Modul Diubah Guru B",
+		"description":              "Deskripsi Diubah Guru B",
+		"category":                 "cpns",
+		"duration_minutes":         50,
+		"passing_score_percentage": 70,
+		"published":                false,
+		"questions": []models.TestQuestion{
+			{
+				QuestionText:    "Soal modifikasi Guru B",
+				QuestionType:    "multiple_choice",
+				DifficultyLevel: "easy",
+				Points:          5,
+				Options: []models.QuestionOption{
+					{OptionLetter: "A", OptionText: "Pilihan A", IsCorrect: &isTrue},
+					{OptionLetter: "B", OptionText: "Pilihan B", IsCorrect: &isFalse},
+				},
+			},
+		},
+	})
+	updateReq, _ := http.NewRequest("PUT", "/api/admin/tests/"+testID, bytes.NewBuffer(updateBody))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateReq.Header.Set("Authorization", "Bearer "+creatorBToken)
+	updateW := httptest.NewRecorder()
+	router.ServeHTTP(updateW, updateReq)
+	if updateW.Code != http.StatusForbidden {
+		t.Fatalf("Expected 403 Forbidden when Creator B updates Creator A's test, got %d", updateW.Code)
+	}
+
+	// 4. Creator B attempts to toggle publish -> 403 Forbidden
+	toggleReq, _ := http.NewRequest("POST", "/api/admin/tests/"+testID+"/toggle-publish", nil)
+	toggleReq.Header.Set("Authorization", "Bearer "+creatorBToken)
+	toggleW := httptest.NewRecorder()
+	router.ServeHTTP(toggleW, toggleReq)
+	if toggleW.Code != http.StatusForbidden {
+		t.Fatalf("Expected 403 Forbidden when Creator B toggles Creator A's test, got %d", toggleW.Code)
+	}
+
+	// 5. Creator B attempts to delete -> 403 Forbidden
+	delReq, _ := http.NewRequest("DELETE", "/api/admin/tests/"+testID, nil)
+	delReq.Header.Set("Authorization", "Bearer "+creatorBToken)
+	delW := httptest.NewRecorder()
+	router.ServeHTTP(delW, delReq)
+	if delW.Code != http.StatusForbidden {
+		t.Fatalf("Expected 403 Forbidden when Creator B deletes Creator A's test, got %d", delW.Code)
+	}
+
+	// 6. Creator A can update their own test -> 200 OK
+	updateReqA, _ := http.NewRequest("PUT", "/api/admin/tests/"+testID, bytes.NewBuffer(updateBody))
+	updateReqA.Header.Set("Content-Type", "application/json")
+	updateReqA.Header.Set("Authorization", "Bearer "+creatorAToken)
+	updateWA := httptest.NewRecorder()
+	router.ServeHTTP(updateWA, updateReqA)
+	if updateWA.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK when Creator A updates their own test, got %d: %s", updateWA.Code, updateWA.Body.String())
+	}
+
+	// 7. Admin can delete Creator A's test -> 200 OK
+	delAdminReq, _ := http.NewRequest("DELETE", "/api/admin/tests/"+testID, nil)
+	delAdminReq.Header.Set("Authorization", "Bearer "+adminToken)
+	delAdminW := httptest.NewRecorder()
+	router.ServeHTTP(delAdminW, delAdminReq)
+	if delAdminW.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK when Admin deletes test, got %d: %s", delAdminW.Code, delAdminW.Body.String())
+	}
+}
+

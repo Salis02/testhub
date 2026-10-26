@@ -23,7 +23,8 @@ type TabType = 'overview' | 'tests' | 'essays' | 'subscriptions' | 'users' | 'au
 
 
 export const AdminPage: React.FC = () => {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const navigate = useNavigate()
   const toast = useToast()
   const queryClient = useQueryClient()
@@ -41,8 +42,12 @@ export const AdminPage: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login')
+      return
     }
-  }, [isAuthenticated, navigate])
+    if (!isAdmin && (activeTab === 'subscriptions' || activeTab === 'users')) {
+      setActiveTab('overview')
+    }
+  }, [isAuthenticated, isAdmin, activeTab, navigate])
 
   // 1. Declarative Server State with Auto-caching & Deduping
   const { data: stats, isLoading: loadingStats } = useQuery({
@@ -251,29 +256,33 @@ export const AdminPage: React.FC = () => {
             )}
           </button>
 
-          <button
-            onClick={() => setActiveTab('subscriptions')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-              activeTab === 'subscriptions'
-                ? 'bg-canvas text-accent shadow-xs font-semibold border border-borderline'
-                : 'text-ink-muted hover:text-ink'
-            }`}
-          >
-            <CreditCard className="w-3.5 h-3.5" />
-            <span>Paket Langganan</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('subscriptions')}
+              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                activeTab === 'subscriptions'
+                  ? 'bg-canvas text-accent shadow-xs font-semibold border border-borderline'
+                  : 'text-ink-muted hover:text-ink'
+              }`}
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>Paket Langganan</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-              activeTab === 'users'
-                ? 'bg-canvas text-accent shadow-xs font-semibold border border-borderline'
-                : 'text-ink-muted hover:text-ink'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Pengguna & Akun</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                activeTab === 'users'
+                  ? 'bg-canvas text-accent shadow-xs font-semibold border border-borderline'
+                  : 'text-ink-muted hover:text-ink'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Pengguna & Akun</span>
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab('audit')}
@@ -341,11 +350,11 @@ export const AdminPage: React.FC = () => {
         <EssayGradingView submissions={essays} onGrade={handleGradeEssay} />
       )}
 
-      {activeTab === 'subscriptions' && (
+      {activeTab === 'subscriptions' && isAdmin && (
         <SubscriptionManagement tests={tests} isLoadingTests={loadingTests} />
       )}
 
-      {activeTab === 'users' && (
+      {activeTab === 'users' && isAdmin && (
         <UserManagement />
       )}
 

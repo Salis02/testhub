@@ -58,11 +58,23 @@ func TestPaywallAndSubscriptionFlow(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &created)
 	testID := created.ID
 
-	// 2. An examinee tries to start the test without paying -> Expect HTTP 402 Payment Required
-	userEmail := "examinee-student@example.com"
-	startReq, _ := http.NewRequest("POST", "/api/tests/"+testID+"/start", bytes.NewBuffer([]byte(fmt.Sprintf(`{"email":"%s"}`, userEmail))))
+	// 2. An examinee tries to start the paid test without logging in -> Expect HTTP 401 Unauthorized with require_login
+	userEmail := fmt.Sprintf("examinee-%d@example.com", time.Now().UnixNano())
+	unauthReq, _ := http.NewRequest("POST", "/api/tests/"+testID+"/start", bytes.NewBuffer([]byte(fmt.Sprintf(`{"email":"%s"}`, userEmail))))
+	unauthReq.Header.Set("Content-Type", "application/json")
+	unauthReq.Header.Set("X-User-Email", userEmail) // spoof attempt should fail
+	wUnauth := httptest.NewRecorder()
+	router.ServeHTTP(wUnauth, unauthReq)
+
+	if wUnauth.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected HTTP 401 Unauthorized for unauthenticated paid test start, got %d: %s", wUnauth.Code, wUnauth.Body.String())
+	}
+
+	// 2b. Examinee registers/logs in and tries to start without paying -> Expect HTTP 402 Payment Required
+	userToken := getUserToken(t, router, userEmail)
+	startReq, _ := http.NewRequest("POST", "/api/tests/"+testID+"/start", bytes.NewBuffer([]byte(`{}`)))
 	startReq.Header.Set("Content-Type", "application/json")
-	startReq.Header.Set("X-User-Email", userEmail)
+	startReq.Header.Set("Authorization", "Bearer "+userToken)
 	startReq.Header.Set("X-Forwarded-For", fmt.Sprintf("198.51.100.%d", time.Now().UnixNano()%200+10))
 	wStart := httptest.NewRecorder()
 	router.ServeHTTP(wStart, startReq)
@@ -79,6 +91,7 @@ func TestPaywallAndSubscriptionFlow(t *testing.T) {
 	})
 	invReq, _ := http.NewRequest("POST", "/api/payments/create-invoice", bytes.NewBuffer(invReqBody))
 	invReq.Header.Set("Content-Type", "application/json")
+	invReq.Header.Set("Authorization", "Bearer "+userToken)
 	wInv := httptest.NewRecorder()
 	router.ServeHTTP(wInv, invReq)
 
@@ -113,10 +126,10 @@ func TestPaywallAndSubscriptionFlow(t *testing.T) {
 		t.Fatalf("Webhook failed with status %d: %s", wWeb.Code, wWeb.Body.String())
 	}
 
-	// 6. Examinee now starts the test -> Expect HTTP 200 OK (Paywall unlocked!)
-	startReq2, _ := http.NewRequest("POST", "/api/tests/"+testID+"/start", bytes.NewBuffer([]byte(fmt.Sprintf(`{"email":"%s"}`, userEmail))))
+	// 6. Examinee now starts the test with valid auth token -> Expect HTTP 200 OK (Paywall unlocked!)
+	startReq2, _ := http.NewRequest("POST", "/api/tests/"+testID+"/start", bytes.NewBuffer([]byte(`{}`)))
 	startReq2.Header.Set("Content-Type", "application/json")
-	startReq2.Header.Set("X-User-Email", userEmail)
+	startReq2.Header.Set("Authorization", "Bearer "+userToken)
 	startReq2.Header.Set("X-Forwarded-For", fmt.Sprintf("198.51.100.%d", time.Now().UnixNano()%200+11))
 	wStart2 := httptest.NewRecorder()
 	router.ServeHTTP(wStart2, startReq2)

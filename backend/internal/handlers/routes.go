@@ -129,7 +129,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		payments := api.Group("/payments")
 		{
 			payments.POST("/create-invoice", middleware.OptionalAuth(cfg.JWTSecret), middleware.RateLimit(cacheClient, 15, time.Minute, "create_invoice"), paymentHandler.CreateInvoice)
-			payments.GET("/status/:orderId", paymentHandler.GetOrderStatus)
+			payments.GET("/status/:orderId", middleware.RateLimit(cacheClient, 60, time.Minute, "order_status"), paymentHandler.GetOrderStatus)
 			payments.POST("/webhook", paymentHandler.HandleWebhook)
 		}
 
@@ -160,7 +160,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		// =========================================================================
 		admin := api.Group("/admin")
 		admin.Use(middleware.AuthRequired(cfg.JWTSecret, cacheClient))
-		admin.Use(middleware.RequireAdmin())
+		admin.Use(middleware.RequireCreatorOrAdmin())
 		{
 			// Dashboard & Analytics
 			admin.GET("/stats", adminHandler.GetStats)
@@ -184,16 +184,21 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			admin.POST("/upload-media", mediaHandler.UploadMedia)
 			admin.DELETE("/media", mediaHandler.DeleteMedia)
 
-			// Subscription Management & Manual Overrides
-			admin.GET("/subscriptions", adminSubHandler.ListSubscriptions)
-			admin.POST("/subscriptions/manual-grant", adminSubHandler.ManualGrant)
-			admin.PUT("/subscriptions/:id/status", adminSubHandler.UpdateStatus)
-			admin.DELETE("/subscriptions/:id/revoke", adminSubHandler.Revoke)
+			// Strict Admin Only (Subscription overrides & User access control)
+			strictAdmin := admin.Group("")
+			strictAdmin.Use(middleware.RequireAdmin())
+			{
+				// Subscription Management & Manual Overrides
+				strictAdmin.GET("/subscriptions", adminSubHandler.ListSubscriptions)
+				strictAdmin.POST("/subscriptions/manual-grant", adminSubHandler.ManualGrant)
+				strictAdmin.PUT("/subscriptions/:id/status", adminSubHandler.UpdateStatus)
+				strictAdmin.DELETE("/subscriptions/:id/revoke", adminSubHandler.Revoke)
 
-			// User Management & Access Control
-			admin.GET("/users", adminHandler.ListUsers)
-			admin.PATCH("/users/:userId/status", adminHandler.ToggleUserStatus)
-			admin.PUT("/users/:userId/role", adminHandler.UpdateUserRole)
+				// User Management & Access Control
+				strictAdmin.GET("/users", adminHandler.ListUsers)
+				strictAdmin.PATCH("/users/:userId/status", adminHandler.ToggleUserStatus)
+				strictAdmin.PUT("/users/:userId/role", adminHandler.UpdateUserRole)
+			}
 		}
 	}
 

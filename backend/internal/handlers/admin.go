@@ -43,6 +43,42 @@ func (h *AdminHandler) invalidateCatalogCache() {
 	}
 }
 
+func (h *AdminHandler) checkTestOwnership(c *gin.Context, testID string) (*models.Test, bool) {
+	test, err := h.testRepo.GetTestByID(c.Request.Context(), testID)
+	if err != nil {
+		if errors.Is(err, repository.ErrTestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Ujian tidak ditemukan"})
+			return nil, false
+		}
+		log.Printf("[AdminHandler.checkTestOwnership] internal error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memverifikasi kepemilikan modul ujian."})
+		return nil, false
+	}
+
+	role, _ := c.Get("role")
+	roleStr, _ := role.(string)
+	if roleStr == "creator" {
+		userUID := ""
+		if uid, exists := c.Get("user_id"); exists {
+			if s, ok := uid.(string); ok {
+				userUID = s
+			}
+		}
+		if userUID == "" {
+			if uid, exists := c.Get("userID"); exists {
+				if s, ok := uid.(string); ok {
+					userUID = s
+				}
+			}
+		}
+		if test.CreatorID == nil || *test.CreatorID != userUID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Anda hanya berwenang mengelola modul ujian buatan Anda sendiri"})
+			return nil, false
+		}
+	}
+	return test, true
+}
+
 // GetStats handles GET /api/admin/stats
 func (h *AdminHandler) GetStats(c *gin.Context) {
 	stats, err := h.testRepo.GetStats(c.Request.Context())
@@ -167,6 +203,11 @@ func (h *AdminHandler) GetTest(c *gin.Context) {
 func (h *AdminHandler) UpdateTest(c *gin.Context) {
 	testID := c.Param("testId")
 
+	existingTest, ok := h.checkTestOwnership(c, testID)
+	if !ok {
+		return
+	}
+
 	var req models.SaveTestDTO
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -192,6 +233,7 @@ func (h *AdminHandler) UpdateTest(c *gin.Context) {
 	now := time.Now()
 	test := models.Test{
 		ID:                     testID,
+		CreatorID:              existingTest.CreatorID,
 		Title:                  req.Title,
 		Description:            req.Description,
 		Category:               req.Category,
@@ -244,6 +286,10 @@ func (h *AdminHandler) UpdateTest(c *gin.Context) {
 func (h *AdminHandler) TogglePublish(c *gin.Context) {
 	testID := c.Param("testId")
 
+	if _, ok := h.checkTestOwnership(c, testID); !ok {
+		return
+	}
+
 	newStatus, err := h.testRepo.TogglePublish(c.Request.Context(), testID)
 	if err != nil {
 		if errors.Is(err, repository.ErrTestNotFound) {
@@ -266,6 +312,10 @@ func (h *AdminHandler) TogglePublish(c *gin.Context) {
 // DeleteTest handles DELETE /api/admin/tests/:testId
 func (h *AdminHandler) DeleteTest(c *gin.Context) {
 	testID := c.Param("testId")
+
+	if _, ok := h.checkTestOwnership(c, testID); !ok {
+		return
+	}
 
 	err := h.testRepo.DeleteTest(c.Request.Context(), testID)
 	if err != nil {

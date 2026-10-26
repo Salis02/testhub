@@ -60,3 +60,46 @@ func getAdminToken(t *testing.T, router http.Handler) string {
 	_ = json.Unmarshal(wReg.Body.Bytes(), &authResp)
 	return authResp.Token
 }
+
+// getUserToken registers a standard user and returns their JWT bearer token
+func getUserToken(t *testing.T, router http.Handler, email string) string {
+	regBody, _ := json.Marshal(models.RegisterRequest{
+		Email:    email,
+		Password: "SecurePassword123!",
+		FullName: "Test User",
+		Role:     "user",
+	})
+	reqReg, _ := http.NewRequest("POST", "/api/auth/register", bytes.NewBuffer(regBody))
+	reqReg.Header.Set("Content-Type", "application/json")
+	ip := fmt.Sprintf("10.0.%d.%d", (time.Now().UnixNano()/1000)%250+1, time.Now().UnixNano()%250+1)
+	reqReg.Header.Set("X-Forwarded-For", ip)
+	reqReg.RemoteAddr = ip + ":12345"
+	wReg := httptest.NewRecorder()
+	router.ServeHTTP(wReg, reqReg)
+
+	var authResp models.AuthResponse
+	_ = json.Unmarshal(wReg.Body.Bytes(), &authResp)
+	return authResp.Token
+}
+
+// getCreatorToken registers a creator user and returns their JWT bearer token
+func getCreatorToken(t *testing.T, router http.Handler) string {
+	uniqueEmail := fmt.Sprintf("creator-%d-%d@testhub.id", time.Now().UnixNano(), time.Now().Unix())
+	regBody, _ := json.Marshal(models.RegisterRequest{
+		Email:    uniqueEmail,
+		Password: "SecurePassword123!",
+		FullName: "Creator Instructor",
+		Role:     "creator",
+	})
+	reqReg, _ := http.NewRequest("POST", "/api/auth/register", bytes.NewBuffer(regBody))
+	reqReg.Header.Set("Content-Type", "application/json")
+	ip := fmt.Sprintf("10.0.%d.%d", (time.Now().UnixNano()/1000)%250+1, time.Now().UnixNano()%250+1)
+	reqReg.Header.Set("X-Forwarded-For", ip)
+	reqReg.RemoteAddr = ip + ":12345"
+	wReg := httptest.NewRecorder()
+	router.ServeHTTP(wReg, reqReg)
+
+	var authResp models.AuthResponse
+	_ = json.Unmarshal(wReg.Body.Bytes(), &authResp)
+	return authResp.Token
+}
