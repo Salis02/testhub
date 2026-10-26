@@ -23,14 +23,16 @@ type AdminHandler struct {
 	db       *database.DB
 	testRepo repository.TestRepository
 	userRepo repository.UserRepository
+	examRepo repository.ExamRepository
 	cache    *cache.Client
 }
 
-func NewAdminHandler(db *database.DB, testRepo repository.TestRepository, userRepo repository.UserRepository, cache *cache.Client) *AdminHandler {
+func NewAdminHandler(db *database.DB, testRepo repository.TestRepository, userRepo repository.UserRepository, examRepo repository.ExamRepository, cache *cache.Client) *AdminHandler {
 	return &AdminHandler{
 		db:       db,
 		testRepo: testRepo,
 		userRepo: userRepo,
+		examRepo: examRepo,
 		cache:    cache,
 	}
 }
@@ -283,67 +285,11 @@ func (h *AdminHandler) DeleteTest(c *gin.Context) {
 
 // GetPendingEssays handles GET /api/admin/essays
 func (h *AdminHandler) GetPendingEssays(c *gin.Context) {
-	type EssayRow struct {
-		ID              string    `db:"id"`
-		TestID          string    `db:"test_id"`
-		TestTitle       string    `db:"test_title"`
-		SessionID       string    `db:"session_id"`
-		QuestionID      string    `db:"question_id"`
-		QuestionText    string    `db:"question_text"`
-		UserAnswerText  string    `db:"user_answer_text"`
-		Score           *float64  `db:"score"`
-		AdminReviewNote *string   `db:"admin_review_note"`
-		AdminReviewedAt *string   `db:"admin_reviewed_at"`
-		SubmittedAt     time.Time `db:"submitted_at"`
-	}
-
-	query := `
-		SELECT 
-			ts.id,
-			t.id AS test_id,
-			t.title AS test_title,
-			ts.session_id,
-			ts.question_id,
-			tq.question_text,
-			COALESCE(ts.user_answer_text, '') AS user_answer_text,
-			ts.score,
-			ts.admin_review_note,
-			TO_CHAR(ts.admin_reviewed_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS admin_reviewed_at,
-			ts.submitted_at
-		FROM test_submissions ts
-		JOIN test_questions tq ON ts.question_id = tq.id
-		JOIN tests t ON tq.test_id = t.id
-		WHERE tq.question_type = 'essay'
-		ORDER BY ts.submitted_at DESC
-	`
-
-	var rows []EssayRow
-	err := h.db.SelectContext(c.Request.Context(), &rows, query)
+	results, err := h.examRepo.GetPendingEssays(c.Request.Context())
 	if err != nil {
-		log.Printf("[AdminHandler.GetPendingEssays] internal query error: %v", err)
+		log.Printf("[AdminHandler.GetPendingEssays] error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar jawaban esai."})
 		return
-	}
-
-	var results []models.EssaySubmission
-	for _, r := range rows {
-		results = append(results, models.EssaySubmission{
-			ID:              r.ID,
-			TestID:          r.TestID,
-			TestTitle:       r.TestTitle,
-			SessionID:       r.SessionID,
-			QuestionID:      r.QuestionID,
-			QuestionText:    r.QuestionText,
-			UserAnswerText:  r.UserAnswerText,
-			Score:           r.Score,
-			AdminReviewNote: r.AdminReviewNote,
-			AdminReviewedAt: r.AdminReviewedAt,
-			SubmittedAt:     r.SubmittedAt.Format(time.RFC3339),
-		})
-	}
-
-	if results == nil {
-		results = []models.EssaySubmission{}
 	}
 
 	c.JSON(http.StatusOK, results)
@@ -362,24 +308,14 @@ func (h *AdminHandler) GradeEssay(c *gin.Context) {
 		return
 	}
 
-	now := time.Now()
-	scoreFloat := float64(req.Score)
-
-	updateSQL := `
-		UPDATE test_submissions
-		SET score = $1, admin_review_note = $2, admin_reviewed_at = $3
-		WHERE id = $4
-	`
-	res, err := h.db.ExecContext(c.Request.Context(), updateSQL, scoreFloat, req.Note, now, essayID)
+	err := h.examRepo.GradeEssaySubmission(c.Request.Context(), essayID, float64(req.Score), req.Note)
 	if err != nil {
+		if errors.Is(err, repository.ErrEssayNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Jawaban esai tidak ditemukan"})
+			return
+		}
 		log.Printf("[AdminHandler.GradeEssay] internal DB error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan penilaian esai."})
-		return
-	}
-
-	rows, _ := res.RowsAffected()
-	if rows == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Jawaban esai tidak ditemukan"})
 		return
 	}
 

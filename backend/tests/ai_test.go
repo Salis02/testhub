@@ -12,6 +12,7 @@ import (
 
 func TestAIGenerator(t *testing.T) {
 	_, _, router := setupTestApp(t)
+	token := getAdminToken(t, router)
 
 	aiBody, _ := json.Marshal(models.AIGenerateRequest{
 		Category:   "cpns",
@@ -20,8 +21,19 @@ func TestAIGenerator(t *testing.T) {
 		Count:      3,
 	})
 
+	// 1. Verify unauthenticated call is rejected with 401
+	unauthReq, _ := http.NewRequest("POST", "/api/ai/generate-questions", bytes.NewBuffer(aiBody))
+	unauthReq.Header.Set("Content-Type", "application/json")
+	unauthW := httptest.NewRecorder()
+	router.ServeHTTP(unauthW, unauthReq)
+	if unauthW.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 for unauthenticated AI generation, got %d", unauthW.Code)
+	}
+
+	// 2. Authenticated call succeeds
 	req, _ := http.NewRequest("POST", "/api/ai/generate-questions", bytes.NewBuffer(aiBody))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -38,6 +50,7 @@ func TestAIGenerator(t *testing.T) {
 
 func TestAIStreamGenerator(t *testing.T) {
 	_, _, router := setupTestApp(t)
+	token := getAdminToken(t, router)
 
 	aiBody, _ := json.Marshal(models.AIGenerateRequest{
 		Category:   "cpns",
@@ -48,6 +61,7 @@ func TestAIStreamGenerator(t *testing.T) {
 
 	req, _ := http.NewRequest("POST", "/api/ai/stream-generate-questions", bytes.NewBuffer(aiBody))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -70,6 +84,7 @@ func TestAIStreamGenerator(t *testing.T) {
 
 func TestAIEssayAutoGrader(t *testing.T) {
 	_, _, router := setupTestApp(t)
+	token := getAdminToken(t, router)
 
 	gradeBody, _ := json.Marshal(models.AIEssayGradeRequest{
 		EssayID:        "essay-test-001",
@@ -80,6 +95,7 @@ func TestAIEssayAutoGrader(t *testing.T) {
 
 	req, _ := http.NewRequest("POST", "/api/ai/grade-essay", bytes.NewBuffer(gradeBody))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 

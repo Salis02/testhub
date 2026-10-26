@@ -87,6 +87,7 @@ func TestAdminAuditLogFlow(t *testing.T) {
 	})
 	reqAI, _ := http.NewRequest("POST", "/api/ai/generate-questions", bytes.NewBuffer(aiReqBody))
 	reqAI.Header.Set("Content-Type", "application/json")
+	reqAI.Header.Set("Authorization", "Bearer "+token)
 	wAI := httptest.NewRecorder()
 	router.ServeHTTP(wAI, reqAI)
 

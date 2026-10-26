@@ -78,6 +78,7 @@ var (
 	ErrSessionNotFound = errors.New("sesi ujian tidak ditemukan")
 	ErrSessionInactive = errors.New("sesi ujian sudah selesai atau tidak aktif")
 	ErrResultNotFound  = errors.New("hasil ujian tidak ditemukan")
+	ErrEssayNotFound   = errors.New("jawaban esai tidak ditemukan")
 )
 
 // ExamRepository defines the contract for examinee test taking, scoring, and certification
@@ -96,6 +97,8 @@ type ExamRepository interface {
 	GetUserExamHistory(ctx context.Context, userID string, limit, offset int) ([]models.UserExamHistoryItem, int, error)
 	GetUserExamStats(ctx context.Context, userID string) (*models.UserExamStats, error)
 	GetPublicStats(ctx context.Context) (*models.PublicStats, error)
+	GetPendingEssays(ctx context.Context) ([]models.EssaySubmission, error)
+	GradeEssaySubmission(ctx context.Context, essayID string, score float64, note string) error
 }
 
 type PostgresExamRepository struct {
@@ -743,4 +746,85 @@ func (r *PostgresExamRepository) GetUserExamStats(ctx context.Context, userID st
 		HighestScore:    stats.HighestScore,
 	}, nil
 }
+
+// GetPendingEssays retrieves essay submissions across tests for admin review
+func (r *PostgresExamRepository) GetPendingEssays(ctx context.Context) ([]models.EssaySubmission, error) {
+	query := `
+		SELECT 
+			ts.id,
+			tq.test_id,
+			t.title AS test_title,
+			ts.session_id,
+			ts.question_id,
+			tq.question_text,
+			COALESCE(ts.user_answer_text, '') AS user_answer_text,
+			ts.score,
+			ts.admin_review_note,
+			TO_CHAR(ts.admin_reviewed_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS admin_reviewed_at,
+			ts.submitted_at
+		FROM test_submissions ts
+		JOIN test_questions tq ON ts.question_id = tq.id
+		JOIN tests t ON tq.test_id = t.id
+		WHERE tq.question_type = 'essay'
+		ORDER BY ts.submitted_at DESC
+	`
+
+	var rows []struct {
+		ID              string    `db:"id"`
+		TestID          string    `db:"test_id"`
+		TestTitle       string    `db:"test_title"`
+		SessionID       string    `db:"session_id"`
+		QuestionID      string    `db:"question_id"`
+		QuestionText    string    `db:"question_text"`
+		UserAnswerText  string    `db:"user_answer_text"`
+		Score           *float64  `db:"score"`
+		AdminReviewNote *string   `db:"admin_review_note"`
+		AdminReviewedAt *string   `db:"admin_reviewed_at"`
+		SubmittedAt     time.Time `db:"submitted_at"`
+	}
+
+	err := r.db.SelectContext(ctx, &rows, query)
+	if err != nil {
+		return nil, fmt.Errorf("select pending essays: %w", err)
+	}
+
+	results := make([]models.EssaySubmission, 0, len(rows))
+	for _, row := range rows {
+		results = append(results, models.EssaySubmission{
+			ID:              row.ID,
+			TestID:          row.TestID,
+			TestTitle:       row.TestTitle,
+			SessionID:       row.SessionID,
+			QuestionID:      row.QuestionID,
+			QuestionText:    row.QuestionText,
+			UserAnswerText:  row.UserAnswerText,
+			Score:           row.Score,
+			AdminReviewNote: row.AdminReviewNote,
+			AdminReviewedAt: row.AdminReviewedAt,
+			SubmittedAt:     row.SubmittedAt.Format(time.RFC3339),
+		})
+	}
+
+	return results, nil
+}
+
+// GradeEssaySubmission updates score and admin note for an essay submission
+func (r *PostgresExamRepository) GradeEssaySubmission(ctx context.Context, essayID string, score float64, note string) error {
+	query := `
+		UPDATE test_submissions
+		SET score = $1, admin_review_note = $2, admin_reviewed_at = $3
+		WHERE id = $4
+	`
+	res, err := r.db.ExecContext(ctx, query, score, note, time.Now(), essayID)
+	if err != nil {
+		return fmt.Errorf("update essay submission: %w", err)
+	}
+
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrEssayNotFound
+	}
+	return nil
+}
+
 

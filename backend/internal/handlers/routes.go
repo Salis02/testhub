@@ -59,7 +59,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 
 	authHandler := NewAuthHandler(db, cfg, testRepo, userRepo, googleOAuth, cacheClient)
 	publicHandler := NewPublicHandler(examRepo, subRepo, testRepo, cacheClient)
-	adminHandler := NewAdminHandler(db, testRepo, userRepo, cacheClient)
+	adminHandler := NewAdminHandler(db, testRepo, userRepo, examRepo, cacheClient)
 	userHandler := NewUserHandler(examRepo)
 	paymentGateway := services.NewPaymentGatewayProvider(cfg)
 	paymentHandler := NewPaymentHandler(subRepo, testRepo, paymentGateway)
@@ -110,8 +110,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			sessions.GET("/:sessionId/questions", publicHandler.GetQuestions)
 			sessions.GET("/:sessionId/submissions", publicHandler.GetSubmissions)
 			sessions.POST("/:sessionId/submit-answer", publicHandler.SubmitAnswer)
-			sessions.POST("/:sessionId/questions/:questionId/submit", publicHandler.SubmitAnswer)
-			sessions.POST("/:sessionId/finish", middleware.OptionalAuth(cfg.JWTSecret), publicHandler.FinishTest)
+			sessions.POST("/:sessionId/finish", middleware.OptionalAuth(cfg.JWTSecret), middleware.RateLimit(cacheClient, 20, time.Minute, "finish_test"), publicHandler.FinishTest)
 		}
 
 		// Public Test Results & Verification Certificates
@@ -134,8 +133,10 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			payments.POST("/webhook", paymentHandler.HandleWebhook)
 		}
 
-		// Public AI Assistance & Copilot
+		// AI Assistance & Copilot (Protected for authenticated users / creators / admins)
 		ai := api.Group("/ai")
+		ai.Use(middleware.AuthRequired(cfg.JWTSecret, cacheClient))
+		ai.Use(middleware.RateLimit(cacheClient, 20, time.Minute, "ai_requests"))
 		{
 			ai.POST("/generate-questions", aiHandler.GenerateQuestions)
 			ai.POST("/stream-generate-questions", aiHandler.StreamGenerateQuestions)
@@ -172,8 +173,6 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 			admin.GET("/tests/:testId", adminHandler.GetTest)
 			admin.PUT("/tests/:testId", adminHandler.UpdateTest)
 			admin.POST("/tests/:testId/toggle-publish", adminHandler.TogglePublish)
-			admin.PATCH("/tests/:testId/toggle-publish", adminHandler.TogglePublish)
-			admin.POST("/tests/:testId/publish", adminHandler.TogglePublish)
 			admin.DELETE("/tests/:testId", adminHandler.DeleteTest)
 
 			// Essay Manual Grading & AI Auto-Grader

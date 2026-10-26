@@ -3,9 +3,11 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"testhub/internal/models"
 )
@@ -238,3 +240,114 @@ func TestValidationRelationalFailures(t *testing.T) {
 		t.Fatalf("Expected 400 Bad Request for question with 2 correct answers, got %d", w3.Code)
 	}
 }
+
+func TestAdminPendingEssaysAndGrading(t *testing.T) {
+	_, _, router := setupTestApp(t)
+	token := getAdminToken(t, router)
+
+	// 1. Create test with essay question
+	testBody, _ := json.Marshal(map[string]interface{}{
+		"title":                    "Essay Test " + time.Now().Format("150405"),
+		"category":                 "custom",
+		"duration_minutes":         30,
+		"passing_score_percentage": 50,
+		"published":                true,
+		"questions": []models.QuestionDTO{
+			{
+				QuestionText:    "Jelaskan pendapat Anda mengenai integrasi AI pada pendidikan!",
+				QuestionType:    "essay",
+				DifficultyLevel: "medium",
+				Points:          10,
+			},
+		},
+	})
+	req, _ := http.NewRequest("POST", "/api/admin/tests", bytes.NewBuffer(testBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Failed to create essay test: %s", w.Body.String())
+	}
+	var createdTest models.Test
+	_ = json.Unmarshal(w.Body.Bytes(), &createdTest)
+
+	// 2. Start test session
+	startReq, _ := http.NewRequest("POST", fmt.Sprintf("/api/tests/%s/start", createdTest.ID), nil)
+	startReq.Header.Set("Authorization", "Bearer "+token)
+	startW := httptest.NewRecorder()
+	router.ServeHTTP(startW, startReq)
+	if startW.Code != http.StatusOK {
+		t.Fatalf("Failed to start exam session: %s", startW.Body.String())
+	}
+	var sessionResp models.TestSessionResponse
+	_ = json.Unmarshal(startW.Body.Bytes(), &sessionResp)
+
+	// 3. Get session question to know question ID
+	qReq, _ := http.NewRequest("GET", fmt.Sprintf("/api/sessions/%s/questions", sessionResp.SessionID), nil)
+	qW := httptest.NewRecorder()
+	router.ServeHTTP(qW, qReq)
+	var qData struct {
+		Questions []models.TestQuestion `json:"questions"`
+	}
+	_ = json.Unmarshal(qW.Body.Bytes(), &qData)
+	if len(qData.Questions) == 0 {
+		t.Fatalf("No questions returned for session")
+	}
+	questionID := qData.Questions[0].ID
+
+	// 4. Submit essay answer
+	answerText := "Integrasi AI sangat membantu mempersonalisasi pembelajaran siswa."
+	subBody, _ := json.Marshal(models.SubmitAnswerDTO{
+		QuestionID: questionID,
+		AnswerText: &answerText,
+	})
+	subReq, _ := http.NewRequest("POST", fmt.Sprintf("/api/sessions/%s/submit-answer", sessionResp.SessionID), bytes.NewBuffer(subBody))
+	subReq.Header.Set("Content-Type", "application/json")
+	subW := httptest.NewRecorder()
+	router.ServeHTTP(subW, subReq)
+	if subW.Code != http.StatusOK {
+		t.Fatalf("Submit answer failed: %s", subW.Body.String())
+	}
+
+	// 5. Admin lists pending essays
+	essaysReq, _ := http.NewRequest("GET", "/api/admin/essays", nil)
+	essaysReq.Header.Set("Authorization", "Bearer "+token)
+	essaysW := httptest.NewRecorder()
+	router.ServeHTTP(essaysW, essaysReq)
+	if essaysW.Code != http.StatusOK {
+		t.Fatalf("Failed to get pending essays: %s", essaysW.Body.String())
+	}
+	var essayList []models.EssaySubmission
+	_ = json.Unmarshal(essaysW.Body.Bytes(), &essayList)
+	if len(essayList) == 0 {
+		t.Fatalf("Expected at least 1 essay in pending list")
+	}
+
+	// Find the essay we just submitted
+	var targetEssayID string
+	for _, e := range essayList {
+		if e.SessionID == sessionResp.SessionID {
+			targetEssayID = e.ID
+			break
+		}
+	}
+	if targetEssayID == "" {
+		t.Fatalf("Could not find submitted essay in pending list")
+	}
+
+	// 6. Admin grades the essay
+	gradeBody, _ := json.Marshal(models.GradeEssayRequest{
+		Score: 9,
+		Note:  "Argumen sangat jelas dan terstruktur.",
+	})
+	gradeReq, _ := http.NewRequest("POST", fmt.Sprintf("/api/admin/essays/%s/grade", targetEssayID), bytes.NewBuffer(gradeBody))
+	gradeReq.Header.Set("Content-Type", "application/json")
+	gradeReq.Header.Set("Authorization", "Bearer "+token)
+	gradeW := httptest.NewRecorder()
+	router.ServeHTTP(gradeW, gradeReq)
+	if gradeW.Code != http.StatusOK {
+		t.Fatalf("Failed to grade essay: %s", gradeW.Body.String())
+	}
+}
+
