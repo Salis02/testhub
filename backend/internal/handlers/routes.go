@@ -55,8 +55,9 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 	examRepo := repository.NewPostgresExamRepository(db)
 	subRepo := repository.NewPostgresSubscriptionRepository(db)
 	userRepo := repository.NewPostgresUserRepository(db)
+	googleOAuth := services.NewGoogleOAuthService(cfg)
 
-	authHandler := NewAuthHandler(db, cfg, testRepo, cacheClient)
+	authHandler := NewAuthHandler(db, cfg, testRepo, userRepo, googleOAuth, cacheClient)
 	publicHandler := NewPublicHandler(examRepo, subRepo, testRepo, cacheClient)
 	adminHandler := NewAdminHandler(db, testRepo, userRepo, cacheClient)
 	userHandler := NewUserHandler(examRepo)
@@ -81,6 +82,7 @@ func SetupRouter(db *database.DB, cacheClient *cache.Client, cfg *config.Config)
 		{
 			auth.POST("/register", middleware.RateLimit(cacheClient, 20, time.Minute, "register"), authHandler.Register)
 			auth.POST("/login", middleware.RateLimit(cacheClient, 30, time.Minute, "login"), authHandler.Login)
+			auth.POST("/google", middleware.RateLimit(cacheClient, 30, time.Minute, "google_login"), authHandler.GoogleLogin)
 			auth.POST("/refresh", middleware.RateLimit(cacheClient, 30, time.Minute, "refresh_token"), authHandler.RefreshToken)
 			auth.POST("/logout", authHandler.Logout)
 			auth.GET("/me", middleware.AuthRequired(cfg.JWTSecret, cacheClient), authHandler.Me) // Backward-compatible alias

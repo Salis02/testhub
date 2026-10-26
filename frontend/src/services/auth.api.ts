@@ -83,6 +83,32 @@ export const authApi = {
     }
   },
 
+  async googleLogin(credential: string, role?: string): Promise<AuthResponse> {
+    const data = await apiClient<AuthResponse>('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential, role: role || 'user' }),
+    })
+
+    const user: User = {
+      id: data.user_id,
+      email: data.email,
+      fullName: data.full_name,
+      role: data.role,
+    }
+
+    if (data.token) {
+      setStoredToken(data.token)
+    }
+    if (data.refresh_token) {
+      setStoredRefreshToken(data.refresh_token)
+    }
+
+    return {
+      ...data,
+      user,
+    }
+  },
+
   async me(signal?: AbortSignal): Promise<User> {
     const res = await apiClient<{
       id?: string

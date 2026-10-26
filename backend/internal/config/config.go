@@ -33,6 +33,9 @@ type Config struct {
 	LogLevel    string
 	Domain      string
 
+	// Google OAuth
+	GoogleClientID string
+
 	// Rate Limiting
 	RateLimitRequests int
 	RateLimitWindow   time.Duration
@@ -69,6 +72,7 @@ func LoadConfig() *Config {
 		Environment:          getEnv("ENVIRONMENT", "development"),
 		LogLevel:             getEnv("LOG_LEVEL", "debug"),
 		Domain:               getEnv("DOMAIN", "localhost"),
+		GoogleClientID:       getEnv("GOOGLE_CLIENT_ID", ""),
 		RateLimitRequests:    getEnvInt("RATE_LIMIT_REQUESTS", 100),
 		RateLimitWindow:      time.Minute,
 		GeminiAPIKeys:        getEnvSlice("GEMINI_API_KEYS", nil),

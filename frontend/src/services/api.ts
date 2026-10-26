@@ -42,6 +42,7 @@ export const api = {
   // 3. Authentication & Profile
   adminLogin: authApi.login,
   adminRegister: authApi.register,
+  googleLogin: authApi.googleLogin,
   getCurrentUser: authApi.me,
   logout: authApi.logout,
 

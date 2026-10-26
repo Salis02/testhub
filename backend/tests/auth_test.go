@@ -128,3 +128,67 @@ func TestAuthFlow(t *testing.T) {
 		t.Fatalf("Expected HTTP 401 for invalidated refresh token after logout, got %d", wBadRefresh.Code)
 	}
 }
+
+func TestGoogleAuthFlow(t *testing.T) {
+	_, _, router := setupTestApp(t)
+
+	uniqueIP := fmt.Sprintf("10.2.%d.%d", (time.Now().UnixNano()/1000)%250+1, time.Now().UnixNano()%250+1)
+	googleEmail := fmt.Sprintf("google-%d@test.com", time.Now().UnixNano())
+	mockToken := fmt.Sprintf("mock-google-token:%s:Google Tester", googleEmail)
+
+	// 1. Test successful Google Login (auto-registration)
+	reqBody, _ := json.Marshal(models.GoogleAuthRequest{
+		Credential: mockToken,
+		Role:       "student",
+	})
+	req, _ := http.NewRequest("POST", "/api/auth/google", bytes.NewBuffer(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-For", uniqueIP)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Google login failed with status %d: %s", w.Code, w.Body.String())
+	}
+
+	var authResp models.AuthResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &authResp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if authResp.Token == "" || authResp.RefreshToken == "" {
+		t.Errorf("Expected access token and refresh token, got %+v", authResp)
+	}
+	if authResp.Email != googleEmail {
+		t.Errorf("Expected email %s, got %s", googleEmail, authResp.Email)
+	}
+	if authResp.FullName != "Google Tester" {
+		t.Errorf("Expected name 'Google Tester', got %s", authResp.FullName)
+	}
+
+	// 2. Test subsequent login (user exists)
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest("POST", "/api/auth/google", bytes.NewBuffer(reqBody))
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("X-Forwarded-For", uniqueIP)
+	router.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("Subsequent Google login failed with status %d: %s", w2.Code, w2.Body.String())
+	}
+
+	// 3. Test Invalid Credential
+	invalidBody, _ := json.Marshal(models.GoogleAuthRequest{
+		Credential: "invalid-token-here",
+	})
+	w3 := httptest.NewRecorder()
+	req3, _ := http.NewRequest("POST", "/api/auth/google", bytes.NewBuffer(invalidBody))
+	req3.Header.Set("Content-Type", "application/json")
+	req3.Header.Set("X-Forwarded-For", uniqueIP)
+	router.ServeHTTP(w3, req3)
+
+	if w3.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 for invalid Google token, got %d: %s", w3.Code, w3.Body.String())
+	}
+}
+

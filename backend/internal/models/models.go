@@ -182,6 +182,11 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+type GoogleAuthRequest struct {
+	Credential string `json:"credential" binding:"required"`
+	Role       string `json:"role,omitempty"` // "creator" or "user"
+}
+
 type AuthResponse struct {
 	UserID       string `json:"user_id"`
 	Email        string `json:"email"`

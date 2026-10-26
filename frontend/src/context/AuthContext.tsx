@@ -15,6 +15,7 @@ interface AuthContextType {
   isCheckingAuth: boolean
   login: (email: string, pass: string) => Promise<boolean>
   register: (email: string, pass: string, fullName: string, role?: string) => Promise<boolean>
+  loginWithGoogle: (credential: string, role?: string) => Promise<boolean>
   logout: () => void
   verifySession: () => Promise<void>
 }
@@ -25,6 +26,7 @@ const AuthContext = createContext<AuthContextType>({
   isCheckingAuth: true,
   login: async () => false,
   register: async () => false,
+  loginWithGoogle: async () => false,
   logout: () => {},
   verifySession: async () => {},
 })
@@ -97,6 +99,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false
   }
 
+  const loginWithGoogle = async (credential: string, role?: string): Promise<boolean> => {
+    try {
+      const res = await api.googleLogin(credential, role)
+      if (res && res.token && res.user) {
+        setUser(res.user)
+        setStoredToken(res.token)
+        setStoredUserEmail(res.user.email)
+        return true
+      }
+    } catch (err) {
+      console.error('Google login error:', err)
+      throw err
+    }
+    return false
+  }
+
   const logout = async () => {
     try {
       await api.logout()
@@ -117,6 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isCheckingAuth,
         login,
         register,
+        loginWithGoogle,
         logout,
         verifySession,
       }}

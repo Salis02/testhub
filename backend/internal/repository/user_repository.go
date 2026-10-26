@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,8 +11,14 @@ import (
 	"testhub/internal/models"
 )
 
+var ErrUserNotFound = errors.New("pengguna tidak ditemukan")
+
 // UserRepository defines the contract for user account management
 type UserRepository interface {
+	GetByEmail(ctx context.Context, email string) (*models.User, error)
+	GetByID(ctx context.Context, id string) (*models.User, error)
+	Create(ctx context.Context, user *models.User) error
+	Update(ctx context.Context, user *models.User) error
 	ListUsers(ctx context.Context, search, role, status string, limit, offset int) ([]models.UserListItem, int, error)
 	UpdateUserStatus(ctx context.Context, userID string, isActive bool) error
 	UpdateUserRole(ctx context.Context, userID string, role string) error
@@ -23,6 +31,62 @@ type PostgresUserRepository struct {
 
 func NewPostgresUserRepository(db *database.DB) *PostgresUserRepository {
 	return &PostgresUserRepository{db: db}
+}
+
+// GetByEmail retrieves a user by email address
+func (r *PostgresUserRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
+	var user models.User
+	err := r.db.GetContext(ctx, &user, "SELECT * FROM users WHERE email = $1", email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("get user by email: %w", err)
+	}
+	return &user, nil
+}
+
+// GetByID retrieves a user by their unique ID
+func (r *PostgresUserRepository) GetByID(ctx context.Context, id string) (*models.User, error) {
+	var user models.User
+	err := r.db.GetContext(ctx, &user, "SELECT * FROM users WHERE id = $1", id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("get user by id: %w", err)
+	}
+	return &user, nil
+}
+
+// Create inserts a new user record into the database
+func (r *PostgresUserRepository) Create(ctx context.Context, user *models.User) error {
+	query := `
+		INSERT INTO users (id, email, password_hash, full_name, role, subscription_tier, is_active, created_at, updated_at)
+		VALUES (:id, :email, :password_hash, :full_name, :role, :subscription_tier, :is_active, :created_at, :updated_at)
+	`
+	_, err := r.db.NamedExecContext(ctx, query, user)
+	if err != nil {
+		return fmt.Errorf("insert user: %w", err)
+	}
+	return nil
+}
+
+// Update updates an existing user record
+func (r *PostgresUserRepository) Update(ctx context.Context, user *models.User) error {
+	query := `
+		UPDATE users 
+		SET email = :email, password_hash = :password_hash, full_name = :full_name, 
+		    role = :role, subscription_tier = :subscription_tier, 
+		    subscription_expires_at = :subscription_expires_at, is_active = :is_active, 
+		    updated_at = :updated_at
+		WHERE id = :id
+	`
+	_, err := r.db.NamedExecContext(ctx, query, user)
+	if err != nil {
+		return fmt.Errorf("update user: %w", err)
+	}
+	return nil
 }
 
 // ListUsers returns paginated user records with search and role filters
